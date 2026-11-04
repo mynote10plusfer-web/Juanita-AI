@@ -9,7 +9,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -35,8 +34,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.juanita.app.data.AssistantPreferences
 import java.util.Locale
 
 private data class VoiceLanguage(val label: String, val tag: String) {
@@ -63,22 +61,46 @@ private val voiceLanguages = listOf(
 
 class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
-    private var ttsReady = false
+    @Volatile private var ttsReady = false
+    private lateinit var preferences: AssistantPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        preferences = AssistantPreferences(applicationContext)
 
-        tts = TextToSpeech(this) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
+        tts = TextToSpeech(this) { result ->
+            ttsReady = result == TextToSpeech.SUCCESS
         }
 
         setContent {
             JuanitaApp(
+                initialLanguageTag = preferences.languageTag,
+                onLanguageSelected = { preferences.languageTag = it },
                 onSpeak = { text, language ->
                     val engine = tts
-                    if (ttsReady && engine != null) {
-                        engine.language = language.locale
-                        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "juanita-intro")
+                    when {
+                        !ttsReady || engine == null ->
+                            "Il motore vocale Android non è ancora pronto."
+                        engine.isLanguageAvailable(language.locale) < TextToSpeech.LANG_AVAILABLE ->
+                            "La voce " + language.label + " non è installata o non è supportata."
+                        else -> {
+                            val languageResult = engine.setLanguage(language.locale)
+                            if (languageResult < TextToSpeech.LANG_AVAILABLE) {
+                                "Impossibile attivare la lingua " + language.label + "."
+                            } else {
+                                val speakResult = engine.speak(
+                                    text,
+                                    TextToSpeech.QUEUE_FLUSH,
+                                    null,
+                                    "juanita-intro"
+                                )
+                                if (speakResult == TextToSpeech.ERROR) {
+                                    "Il motore vocale non è riuscito ad avviare la riproduzione."
+                                } else {
+                                    "Voce avviata con " + language.label + "."
+                                }
+                            }
+                        }
                     }
                 }
             )
@@ -89,19 +111,26 @@ class MainActivity : ComponentActivity() {
         tts?.stop()
         tts?.shutdown()
         tts = null
+        ttsReady = false
         super.onDestroy()
     }
 }
 
 @Composable
-private fun JuanitaApp(onSpeak: (String, VoiceLanguage) -> Unit) {
+private fun JuanitaApp(
+    initialLanguageTag: String,
+    onLanguageSelected: (String) -> Unit,
+    onSpeak: (String, VoiceLanguage) -> String
+) {
     val background = Color(0xFF090A0C)
     val panel = Color(0xFF17191D)
     val gold = Color(0xFFE4BD69)
-    var selectedLanguage by remember { mutableStateOf(voiceLanguages.first()) }
+    val initialLanguage = voiceLanguages.firstOrNull { it.tag == initialLanguageTag }
+        ?: voiceLanguages.first()
+    var selectedLanguage by remember { mutableStateOf(initialLanguage) }
     var menuExpanded by remember { mutableStateOf(false) }
     var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
-    var status by remember { mutableStateOf("Pronta per il primo test") }
+    var status by remember { mutableStateOf("Impostazioni salvate sul dispositivo") }
 
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -171,14 +200,16 @@ private fun JuanitaApp(onSpeak: (String, VoiceLanguage) -> Unit) {
                                         text = { Text(language.label) },
                                         onClick = {
                                             selectedLanguage = language
+                                            onLanguageSelected(language.tag)
                                             menuExpanded = false
+                                            status = "Lingua " + language.label + " salvata"
                                         }
                                     )
                                 }
                             }
                         }
                         Text(
-                            "La lingua scelta viene usata per la prova vocale e per la voce sintetica.",
+                            "La scelta resta memorizzata anche dopo la chiusura dell'app.",
                             color = Color(0xFF9A9DA4),
                             fontSize = 12.sp
                         )
@@ -201,6 +232,7 @@ private fun JuanitaApp(onSpeak: (String, VoiceLanguage) -> Unit) {
                                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, selectedLanguage.tag)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, selectedLanguage.tag)
                                     putExtra(RecognizerIntent.EXTRA_PROMPT, "Parla con Juanita")
                                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                                 }
@@ -237,11 +269,10 @@ private fun JuanitaApp(onSpeak: (String, VoiceLanguage) -> Unit) {
                         )
                         Button(
                             onClick = {
-                                onSpeak(
+                                status = onSpeak(
                                     "Ciao, sono Juanita. Piacere di conoscerti. Come posso aiutarti?",
                                     selectedLanguage
                                 )
-                                status = "Richiesta inviata al motore vocale Android"
                             },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
@@ -258,7 +289,7 @@ private fun JuanitaApp(onSpeak: (String, VoiceLanguage) -> Unit) {
                 Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    "Versione 0.1.0 • Prototipo tecnico",
+                    "Versione 0.2.0 • Fondamenta modulari",
                     color = Color(0xFF686C74),
                     fontSize = 11.sp,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
