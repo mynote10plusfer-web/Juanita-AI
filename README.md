@@ -1,26 +1,43 @@
 # Juanita AI
 
-Juanita AI is a modular Android personal voice assistant.
+Juanita AI is an Android-first personal voice assistant, designed around multilingual interaction, configurable personality, privacy, and replaceable voice/AI providers.
 
-## Project goals
+## Current implementation
 
-- Multilingual voice interaction with configurable language and voice.
-- Offline-first speech recognition and text-to-speech where supported.
-- Configurable assistant personality and wake phrase.
-- Privacy-conscious design with explicit permissions and optional cloud AI providers.
-- Android-first implementation, with cloud builds through GitHub Actions.
+Version **0.1.0** is the first technical foundation:
 
-## Development status
+- Kotlin + Jetpack Compose Android application.
+- Dark, high-contrast starter interface.
+- Language selection for Spanish (Spain), Italian, Czech, English, and Spanish (Colombia).
+- Speech input smoke test using the Android speech-recognition intent.
+- Speech output smoke test using the Android TextToSpeech engine.
+- GitHub Actions workflow intended to build and publish a debug APK artifact.
 
-Repository initialized. The Android application and voice components are not yet implemented in this repository.
+These speech tests use services available on the Android device. They are **not yet** the final offline speech stack and may depend on installed Android speech services and network availability.
 
-## Planned architecture
+## Not implemented yet
 
-- Android app: Kotlin and Jetpack Compose.
-- Speech layer: interchangeable offline/online ASR and TTS providers.
-- Conversation layer: interchangeable local or remote AI providers.
-- Lifecycle services: foreground audio service and user-controlled notification features.
+- Conversational AI engine and persistent memory.
+- sherpa-onnx offline ASR/TTS integration and verified voice models.
+- Wake-word detection and always-listening foreground service.
+- Notification, SMS, WhatsApp, email, call, and calendar integrations.
+- Full personality controls, privacy dashboard, and data export/deletion.
+- Production signing, release build, and automated device tests.
+
+## Architecture direction
+
+Keep the application modular so that the following can be replaced independently:
+
+1. Android presentation and lifecycle layer.
+2. Speech recognition (ASR), voice activity detection (VAD), wake-word detection, and speech synthesis (TTS).
+3. Conversation/LLM provider (local or optional cloud).
+4. Memory and user-controlled personal data.
+5. Android integrations, each behind explicit permissions and user controls.
+
+## Build
+
+The GitHub Actions workflow is `.github/workflows/android.yml`. It uses JDK 17 and Gradle 8.9 to build the debug APK.
 
 ## Security
 
-Never commit API keys, passwords, tokens, or private personal data. Keep secrets in secure local configuration or GitHub Actions secrets.
+Never commit API keys, passwords, access tokens, signing keys, or private personal data. Keep secrets out of source control and use protected GitHub Actions secrets only when a future cloud provider is deliberately enabled.
