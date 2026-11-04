@@ -76,6 +76,11 @@ class MainActivity : ComponentActivity() {
             JuanitaApp(
                 initialLanguageTag = preferences.languageTag,
                 onLanguageSelected = { preferences.languageTag = it },
+                initialDialectId = preferences.dialectId,
+                onDialectSelected = { dialectId, languageTag ->
+                    preferences.dialectId = dialectId
+                    preferences.languageTag = languageTag
+                },
                 onSpeak = { text, language ->
                     val engine = tts
                     when {
@@ -120,6 +125,8 @@ class MainActivity : ComponentActivity() {
 private fun JuanitaApp(
     initialLanguageTag: String,
     onLanguageSelected: (String) -> Unit,
+    initialDialectId: String,
+    onDialectSelected: (String, String) -> Unit,
     onSpeak: (String, VoiceLanguage) -> String
 ) {
     val background = Color(0xFF090A0C)
@@ -128,6 +135,33 @@ private fun JuanitaApp(
     val initialLanguage = voiceLanguages.firstOrNull { it.tag == initialLanguageTag }
         ?: voiceLanguages.first()
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
+    val dialects = listOf(
+        DialectProfile(
+            id = "sicilian-palermo",
+            label = "Siciliano · area palermitana",
+            languageTag = "it-IT",
+            sample = "Chi bedda jurnata! Nni facemu 'na passiata?",
+            note = "Variante siciliana da sviluppare e verificare con parlanti madrelingua."
+        ),
+        DialectProfile(
+            id = "canarian",
+            label = "Español canario",
+            languageTag = "es-ES",
+            sample = "¡Qué día más bueno! ¿Nos damos una vueltita por la isla?",
+            note = "Spagnolo delle Canarie: lessico e ritmo regionali da affinare."
+        ),
+        DialectProfile(
+            id = "paisa",
+            label = "Colombiano paisa",
+            languageTag = "es-CO",
+            sample = "¡Qué más pues! ¿Cómo vamos? Nos damos una vueltica, ¿o qué?",
+            note = "Variante paisa: espressioni colloquiali da calibrare con parlanti di Antioquia."
+        )
+    )
+    var selectedDialect by remember {
+        mutableStateOf(dialects.firstOrNull { it.id == initialDialectId } ?: dialects[0])
+    }
+    var dialectMenuExpanded by remember { mutableStateOf(false) }
     var menuExpanded by remember { mutableStateOf(false) }
     var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
     var status by remember { mutableStateOf("Impostazioni salvate sul dispositivo") }
@@ -223,6 +257,75 @@ private fun JuanitaApp(
                 ) {
                     Column(
                         modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("VARIANTE REGIONALE", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                selectedDialect.label,
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { dialectMenuExpanded = true }) {
+                                Text("Scegli", color = gold)
+                            }
+                            DropdownMenu(
+                                expanded = dialectMenuExpanded,
+                                onDismissRequest = { dialectMenuExpanded = false }
+                            ) {
+                                dialects.forEach { dialect ->
+                                    DropdownMenuItem(
+                                        text = { Text(dialect.label) },
+                                        onClick = {
+                                            selectedDialect = dialect
+                                            val matchingLanguage = voiceLanguages.firstOrNull {
+                                                it.tag == dialect.languageTag
+                                            } ?: selectedLanguage
+                                            selectedLanguage = matchingLanguage
+                                            onLanguageSelected(matchingLanguage.tag)
+                                            onDialectSelected(dialect.id, dialect.languageTag)
+                                            dialectMenuExpanded = false
+                                            status = "Profilo " + dialect.label + " selezionato"
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Text(selectedDialect.note, color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                        Text(
+                            "Frase di esempio: " + selectedDialect.sample,
+                            color = Color.White,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            "Anteprima con voce di sistema: non è ancora una voce dialettale autentica.",
+                            color = Color(0xFFE4BD69),
+                            fontSize = 11.sp
+                        )
+                        Button(
+                            onClick = {
+                                status = onSpeak(selectedDialect.sample, selectedLanguage)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF30343B),
+                                contentColor = gold
+                            )
+                        ) {
+                            Icon(Icons.Default.RecordVoiceOver, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ascolta esempio")
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = panel),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("PROVA MICROFONO", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
@@ -289,7 +392,7 @@ private fun JuanitaApp(
                 Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
                 Spacer(modifier = Modifier.weight(1f))
                 Text(
-                    "Versione 0.2.0 • Fondamenta modulari",
+                    "Versione 0.3.0 • Profili regionali sperimentali",
                     color = Color(0xFF686C74),
                     fontSize = 11.sp,
                     modifier = Modifier.align(Alignment.CenterHorizontally)
