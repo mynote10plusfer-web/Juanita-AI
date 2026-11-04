@@ -28,12 +28,21 @@ class AssistantPreferences(context: Context) {
             storage.edit().putString(KEY_WAKE_PHRASE, value.trim()).apply()
         }
 
+    var dialectId: String
+        get() = storage.getString(KEY_DIALECT_ID, DEFAULT_DIALECT_ID)
+            ?: DEFAULT_DIALECT_ID
+        set(value) {
+            storage.edit().putString(KEY_DIALECT_ID, value).apply()
+        }
+
     companion object {
         private const val FILE_NAME = "juanita_preferences"
         private const val KEY_LANGUAGE_TAG = "language_tag"
         private const val KEY_WAKE_PHRASE = "wake_phrase"
+        private const val KEY_DIALECT_ID = "dialect_id"
 
         const val DEFAULT_LANGUAGE_TAG = "es-ES"
         const val DEFAULT_WAKE_PHRASE = "Hola Juanita"
+        const val DEFAULT_DIALECT_ID = "canarian"
     }
 }
