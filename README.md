@@ -1,29 +1,34 @@
 # Juanita AI
 
-Android-first personal voice assistant focused on multilingual interaction, offline-capable speech, configurable personality, privacy, and replaceable AI providers.
+Android-first personal voice assistant focused on multilingual interaction, configurable identity and personality, offline-capable speech, privacy, and replaceable AI providers.
 
-## Current version: 0.3.0
+## Current version: 0.4.0
 
 - Kotlin + Jetpack Compose Android application.
-- Persistent voice-language and regional-profile selection.
-- Experimental Sicilian (Palermo-area), Canarian Spanish, and Colombian Paisa phrase profiles with spoken sample previews.
-- Sample playback currently uses the selected Android system voice; it does not claim authentic regional accent synthesis.
+- Editable assistant display name and configurable wake phrase (saved locally; wake-word engine not yet connected).
+- Nine persistent personality controls: irony, sweetness, sensuality, seriousness, friendliness, curiosity, expressiveness, formality, and empathy.
+- Persona prompt model prepared for the future conversation provider.
+- Persistent language and regional-profile selection.
+- Experimental Sicilian (Palermo-area), Canarian Spanish, and Colombian Paisa phrase profiles.
+- Android system TTS sample playback; regional accent authenticity is not guaranteed.
 - Android speech-recognition intent as a temporary input adapter.
-- Android TextToSpeech with language availability and error handling.
 - Provider-neutral interfaces for speech recognition, speech output, and conversational AI.
-- GitHub Actions debug APK build.
-- Protected workflow and Gradle configuration prepared for permanent release signing.
+- GitHub Actions debug APK build; optional protected release-signing workflow.
 
-The current Android speech adapters are a development baseline, not the final offline speech system. System recognition may depend on services installed on the device and network availability.
+The personality settings are stored on-device and define the system instructions that a future AI conversation provider will receive. They do not yet alter live AI replies because a conversation provider has not been connected.
 
 ## Not implemented yet
 
-- sherpa-onnx offline ASR/TTS runtime and downloaded model assets.
-- Authentic Sicilian, Canarian, and Paisa neural voices (regional profiles are currently phrase/style previews only).
+- Actual conversational AI provider and multi-turn chat.
+- sherpa-onnx offline ASR/TTS runtime and model downloads.
+- Authentic regional Sicilian, Canarian, or Paisa neural voices.
 - Wake-word detection and always-listening foreground service.
-- Conversational AI provider and persistent conversational memory.
-- Notification, SMS, WhatsApp, email, call, and calendar integrations.
+- LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar); each will require explicit permissions.
 - Production release signing key configured in GitHub Actions.
+
+## Product direction
+
+The first release is an independent Android app. Core functions should remain free and local wherever practical; optional cloud intelligence may be added without making cloud access mandatory for basic device functions. A later LIFE mode is intended to act as an opt-in daily copilot for alarms, messages, email, reminders, and incoming-call announcements.
 
 ## Build
 
