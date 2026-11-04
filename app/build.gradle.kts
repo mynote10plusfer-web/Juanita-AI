@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val signingStoreFile = providers.environmentVariable("JUANITA_SIGNING_STORE_FILE").orNull
+val signingStorePassword = providers.environmentVariable("JUANITA_SIGNING_STORE_PASSWORD").orNull
+val signingKeyAlias = providers.environmentVariable("JUANITA_SIGNING_KEY_ALIAS").orNull
+val signingKeyPassword = providers.environmentVariable("JUANITA_SIGNING_KEY_PASSWORD").orNull
+
 android {
     namespace = "ai.juanita.app"
     compileSdk = 35
@@ -14,6 +19,26 @@ android {
         targetSdk = 35
         versionCode = 2
         versionName = "0.2.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            if (!signingStoreFile.isNullOrBlank()) {
+                storeFile = file(signingStoreFile)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            if (!signingStoreFile.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
 
     buildFeatures {
