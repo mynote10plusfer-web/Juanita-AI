@@ -26,6 +26,10 @@ The personality settings are stored on-device and define the system instructions
 - LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar); each will require explicit permissions.
 - Production release signing key configured in GitHub Actions.
 
+## JUANITA CORE
+
+The planned persistent identity, autonomous memory curation, reflection journal, privacy controls and adaptive-style architecture are specified in [JUANITA_CORE.md](JUANITA_CORE.md). This is a design specification; these runtime capabilities are not implemented yet.
+
 ## Product direction
 
 The first release is an independent Android app. Core functions should remain free and local wherever practical; optional cloud intelligence may be added without making cloud access mandatory for basic device functions. A later LIFE mode is intended to act as an opt-in daily copilot for alarms, messages, email, reminders, and incoming-call announcements.
