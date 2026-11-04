@@ -1,0 +1,269 @@
+package ai.juanita.app
+
+import android.app.Activity
+import android.content.Intent
+import android.os.Bundle
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.Icon
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import java.util.Locale
+
+private data class VoiceLanguage(val label: String, val tag: String) {
+    val locale: Locale get() = Locale.forLanguageTag(tag)
+}
+
+private val voiceLanguages = listOf(
+    VoiceLanguage("Español (España)", "es-ES"),
+    VoiceLanguage("Italiano", "it-IT"),
+    VoiceLanguage("Čeština", "cs-CZ"),
+    VoiceLanguage("English", "en-US"),
+    VoiceLanguage("Español (Colombia)", "es-CO")
+)
+
+class MainActivity : ComponentActivity() {
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        tts = TextToSpeech(this) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+        }
+
+        setContent {
+            JuanitaApp(
+                onSpeak = { text, language ->
+                    val engine = tts
+                    if (ttsReady && engine != null) {
+                        engine.language = language.locale
+                        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "juanita-intro")
+                    }
+                }
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        tts?.stop()
+        tts?.shutdown()
+        tts = null
+        super.onDestroy()
+    }
+}
+
+@Composable
+private fun JuanitaApp(onSpeak: (String, VoiceLanguage) -> Unit) {
+    val background = Color(0xFF090A0C)
+    val panel = Color(0xFF17191D)
+    val gold = Color(0xFFE4BD69)
+    var selectedLanguage by remember { mutableStateOf(voiceLanguages.first()) }
+    var menuExpanded by remember { mutableStateOf(false) }
+    var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
+    var status by remember { mutableStateOf("Pronta per il primo test") }
+
+    val speechLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+            if (!spoken.isNullOrBlank()) {
+                transcript = spoken
+                status = "Voce riconosciuta"
+            } else {
+                status = "Nessun testo riconosciuto"
+            }
+        } else {
+            status = "Riconoscimento vocale annullato o non disponibile"
+        }
+    }
+
+    MaterialTheme {
+        Surface(modifier = Modifier.fillMaxSize(), color = background) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 22.dp, vertical = 28.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            ) {
+                Text(
+                    text = "JUANITA",
+                    color = gold,
+                    fontSize = 29.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 4.sp
+                )
+                Text(
+                    text = "PERSONAL VOICE ASSISTANT",
+                    color = Color(0xFF9A9DA4),
+                    fontSize = 11.sp,
+                    letterSpacing = 2.sp
+                )
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = panel),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text("LINGUA DELLA VOCE", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                selectedLanguage.label,
+                                color = Color.White,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = { menuExpanded = true }) {
+                                Text("Cambia", color = gold)
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false }
+                            ) {
+                                voiceLanguages.forEach { language ->
+                                    DropdownMenuItem(
+                                        text = { Text(language.label) },
+                                        onClick = {
+                                            selectedLanguage = language
+                                            menuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            "La lingua scelta viene usata per la prova vocale e per la voce sintetica.",
+                            color = Color(0xFF9A9DA4),
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = panel),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("PROVA MICROFONO", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(transcript, color = Color.White, fontSize = 16.sp)
+                        Button(
+                            onClick = {
+                                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, selectedLanguage.tag)
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Parla con Juanita")
+                                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                                }
+                                try {
+                                    speechLauncher.launch(intent)
+                                    status = "Ascolto tramite il servizio vocale Android…"
+                                } catch (_: Exception) {
+                                    status = "Nessun servizio di riconoscimento vocale disponibile"
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                        ) {
+                            Icon(Icons.Default.Mic, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Parla")
+                        }
+                    }
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = panel),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("VOCE DI JUANITA", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Ciao, sono Juanita. Sto preparando la mia voce e le mie capacità.",
+                            color = Color.White
+                        )
+                        Button(
+                            onClick = {
+                                onSpeak(
+                                    "Ciao, sono Juanita. Piacere di conoscerti. Come posso aiutarti?",
+                                    selectedLanguage
+                                )
+                                status = "Richiesta inviata al motore vocale Android"
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                        ) {
+                            Icon(Icons.Default.RecordVoiceOver, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Ascolta la voce")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(2.dp))
+                Text("STATO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    "Versione 0.1.0 • Prototipo tecnico",
+                    color = Color(0xFF686C74),
+                    fontSize = 11.sp,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
+        }
+    }
+}
