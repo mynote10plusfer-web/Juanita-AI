@@ -2,10 +2,12 @@
 
 Android-first personal voice assistant focused on multilingual interaction, offline-capable speech, configurable personality, privacy, and replaceable AI providers.
 
-## Current version: 0.2.0
+## Current version: 0.3.0
 
 - Kotlin + Jetpack Compose Android application.
-- Persistent voice-language selection.
+- Persistent voice-language and regional-profile selection.
+- Experimental Sicilian (Palermo-area), Canarian Spanish, and Colombian Paisa phrase profiles with spoken sample previews.
+- Sample playback currently uses the selected Android system voice; it does not claim authentic regional accent synthesis.
 - Android speech-recognition intent as a temporary input adapter.
 - Android TextToSpeech with language availability and error handling.
 - Provider-neutral interfaces for speech recognition, speech output, and conversational AI.
@@ -17,6 +19,7 @@ The current Android speech adapters are a development baseline, not the final of
 ## Not implemented yet
 
 - sherpa-onnx offline ASR/TTS runtime and downloaded model assets.
+- Authentic Sicilian, Canarian, and Paisa neural voices (regional profiles are currently phrase/style previews only).
 - Wake-word detection and always-listening foreground service.
 - Conversational AI provider and persistent conversational memory.
 - Notification, SMS, WhatsApp, email, call, and calendar integrations.
