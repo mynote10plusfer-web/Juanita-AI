@@ -1,0 +1,82 @@
+# Juanita AI — Engineering Architecture
+
+## Product principles
+
+- Android-first, phone-only installation and cloud CI builds.
+- Offline-first speech path wherever a suitable model exists.
+- AI provider is optional and replaceable; no API key is shipped in the APK.
+- Explicit Android permissions and user-controlled background behavior.
+- No fake capability: unavailable providers and missing models must surface a clear status.
+- Preserve package identity `ai.juanita.app`; increment `versionCode` for every installable build.
+- Never rotate the permanent release signing key.
+
+## Current baseline (0.2.0)
+
+- Kotlin + Jetpack Compose.
+- Persistent selected speech language using a local preferences boundary.
+- Android speech-recognition intent as a temporary recognition adapter.
+- Android TextToSpeech with explicit language availability/error checks.
+- Provider-neutral interfaces for ASR, TTS, and conversation engines.
+- GitHub Actions debug build.
+- Optional release signing configuration and a protected release workflow.
+
+## Target modules
+
+### Presentation
+Compose screens, state holders, accessibility, settings, chat transcript.
+
+### Speech
+- `SpeechRecognitionProvider`: streaming/partial/final recognition contract.
+- `SpeechOutputProvider`: speech synthesis contract.
+- Future adapters: sherpa-onnx local models, Android system speech fallback, optional remote providers.
+- VAD and keyword spotting are separate services; wake-word listening must run only after explicit opt-in.
+
+### Conversation
+- `ConversationProvider`: local or remote conversational engine.
+- Context window and prompt construction remain independent from speech providers.
+- API credentials are never embedded in the app or committed to Git.
+
+### Memory
+- User-controlled structured preferences and conversation facts.
+- Data minimization, export, and delete controls.
+- Raw microphone audio is not persisted by default.
+
+### Android integrations
+Notification listener, calendar, calls, and messaging are separate permission-gated modules. No broad permissions are requested until the corresponding feature is implemented and explained.
+
+## Offline speech evaluation
+
+The leading candidate is sherpa-onnx. Its official documentation describes on-device Android speech recognition without Internet access and provides Android/Kotlin examples, ASR, TTS, VAD, keyword spotting, and language-identification APIs.
+
+Integration must be model-driven, not just dependency-driven:
+1. Select an ASR model that covers Italian, Spanish, Czech, and English with acceptable accuracy and latency.
+2. Measure RAM, CPU, battery, APK size, and cold-start time on the target Galaxy Note 10+.
+3. Select TTS voices individually and audit each model/dataset license.
+4. Download model files separately from the APK when appropriate; verify hashes and keep model licenses alongside the downloads.
+5. Do not claim regional accents such as Canarian, Sicilian, or Paisa are authentic unless tested with native speakers.
+
+Official references:
+- https://k2-fsa.github.io/sherpa/onnx/android/index.html
+- https://k2-fsa.github.io/sherpa/onnx/
+
+## Signing and updates
+
+The current debug workflow is for development only. GitHub-hosted runners create a debug signing key in the runner environment; it is not a permanent update identity.
+
+The signed release workflow expects these GitHub Actions secrets:
+- `JUANITA_KEYSTORE_BASE64`
+- `JUANITA_KEYSTORE_PASSWORD`
+- `JUANITA_KEY_ALIAS`
+- `JUANITA_KEY_PASSWORD`
+
+A single user-owned keystore must be created, backed up securely, and used for every release. Never commit the keystore or passwords. Do not install a release APK until the permanent signing key has been configured and the APK signature has been verified.
+
+## Next milestones
+
+1. Configure and back up the permanent signing key; verify release signing.
+2. Add model download/verification and sherpa-onnx native Android runtime.
+3. Implement local microphone capture, VAD, ASR and offline TTS adapters.
+4. Implement wake phrase detection with an explicit foreground-service opt-in and Android notification.
+5. Add conversation provider and local memory.
+6. Add LIFE integrations one by one, behind user-granted permissions.
+7. Device tests and battery/privacy review before any always-on release.
