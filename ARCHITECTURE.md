@@ -10,10 +10,11 @@
 - Preserve package identity `ai.juanita.app`; increment `versionCode` for every installable build.
 - Never rotate the permanent release signing key.
 
-## Current baseline (0.2.0)
+## Current baseline (0.3.0)
 
 - Kotlin + Jetpack Compose.
-- Persistent selected speech language using a local preferences boundary.
+- Persistent selected speech language and regional speech profile using a local preferences boundary.
+- Experimental regional phrase profiles: Sicilian (Palermo area), Canarian Spanish, and Colombian Paisa. These currently select a base system locale and provide sample phrases; Android system TTS does not guarantee the regional accent.
 - Android speech-recognition intent as a temporary recognition adapter.
 - Android TextToSpeech with explicit language availability/error checks.
 - Provider-neutral interfaces for ASR, TTS, and conversation engines.
@@ -43,6 +44,21 @@ Compose screens, state holders, accessibility, settings, chat transcript.
 
 ### Android integrations
 Notification listener, calendar, calls, and messaging are separate permission-gated modules. No broad permissions are requested until the corresponding feature is implemented and explained.
+
+## Regional dialect strategy
+
+Treat language recognition and voice generation as separate problems. A dialect profile must define:
+- Base language/locale for the ASR/TTS engine.
+- Regional vocabulary and phrase preferences for the conversation layer.
+- A dedicated voice model only when a licensed, suitable regional dataset/model exists.
+- Native-speaker review before using labels such as "authentic Sicilian", "Canarian", or "Paisa".
+
+Initial locale mapping:
+- Sicilian (Palermo area): Italian fallback locale `it-IT`; a Sicilian-language model is a separate future requirement.
+- Canarian Spanish: Spanish fallback locale `es-ES`; no dedicated Canarian Piper voice was confirmed in the standard voice catalogue.
+- Colombian Paisa: Colombian Spanish fallback locale `es-CO`; no dedicated Paisa Piper voice was confirmed in the standard voice catalogue.
+
+The current 0.3.0 UI plays example phrases using the Android system voice. This is a functional profile selector, not dialect-accurate speech synthesis.
 
 ## Offline speech evaluation
 
