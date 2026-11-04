@@ -3,23 +3,43 @@
 ## Product principles
 
 - Android-first, phone-only installation and cloud CI builds.
-- Offline-first speech path wherever a suitable model exists.
-- AI provider is optional and replaceable; no API key is shipped in the APK.
+- Independent app first; deeper Android/Google replacement integrations later.
+- Free local-first core; optional replaceable cloud AI, never a mandatory API key in the APK.
+- Female, natural, warm assistant persona with user-adjustable character.
 - Explicit Android permissions and user-controlled background behavior.
 - No fake capability: unavailable providers and missing models must surface a clear status.
 - Preserve package identity `ai.juanita.app`; increment `versionCode` for every installable build.
 - Never rotate the permanent release signing key.
 
-## Current baseline (0.3.0)
+## Current baseline (0.4.0)
 
 - Kotlin + Jetpack Compose.
-- Persistent selected speech language and regional speech profile using a local preferences boundary.
-- Experimental regional phrase profiles: Sicilian (Palermo area), Canarian Spanish, and Colombian Paisa. These currently select a base system locale and provide sample phrases; Android system TTS does not guarantee the regional accent.
+- Persistent assistant name and editable wake phrase.
+- Nine persistent personality traits: irony, sweetness, sensuality, seriousness, friendliness, curiosity/intelligence, expressiveness, formality, empathy.
+- `PersonaProfile` builds a system instruction for a future AI provider; no live conversation provider is connected yet.
+- Persistent selected speech language and regional profile.
+- Experimental Sicilian (Palermo area), Canarian Spanish, and Colombian Paisa phrase profiles.
 - Android speech-recognition intent as a temporary recognition adapter.
 - Android TextToSpeech with explicit language availability/error checks.
 - Provider-neutral interfaces for ASR, TTS, and conversation engines.
-- GitHub Actions debug build.
-- Optional release signing configuration and a protected release workflow.
+- GitHub Actions debug build and optional release signing configuration.
+
+## Assistant identity and personality
+
+Identity, wake phrase, language, regional dialect, voice output and character are separate settings.
+
+Default starting character values (editable by the user):
+- Irony 75%
+- Sweetness 90%
+- Sensuality 65%
+- Seriousness 40%
+- Friendliness 85%
+- Intelligence/curiosity 100%
+- Expressiveness 80%
+- Formality 15%
+- Empathy 95%
+
+The assistant should remain warm, human and conversational. Personality traits must be context-sensitive: serious or sensitive situations prioritize clarity, respect and care; flirtation and humour must never be forced. The editable wake phrase is currently stored only; actual wake-word detection is a later speech milestone.
 
 ## Target modules
 
@@ -34,16 +54,17 @@ Compose screens, state holders, accessibility, settings, chat transcript.
 
 ### Conversation
 - `ConversationProvider`: local or remote conversational engine.
+- Every request should include the selected persona/system instruction, language and regional dialect.
 - Context window and prompt construction remain independent from speech providers.
-- API credentials are never embedded in the app or committed to Git.
+- API credentials are never embedded in the APK or committed to Git.
 
 ### Memory
 - User-controlled structured preferences and conversation facts.
 - Data minimization, export, and delete controls.
 - Raw microphone audio is not persisted by default.
 
-### Android integrations
-Notification listener, calendar, calls, and messaging are separate permission-gated modules. No broad permissions are requested until the corresponding feature is implemented and explained.
+### LIFE mode / Android integrations
+The user-approved product direction is an opt-in daily copilot: wake-up greeting, reminders, incoming-call announcements, and message/email notifications; reading and replying to messages only after explicit user enablement. Build each integration separately behind Android permissions and user controls. No broad permissions are requested until the corresponding feature is implemented and explained.
 
 ## Regional dialect strategy
 
@@ -55,10 +76,10 @@ Treat language recognition and voice generation as separate problems. A dialect 
 
 Initial locale mapping:
 - Sicilian (Palermo area): Italian fallback locale `it-IT`; a Sicilian-language model is a separate future requirement.
-- Canarian Spanish: Spanish fallback locale `es-ES`; no dedicated Canarian Piper voice was confirmed in the standard voice catalogue.
-- Colombian Paisa: Colombian Spanish fallback locale `es-CO`; no dedicated Paisa Piper voice was confirmed in the standard voice catalogue.
+- Canarian Spanish: Spanish fallback locale `es-ES`.
+- Colombian Paisa: Colombian Spanish fallback locale `es-CO`.
 
-The current 0.3.0 UI plays example phrases using the Android system voice. This is a functional profile selector, not dialect-accurate speech synthesis.
+Current Android system TTS previews are not dialect-accurate speech synthesis.
 
 ## Offline speech evaluation
 
@@ -89,10 +110,10 @@ A single user-owned keystore must be created, backed up securely, and used for e
 
 ## Next milestones
 
-1. Configure and back up the permanent signing key; verify release signing.
+1. Connect a real conversation provider and multi-turn chat, passing the saved persona and dialect in every request.
 2. Add model download/verification and sherpa-onnx native Android runtime.
 3. Implement local microphone capture, VAD, ASR and offline TTS adapters.
-4. Implement wake phrase detection with an explicit foreground-service opt-in and Android notification.
-5. Add conversation provider and local memory.
+4. Implement wake phrase detection with explicit foreground-service opt-in and Android notification.
+5. Add user-controlled conversational memory.
 6. Add LIFE integrations one by one, behind user-granted permissions.
-7. Device tests and battery/privacy review before any always-on release.
+7. Verify permanent release signing, then device tests and battery/privacy review.
