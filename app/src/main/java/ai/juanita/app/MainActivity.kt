@@ -1,5 +1,6 @@
 package ai.juanita.app
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
@@ -38,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,11 +50,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private data class VoiceLanguage(val label: String, val tag: String) {
     val locale: Locale get() = Locale.forLanguageTag(tag)
@@ -207,6 +211,24 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var liveState by remember { mutableStateOf("Non connessa") }
+    val liveAssistant = remember { GeminiLiveAssistant() }
+    val liveScope = rememberCoroutineScope()
+    val livePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            liveScope.launch {
+                liveState = "Connessione a Gemini Live…"
+                try {
+                    liveAssistant.start(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                    liveState = "Juanita è in ascolto. Puoi parlare normalmente."
+                } catch (error: Exception) {
+                    liveState = "Connessione non riuscita: ${error.localizedMessage ?: "controlla App Check e rete"}"
+                }
+            }
+        } else liveState = "Permesso microfono negato"
+    }
 
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -353,6 +375,31 @@ private fun JuanitaApp(
                         Icon(Icons.Default.Mic, contentDescription = null)
                         Text("  Parla")
                     }
+                }
+
+                SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
+                    Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                    Text(liveState, color = Color.White, fontSize = 14.sp)
+                    Button(
+                        onClick = { livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                    ) {
+                        Icon(Icons.Default.Mic, contentDescription = null)
+                        Text("  Avvia conversazione")
+                    }
+                    Button(
+                        onClick = {
+                            liveScope.launch {
+                                liveAssistant.stop()
+                                liveState = "Conversazione terminata"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Termina conversazione") }
+                    Text("Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
                 SettingsCard(panel, gold, "MEMORIA DI JUANITA") {
