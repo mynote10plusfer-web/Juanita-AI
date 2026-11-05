@@ -26,6 +26,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +49,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.data.AssistantPreferences
+import ai.juanita.app.memory.EncryptedMemoryStore
+import ai.juanita.app.memory.MemoryItem
 import java.util.Locale
 
 private data class VoiceLanguage(val label: String, val tag: String) {
@@ -78,6 +81,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preferences = AssistantPreferences(applicationContext)
+        val memoryStore = EncryptedMemoryStore(applicationContext)
         tts = TextToSpeech(this) { result -> ttsReady = result == TextToSpeech.SUCCESS }
 
         val savedPersona = PersonaProfile(
@@ -100,6 +104,11 @@ class MainActivity : ComponentActivity() {
                 initialName = preferences.assistantName,
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
+                initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
+                initialMemories = memoryStore.listMemories(),
+                onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
+                onSaveMemory = { memoryStore.addMemory(it) },
+                onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onLanguageSelected = { preferences.languageTag = it },
                 onDialectSelected = { dialectId, languageTag ->
                     preferences.dialectId = dialectId
@@ -156,6 +165,11 @@ private fun JuanitaApp(
     initialName: String,
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
+    initialArchiveEnabled: Boolean,
+    initialMemories: List<MemoryItem>,
+    onArchiveEnabledChanged: (Boolean) -> Unit,
+    onSaveMemory: (String) -> MemoryItem,
+    onDeleteMemory: (String) -> Unit,
     onLanguageSelected: (String) -> Unit,
     onDialectSelected: (String, String) -> Unit,
     onNameChanged: (String) -> Unit,
@@ -189,6 +203,9 @@ private fun JuanitaApp(
     var assistantName by remember { mutableStateOf(initialName) }
     var wakePhrase by remember { mutableStateOf(initialWakePhrase) }
     var persona by remember { mutableStateOf(initialPersona) }
+    var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
+    var memoryDraft by remember { mutableStateOf("") }
+    var memories by remember { mutableStateOf(initialMemories) }
 
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -321,6 +338,60 @@ private fun JuanitaApp(
                         Icon(Icons.Default.Mic, contentDescription = null)
                         Text("  Parla")
                     }
+                }
+
+                SettingsCard(panel, gold, "MEMORIA DI JUANITA") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = archiveEnabled,
+                            onCheckedChange = {
+                                archiveEnabled = it
+                                onArchiveEnabledChanged(it)
+                                status = if (it) "Consenso archivio conversazioni attivato" else "Archivio conversazioni in pausa"
+                            }
+                        )
+                        Text("Consenti archiviazione delle conversazioni", color = Color.White, fontSize = 13.sp)
+                    }
+                    Text(
+                        "Disattivato per impostazione predefinita. Quando il dialogo AI sarà collegato, i testi potranno essere conservati cifrati sul telefono. Nessun audio viene salvato.",
+                        color = Color(0xFF9A9DA4), fontSize = 12.sp
+                    )
+                    OutlinedTextField(
+                        value = memoryDraft,
+                        onValueChange = { memoryDraft = it },
+                        label = { Text("Ricordo da conservare") },
+                        placeholder = { Text("Scrivi un'informazione non sensibile…") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = {
+                            if (memoryDraft.isNotBlank()) {
+                                val saved = onSaveMemory(memoryDraft)
+                                memories = listOf(saved) + memories
+                                memoryDraft = ""
+                                status = "Ricordo salvato in forma cifrata sul dispositivo"
+                            }
+                        },
+                        enabled = memoryDraft.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Salva ricordo") }
+                    if (memories.isEmpty()) {
+                        Text("Nessun ricordo salvato.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                    } else {
+                        memories.take(20).forEach { item ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(item.text, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                TextButton(onClick = {
+                                    onDeleteMemory(item.id)
+                                    memories = memories.filterNot { it.id == item.id }
+                                    status = "Ricordo eliminato"
+                                }) { Text("Elimina", color = gold) }
+                            }
+                        }
+                    }
+                    Text("La curatela automatica e i collegamenti tra ricordi saranno attivati dopo l'integrazione del motore AI. Per ora puoi salvare e cancellare ricordi manualmente.",
+                        color = gold, fontSize = 11.sp)
                 }
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
