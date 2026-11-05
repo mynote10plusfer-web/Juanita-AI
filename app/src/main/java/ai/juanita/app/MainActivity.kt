@@ -190,13 +190,13 @@ private fun JuanitaApp(
     val dialects = listOf(
         RegionalDialect("sicilian-palermo", "Siciliano · area palermitana", "it-IT",
             "Chi bedda jurnata! Nni facemu 'na passiata?",
-            "Profilo sperimentale: lessico e pronuncia da verificare con parlanti palermitani."),
+            "Profilo sperimentale: siciliano palermitano colloquiale; lessico e pronuncia da perfezionare con parlanti nativi."),
         RegionalDialect("canarian", "Español canario", "es-ES",
             "¡Qué día más bueno! ¿Nos damos una vueltita por la isla?",
-            "Profilo sperimentale: lessico e ritmo delle Canarie; non è ancora una voce canaria autentica."),
+            "Profilo sperimentale: spagnolo canario colloquiale, ritmo rilassato e lessico delle isole; timbro nativo non garantito."),
         RegionalDialect("paisa", "Colombiano paisa", "es-CO",
             "¡Qué más pues! ¿Cómo vamos? Nos damos una vueltica, ¿o qué?",
-            "Profilo sperimentale: espressioni di Antioquia; non è ancora una voce paisa autentica.")
+            "Profilo sperimentale: spagnolo paisa di Antioquia/Medellín, espressioni locali e tono cordiale; timbro nativo non garantito.")
     )
     var selectedDialect by remember {
         mutableStateOf(dialects.firstOrNull { it.id == initialDialectId } ?: dialects[1])
@@ -304,7 +304,7 @@ private fun JuanitaApp(
                     TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
                     TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
                     TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
-                    Text("Questi parametri definiscono il profilo da passare al futuro motore conversazionale; da soli non modificano ancora le risposte AI.",
+                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di Juanita.",
                         color = gold, fontSize = 11.sp)
                 }
 
@@ -415,7 +415,7 @@ private fun JuanitaApp(
                         Text("Consenti archiviazione delle conversazioni", color = Color.White, fontSize = 13.sp)
                     }
                     Text(
-                        "Disattivato per impostazione predefinita. Quando il dialogo AI sarà collegato, i testi potranno essere conservati cifrati sul telefono. Nessun audio viene salvato.",
+                        "Disattivato per impostazione predefinita. I ricordi salvati manualmente restano cifrati sul telefono. Lo streaming audio Live non viene archiviato da questa app.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp
                     )
                     OutlinedTextField(
@@ -452,16 +452,16 @@ private fun JuanitaApp(
                             }
                         }
                     }
-                    Text("La curatela automatica e i collegamenti tra ricordi saranno attivati dopo l'integrazione del motore AI. Per ora puoi salvare e cancellare ricordi manualmente.",
+                    Text("La memoria automatica delle conversazioni non è ancora attiva. Puoi salvare e cancellare ricordi manualmente.",
                         color = gold, fontSize = 11.sp)
                 }
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                    Text("Il profilo personale è configurabile e persistente. Motore AI conversazionale, ascolto continuo e voci dialettali dedicate sono ancora da integrare.",
+                    Text("Gemini Live è integrato per le prove vocali. La wake word, la memoria automatica e le voci regionali native sono ancora in sviluppo.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
-                Text("Versione 0.4.0 • Identità e personalità configurabili",
+                Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
         }
