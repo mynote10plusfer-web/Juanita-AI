@@ -1,19 +1,26 @@
 package ai.juanita.app.ai
 
+import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.ActivityDetectionConfig
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.LiveSession
 import com.google.firebase.ai.type.PublicPreviewAPI
+import com.google.firebase.ai.type.RealtimeInputConfig
 import com.google.firebase.ai.type.ResponseModality
 import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
+import com.google.firebase.ai.type.realtimeInputConfig
 
 /**
- * Small lifecycle wrapper for the Firebase AI Logic Gemini Live audio session.
- * Microphone permission must be granted by the Activity before start() is called.
+ * Lifecycle wrapper for Firebase AI Logic Gemini Live audio.
+ *
+ * Uses server-side voice activity detection and Gemini's native interruption
+ * handling. The SDK owns microphone capture and speaker playback.
+ * Microphone permission must be granted by the Activity before start().
  */
 @OptIn(PublicPreviewAPI::class)
 class GeminiLiveAssistant {
@@ -21,17 +28,46 @@ class GeminiLiveAssistant {
 
     suspend fun start(systemInstruction: String) {
         stop()
+
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
             systemInstruction = content { text(systemInstruction) },
             generationConfig = liveGenerationConfig {
                 responseModality = ResponseModality.AUDIO
                 speechConfig = SpeechConfig(voice = Voice("Kore"))
+
+                // Natural turn-taking: detect the user's speech automatically,
+                // but tolerate short pauses and avoid reacting to tiny noises.
+                realtimeInputConfig = realtimeInputConfig {
+                    automaticActivityDetection = ActivityDetectionConfig.builder()
+                        .setStartSensitivity(ActivityDetectionConfig.Sensitivity.LOW)
+                        .setEndSensitivity(ActivityDetectionConfig.Sensitivity.LOW)
+                        .setPrefixPaddingMs(40)
+                        .setSilenceDurationMs(SILENCE_DURATION_MS)
+                        .build()
+                    activityHandling = RealtimeInputConfig.ActivityHandling.INTERRUPT
+                    turnCoverage = RealtimeInputConfig.TurnCoverage.ONLY_ACTIVITY
+                }
             }
         )
+
         val connected = model.connect()
         session = connected
-        connected.startAudioConversation(enableInterruptions = false)
+
+        // The Firebase SDK handles audio capture/playback. Native interruptions
+        // are enabled so the user can speak over Juanita. Transcripts are logged
+        // locally for diagnosis; audio is not recorded or archived by this class.
+        connected.startAudioConversation(
+            transcriptHandler = { input, output ->
+                input?.text?.takeIf { it.isNotBlank() }?.let {
+                    Log.d(TAG, "User: $it")
+                }
+                output?.text?.takeIf { it.isNotBlank() }?.let {
+                    Log.d(TAG, "Juanita: $it")
+                }
+            },
+            enableInterruptions = true
+        )
     }
 
     suspend fun stop() {
@@ -44,5 +80,7 @@ class GeminiLiveAssistant {
 
     companion object {
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
+        private const val TAG = "JuanitaLive"
+        private const val SILENCE_DURATION_MS = 800
     }
 }
