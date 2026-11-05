@@ -12,6 +12,7 @@
     </queries>
 
     <application
+        android:name=".JuanitaApplication"
         android:allowBackup="false"
         android:label="Juanita AI"
         android:supportsRtl="true"
