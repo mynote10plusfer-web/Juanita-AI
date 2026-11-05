@@ -4,6 +4,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.LiveSession
+import com.google.firebase.ai.type.PublicPreviewAPI
 import com.google.firebase.ai.type.ResponseModality
 import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.Voice
@@ -14,6 +15,7 @@ import com.google.firebase.ai.type.liveGenerationConfig
  * Small lifecycle wrapper for the Firebase AI Logic Gemini Live audio session.
  * Microphone permission must be granted by the Activity before start() is called.
  */
+@OptIn(PublicPreviewAPI::class)
 class GeminiLiveAssistant {
     private var session: LiveSession? = null
 
