@@ -265,6 +265,7 @@ private fun JuanitaApp(
                 Text(text = assistantName.uppercase(), color = gold, fontSize = 29.sp,
                     fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                 Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
+                JuanitaAvatarCard()
 
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     OutlinedTextField(
