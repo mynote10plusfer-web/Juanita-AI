@@ -1,6 +1,5 @@
 package ai.juanita.app.ai
 
-import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.ActivityDetectionConfig
@@ -54,20 +53,10 @@ class GeminiLiveAssistant {
         val connected = model.connect()
         session = connected
 
-        // The Firebase SDK handles audio capture/playback. Native interruptions
-        // are enabled so the user can speak over Juanita. Transcripts are logged
-        // locally for diagnosis; audio is not recorded or archived by this class.
-        connected.startAudioConversation(
-            transcriptHandler = { input, output ->
-                input?.text?.takeIf { it.isNotBlank() }?.let {
-                    Log.d(TAG, "User: $it")
-                }
-                output?.text?.takeIf { it.isNotBlank() }?.let {
-                    Log.d(TAG, "Juanita: $it")
-                }
-            },
-            enableInterruptions = true
-        )
+        // The Firebase SDK manages microphone capture and speaker playback.
+        // Native interruptions let the user speak over Juanita when supported
+        // by the device's audio stack.
+        connected.startAudioConversation(enableInterruptions = true)
     }
 
     suspend fun stop() {
@@ -80,7 +69,6 @@ class GeminiLiveAssistant {
 
     companion object {
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
-        private const val TAG = "JuanitaLive"
         private const val SILENCE_DURATION_MS = 800
     }
 }
