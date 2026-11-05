@@ -32,7 +32,7 @@ class GeminiLiveAssistant {
         connected.startAudioConversation(enableInterruptions = true)
     }
 
-    fun stop() {
+    suspend fun stop() {
         session?.let {
             it.stopAudioConversation()
             it.close()
