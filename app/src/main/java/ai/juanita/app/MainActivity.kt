@@ -456,6 +456,8 @@ private fun JuanitaApp(
                         color = gold, fontSize = 11.sp)
                 }
 
+                if (BuildConfig.DEBUG) AppCheckDebugPanel()
+
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
                     Text("Gemini Live è integrato per le prove vocali. La wake word, la memoria automatica e le voci regionali native sono ancora in sviluppo.",
