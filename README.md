@@ -44,3 +44,12 @@ The release workflow requires the four `JUANITA_*` GitHub Actions secrets docume
 ## Security
 
 Never commit API keys, passwords, access tokens, signing keys, or private personal data. Keep secrets in GitHub Actions Secrets and never package them into the APK.
+
+
+## Version 0.5.0 — encrypted memory foundation
+
+This milestone adds an Android Keystore-backed AES-256-GCM local memory store, explicit conversation-archive consent (off by default), manual memory save/list/delete controls, and a deterministic candidate-ranking policy. Raw microphone audio is not stored.
+
+**Important implementation boundary:** the conversational provider is not connected yet, so live conversation turns are not currently being archived and automatic extraction/curation is not yet active. The new curator ranks candidates supplied by a future extraction component; it does not invent memories. The memory centre currently supports explicit manual saving and deletion. Verify encryption and lifecycle behaviour on the Samsung Galaxy Note 10+ / Android 12 before treating this as production-ready.
+
+The signed-release workflow now skips signing cleanly when repository signing secrets are absent, with a visible warning instead of a failed run. A signed APK is still produced only when all four permanent-signing secrets are configured.
