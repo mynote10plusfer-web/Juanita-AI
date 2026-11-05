@@ -11,7 +11,7 @@
 - Preserve package identity `ai.juanita.app`; increment `versionCode` for every installable build.
 - Never rotate the permanent release signing key.
 
-## Current baseline (0.4.0)
+## Current baseline (0.5.1)
 
 - Kotlin + Jetpack Compose.
 - Persistent assistant name and editable wake phrase.
@@ -22,7 +22,11 @@
 - Android speech-recognition intent as a temporary recognition adapter.
 - Android TextToSpeech with explicit language availability/error checks.
 - Provider-neutral interfaces for ASR, TTS, and conversation engines.
-- GitHub Actions debug build and optional release signing configuration.
+- GitHub Actions debug build and permanently signed release build; v0.5.1 signed artifact was built and signature-verified.
+
+## Selected first cloud conversation provider (pending integration)
+
+The user approved a no-billing trial using Firebase AI Logic with the Gemini Developer API and Gemini Live model `gemini-3.1-flash-live-preview`. Use Firebase Spark/free setup only; do not enable billing or choose Agent Platform/Vertex AI without explicit renewed approval. The selected Live model is listed by Google as available on the Gemini Developer API free tier, but Firebase AI Logic Live integration is Preview and may change. Pending user-side Firebase project creation and Android registration (`ai.juanita.app`), receipt of `google-services.json`, SDK/App Check integration, and runtime audio-session implementation. No provider is currently connected in the app.
 
 ## Assistant identity and personality
 
