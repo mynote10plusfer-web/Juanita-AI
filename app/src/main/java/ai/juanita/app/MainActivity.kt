@@ -36,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -219,7 +220,21 @@ private fun JuanitaApp(
         } else status = "Riconoscimento vocale annullato o non disponibile"
     }
 
-    MaterialTheme {
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = gold,
+            onPrimary = Color.Black,
+            secondary = gold,
+            onSecondary = Color.Black,
+            background = background,
+            onBackground = Color.White,
+            surface = panel,
+            onSurface = Color.White,
+            surfaceVariant = Color(0xFF242830),
+            onSurfaceVariant = Color(0xFFE1E3E8),
+            outline = Color(0xFF8C929C)
+        )
+    ) {
         Surface(modifier = Modifier.fillMaxSize(), color = background) {
             Column(
                 modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 28.dp),
