@@ -31,7 +31,7 @@ class GeminiLiveAssistant {
         )
         val connected = model.connect()
         session = connected
-        connected.startAudioConversation(enableInterruptions = true)
+        connected.startAudioConversation(enableInterruptions = false)
     }
 
     suspend fun stop() {
