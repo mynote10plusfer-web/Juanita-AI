@@ -15,10 +15,17 @@ import org.json.JSONArray
 class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     private val mutex = Mutex()
     private val pendingTurns = mutableListOf<String>()
+    private var pendingClearVersion = -1L
 
     suspend fun acceptTurn(role: String, text: String) = mutex.withLock {
         if (!store.isAutomaticMemoryEnabled || text.isBlank()) return@withLock
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return@withLock
+        val clearVersion = store.memoryClearVersion
+        if (pendingTurns.isEmpty()) pendingClearVersion = clearVersion
+        else if (pendingClearVersion != clearVersion) {
+            pendingTurns.clear()
+            pendingClearVersion = clearVersion
+        }
         pendingTurns += "$safeRole: ${text.take(MAX_TURN_CHARS)}"
         if (pendingTurns.size >= BATCH_TURNS) extractPendingLocked()
     }
@@ -28,7 +35,11 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     }
 
     private suspend fun extractPendingLocked() {
-        if (!store.isAutomaticMemoryEnabled) { pendingTurns.clear(); return }
+        if (!store.isAutomaticMemoryEnabled || pendingClearVersion != store.memoryClearVersion) {
+            pendingTurns.clear()
+            pendingClearVersion = store.memoryClearVersion
+            return
+        }
         val batch = pendingTurns.takeLast(MAX_BATCH_TURNS).joinToString("\n")
         pendingTurns.clear()
         if (batch.isBlank()) return
