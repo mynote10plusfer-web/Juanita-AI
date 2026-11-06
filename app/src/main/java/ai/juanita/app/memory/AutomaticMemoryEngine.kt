@@ -3,6 +3,7 @@ package ai.juanita.app.memory
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -41,7 +42,8 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
             return
         }
         val batchVersion = pendingClearVersion
-        val batch = pendingTurns.takeLast(MAX_BATCH_TURNS).joinToString("\n")
+        val batchTurns = pendingTurns.takeLast(MAX_BATCH_TURNS)
+        val batch = batchTurns.joinToString("\n")
         pendingTurns.clear()
         if (batch.isBlank()) return
         try {
@@ -86,8 +88,14 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 if (category !in ALLOWED_CATEGORIES) continue
                 store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f), batchVersion)
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
-            // Best-effort only: a network/quota/JSON error must never interrupt Live audio.
+            // Keep the short batch only in RAM for a later retry; never interrupt Live audio.
+            if (store.isAutomaticMemoryEnabled && store.memoryClearVersion == batchVersion) {
+                pendingTurns.addAll(0, batchTurns)
+                while (pendingTurns.size > MAX_BATCH_TURNS) pendingTurns.removeAt(0)
+            }
         }
     }
 
