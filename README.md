@@ -16,7 +16,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 - Gemini Live response voice selector with seven documented female voices; selection is saved locally and applied when a new Live session starts.
 - Android speech-recognition intent remains available as a separate microphone test.
 - Android requests foreground location permission on first launch (precise GPS or approximate location). It reads a fresh device location automatically on app launch and again before each Gemini Live session, then includes the locality and coordinates in that session context. No weather screen/provider, background tracking, or persistent coordinate history.
-- Android Keystore-backed encrypted manual memory with a dedicated privacy screen: list/edit/delete individual memories, clear all personal memories, enable/disable transcript archiving, choose retention (manual/7/30/90 days), delete individual archived conversations or clear the archive independently. Gemini Live transcript capture is not yet wired into the archive; no automatic conversation transcript is currently stored.
+- Android Keystore-backed encrypted manual memory with a dedicated privacy screen: list/edit/delete individual memories, clear all personal memories, enable/disable transcript archiving, choose retention (manual/7/30/90 days), delete individual archived conversations or clear the archive independently. Gemini Live text transcripts are captured into the local encrypted archive only when the user explicitly enables archiving; raw audio is never archived. Automatic personal-memory extraction is not implemented yet.
 - CameraX front/rear camera preview and optional 1 FPS image frames to the active Gemini Live session are implemented in 0.9.0; physical-device testing is pending.
 - GitHub Actions builds a debug APK and a permanently signed release APK.
 
@@ -34,9 +34,8 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 
 - Native regional neural voices guaranteed to sound authentically Sicilian, Canarian or Paisa.
 - Always-on wake phrase detection (not implemented; the current foreground service is user-started and does not listen for a wake phrase).
-- Automatic extraction, summarization and curation of conversation memories.
 - Offline ASR/TTS runtime and model downloads.
-- Automatic personal-memory extraction and curation.
+- Automatic personal-memory extraction and curation from conversations (planned; not implemented).
 - Background location tracking (intentionally not requested).
 - LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar), each requiring explicit permissions.
 
