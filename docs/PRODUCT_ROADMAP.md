@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06
+Last updated: 2026-11-06 — 0.8.7 privacy storage APIs
 
 ## Latest implementation update — 0.8.6 (foreground audio service)
 
@@ -9,7 +9,7 @@ Last updated: 2026-11-06
 - The service promotes itself to foreground immediately, declares the microphone service type, and shows an ongoing notification with a Stop action.
 - MainActivity now observes service state through StateFlow and no longer owns/stops the Live session when the Activity is destroyed.
 - The known-good Firebase SDK-managed audio path and `enableInterruptions = false` remain unchanged.
-- This is an implementation milestone, not yet a verified screen-off success: GitHub Actions must pass and the APK must be tested on the physical Samsung device with screen off, long pauses, incoming calls, network loss and manual stop.
+- The user confirmed on the physical Samsung Galaxy Note 10+ that Live conversation continues with the display off. Long pauses, incoming calls, network loss and repeated long sessions remain to be tested.
 - Foreground service improves Android background survival but cannot guarantee uninterrupted operation under every OEM battery policy or network condition.
 Repository: https://github.com/mynote10plusfer-web/Juanita-AI
 
@@ -41,7 +41,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Microphone permission and explicit start/stop controls.
 - Language and regional profile selectors (Italian, Spanish, Czech, English, Colombian Spanish; experimental Sicilian, Canarian and Paisa profiles).
 - Nine personality sliders are saved locally and included in the system instruction when a Live session starts. They do not dynamically change an already-running session; apply changes on next session/restart.
-- Encrypted on-device manual memories exist.
+- Encrypted on-device manual memories exist. New local APIs support archive summaries, turn retrieval, per-conversation deletion, date-range deletion, archive-only clearing, memory-only clearing, memory editing and configurable archive retention (never/7/30/90 days). The UI and Live transcript connection remain pending.
 - Conversation archive consent toggle exists, OFF by default; automatic transcript archive and retention/deletion management are not complete.
 - Existing photorealistic Juanita portrait is displayed in an avatar card; animated face and lip sync are not implemented.
 - Wake phrase field exists, but wake-word detection is not connected.
@@ -136,7 +136,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 ## Delivery plan (ordered; update status as work lands)
 
 1. **Reliability foundation:** foreground-service lifecycle and Stop notification implemented in 0.8.6; next add detailed live status/transcript and verify screen-off behavior, reconnects and repeated long conversations on the physical device.
-2. **Privacy foundation:** local transcript data model, opt-in archive, retention policy, delete by conversation/day/range/all; independently manage encrypted personal memories.
+2. **Privacy foundation:** local archive management APIs implemented in 0.8.7 (conversation listing/retrieval/deletion, date-range deletion, archive-only and memory-only clearing, memory editing, retention 0/7/30/90 days). UI controls and actual Gemini Live transcript capture are still pending; archive remains opt-in and no transcript is currently captured automatically.
 3. **Personal onboarding:** gradual “Conosciamoci”, profile editor, explicit save/forget controls, non-intrusive follow-up.
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
 5. **Daily utilities:** local alarms/reminders first, then morning briefing and calendar; weather/location with manual fallback and opt-in notifications.
