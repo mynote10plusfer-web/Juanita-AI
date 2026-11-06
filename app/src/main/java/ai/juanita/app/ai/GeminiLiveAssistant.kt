@@ -2,6 +2,8 @@ package ai.juanita.app.ai
 
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
+import android.graphics.Bitmap
+import com.google.firebase.ai.type.InlineData
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.LiveSession
 import com.google.firebase.ai.type.PublicPreviewAPI
@@ -41,6 +43,13 @@ class GeminiLiveAssistant {
             },
             enableInterruptions = false
         )
+    }
+
+    suspend fun sendVideoFrame(bitmap: Bitmap) {
+        val activeSession = session ?: return
+        val output = java.io.ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 78, output)
+        activeSession.sendVideoRealtime(InlineData(output.toByteArray(), "image/jpeg"))
     }
 
     suspend fun stop() {
