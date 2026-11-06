@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — automatic memory, continuous learning and evolving digital biography requirements added
+Last updated: 2026-11-06 — automatic memory extraction and bounded local storage implemented in PR branch; build/device verification pending
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -77,7 +77,10 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Firebase AI Logic / Gemini Developer API Live model gemini-3.1-flash-live-preview.
 - Encrypted on-device manual memories exist; user can list/edit/delete them. Transcript archive is separately opt-in and OFF by default.
 - Live text transcript capture is wired only when archive consent is enabled; raw audio is never stored.
-- Current memory curator does not yet automatically extract durable memories from every eligible conversation. Automatic extraction, consolidation, retrieval quality and biography generation remain implementation work.
+- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory engine receives user transcript text independently of transcript archiving, batches three user turns, asks Firebase AI Logic/Gemini to extract a maximum of five durable non-sensitive facts, and saves only curated candidates. It does not store raw audio or full transcripts. Model/network/quota errors are non-fatal to the Live session.
+- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory is enabled by default and can be paused in Memory & Privacy settings. The UI can refresh the memory list and supports individual edit/delete and clear-all.
+- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Hard storage ceilings: at most 100 personal memories and 32,000 characters of memory text; each memory is capped at 500 characters. Automatic memories are lower priority than manually saved memories when pruning is required. The separate transcript archive is still opt-in and capped at 300 turns. Clearing memories invalidates pending extraction batches so deleted items are not re-added from buffered turns.
+- Memory retrieval into each new Live session already reads saved personal memories; retrieval quality, contradiction handling, semantic consolidation, biography generation and source-linked Internet knowledge library remain future work.
 - Existing photorealistic Juanita portrait is static; animated face/lip sync not implemented.
 - Avatar Studio stores profile metadata; it does not yet generate rigged models.
 - PR #3 call screen is a partial preview and remains unmerged/build validation pending.
@@ -118,7 +121,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ## Delivery plan
 
-1. Memory engine: implement automatic durable-memory extraction, sensitivity filtering, deduplication, provenance, correction/forgetting, relevance retrieval and encrypted local persistence.
+1. Memory engine: first automatic extraction pipeline, local encrypted persistence, duplicate suppression, sensitive-content guard, pause control, memory list refresh and hard storage caps implemented on PR branch; next validate build/device behavior, add robust provenance/conflict resolution and improve retrieval.
 2. Biography and self-model: build an inspectable evolving biography with chronology, learned topics, projects, milestones and clear separation between user facts and Juanita's software history.
 3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions.
 4. Reliability and privacy: test long sessions, background service, memory pause/disable, export/restore, deletion and offline behavior.
