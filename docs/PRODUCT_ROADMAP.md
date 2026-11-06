@@ -129,7 +129,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ### H. Avatar and expression
 - Keep the existing exact photorealistic brunette, green-eyed portrait; do not replace it with a generic 3D character.
-- [FOUNDATION ADDED IN avatar-call-foundation BRANCH] Portable avatar profile model and private local metadata store support description/photo-reference/random sources, photorealistic/realistic 3D/stylized 3D/cartoon styles, motion presets and an active profile selection. This stores profile metadata only; it does not generate or animate models yet.
+- [INITIAL STUDIO ADDED IN avatar-call-foundation BRANCH] Compose editor supports description/photo-reference/random sources, photorealistic/realistic 3D/stylized 3D/cartoon styles, motion presets, random appearance briefs, and local profile save/select/delete. This stores profile metadata only; it does not generate or animate models yet.
 - Build a WhatsApp-style call screen: large Juanita avatar, user/interlocutor camera preview in a small picture-in-picture tile, camera/mic controls and clear end-call action.
 - Avatar Studio UI: description editor, Android Photo Picker, randomize controls, style selection, preview, save/select/delete.
 - Progressive 2D animation: blinking, gaze, subtle head movement and expressions.
