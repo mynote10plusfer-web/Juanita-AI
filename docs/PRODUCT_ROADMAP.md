@@ -12,14 +12,6 @@ Last updated: 2026-11-06 — 0.9.2 automatic foreground GPS context
 - If permission is denied or a fix is unavailable, Juanita must not pretend to know the user's location.
 - Physical-device GPS testing is required; GPS quality depends on Android permission choice, device settings, satellite reception and network conditions.
 
-- Removed the weather-only screen and Open-Meteo request from the GPS feature.
-- Android asks for foreground location permission on the first app launch, using the standard Android runtime permission prompt (precise or approximate).
-- When permission is granted, the app reads the current device location automatically while in use and refreshes it before each Gemini Live session.
-- The current locality, coordinates, estimated accuracy and age of the fix are passed to Gemini Live as contextual information, so Juanita can use location for local information, nearby places, distances and travel questions.
-- Location is not continuously tracked in the background and no location history or persistent coordinates are stored by the app.
-- If permission is denied or a fix is unavailable, Juanita must not pretend to know the user's location.
-- Physical-device GPS testing is required; GPS quality depends on Android permission choice, device settings, satellite reception and network conditions.
-
 ## Previous implementation update — 0.9.0 (camera integration)\n\n- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.\n- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.\n- Physical-device camera tests remain pending.\n\n## Previous implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Important limitation: Gemini Live transcript capture is not yet connected to the archive. The UI explicitly discloses this; no automatic conversation transcript is currently stored. Raw audio is not archived.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
 
 - Added `JuanitaVoiceService`, an Android microphone foreground service that owns the Gemini Live assistant lifecycle independently of MainActivity.
