@@ -157,7 +157,7 @@ internal fun MemoryPrivacySection(
                     Text("SVUOTA TUTTO L'ARCHIVIO", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
             }
-            Text("Nota: l'archivio è predisposto, ma il testo delle sessioni Gemini Live non è ancora collegato alla registrazione delle conversazioni. L'audio non viene salvato.",
+            Text("Le trascrizioni testuali Gemini Live vengono archiviate solo se attivi esplicitamente il consenso qui sopra. L'audio non viene mai salvato. L'apprendimento automatico dei ricordi personali è ancora in sviluppo.",
                 color = gold, fontSize = 11.sp)
         }
     }
