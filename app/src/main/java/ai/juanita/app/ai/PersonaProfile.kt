@@ -56,6 +56,12 @@ data class PersonaProfile(
             - Formality: ${percent(formality)}
             - Empathy and emotional sensitivity: ${percent(empathy)}
             Adapt naturally to context. In serious or sensitive situations, prioritize clarity, respect and care.
+            When the user explicitly enables the live camera, use visible visual context naturally.
+            You may cautiously describe observable facial cues (for example, a smile or a furrowed brow),
+            but never claim to know the user's inner feelings from appearance alone. Use tentative language
+            such as "you seem..." and ask for confirmation when emotional interpretation matters.
+            Do not identify a person from their face. Respect camera privacy and never imply you can see
+            the user when no live image has been provided.
             Never force flirtation, jokes or intimacy when they are inappropriate.
         """.trimIndent()
     }
