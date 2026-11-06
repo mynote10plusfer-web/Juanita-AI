@@ -2,12 +2,15 @@
 
 Last updated: 2026-11-06
 
-## Latest implementation update — 0.8.5
+## Latest implementation update — 0.8.6 (foreground audio service)
 
-- Added a local preference for the Gemini Live response voice.
-- Added a selector in the app for seven documented female voices; the selected voice is passed into the Live model configuration when a new session starts.
-- The existing stable SDK-managed audio path and interruption setting are unchanged.
-- Next engineering priority remains the microphone foreground-service lifecycle and screen-off reliability. Voice selection has not yet been verified on the physical device; GitHub Actions build results must be checked before distributing the APK.
+- Added `JuanitaVoiceService`, an Android microphone foreground service that owns the Gemini Live assistant lifecycle independently of MainActivity.
+- The user starts the service explicitly from the visible app after granting RECORD_AUDIO permission.
+- The service promotes itself to foreground immediately, declares the microphone service type, and shows an ongoing notification with a Stop action.
+- MainActivity now observes service state through StateFlow and no longer owns/stops the Live session when the Activity is destroyed.
+- The known-good Firebase SDK-managed audio path and `enableInterruptions = false` remain unchanged.
+- This is an implementation milestone, not yet a verified screen-off success: GitHub Actions must pass and the APK must be tested on the physical Samsung device with screen off, long pauses, incoming calls, network loss and manual stop.
+- Foreground service improves Android background survival but cannot guarantee uninterrupted operation under every OEM battery policy or network condition.
 Repository: https://github.com/mynote10plusfer-web/Juanita-AI
 
 This document is the canonical product checklist. Keep it updated whenever scope, implementation status, or user-approved constraints change. A requirement listed here is not a claim that the feature is already implemented.
@@ -49,8 +52,8 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ### A. Conversation continuity and reliability — highest priority
 - Keep voice conversation stable during long turns and pauses.
-- Support screen-off/background conversation through a properly owned microphone foreground service, started only from a user-visible action after permission is granted.
-- Persistent notification while microphone is active, with clear status and a Stop action.
+- [IMPLEMENTED IN 0.8.6 — DEVICE TEST PENDING] Support screen-off/background conversation through a properly owned microphone foreground service, started only from a user-visible action after permission is granted.
+- [IMPLEMENTED IN 0.8.6 — DEVICE TEST PENDING] Persistent notification while microphone is active, with a Stop action.
 - Reconnection/error state, lifecycle handling and safe stop/release.
 - Visible app states: ready/listening, user speaking (when measurable), Juanita speaking, processing, reconnecting, disconnected.
 - Transcript display for user and assistant where supported.
@@ -132,7 +135,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ## Delivery plan (ordered; update status as work lands)
 
-1. **Reliability foundation:** inspect current branch/workflows; implement foreground-service lifecycle for Live audio; visible state and transcript; verify screen-off behavior and repeated long conversations.
+1. **Reliability foundation:** foreground-service lifecycle and Stop notification implemented in 0.8.6; next add detailed live status/transcript and verify screen-off behavior, reconnects and repeated long conversations on the physical device.
 2. **Privacy foundation:** local transcript data model, opt-in archive, retention policy, delete by conversation/day/range/all; independently manage encrypted personal memories.
 3. **Personal onboarding:** gradual “Conosciamoci”, profile editor, explicit save/forget controls, non-intrusive follow-up.
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
