@@ -4,7 +4,7 @@ Status: local profile model/store and Compose Avatar Studio editor are merged in
 
 ## Product experience
 
-The call screen is designed like a video call:
+The call screen is designed like a WhatsApp-style video call:
 
 - Juanita's avatar occupies the main, large area.
 - The current speaker/user appears in a small picture-in-picture window. The first preview currently anchors this tile at the upper-right; drag-to-move is a later refinement.
@@ -12,6 +12,23 @@ The call screen is designed like a video call:
 - Camera and microphone are activated only after an explicit user action and permission.
 - The call screen must continue to use the existing Gemini Live session; opening or closing the call UI must not silently start or stop the voice service.
 - The user can choose a saved avatar and open Avatar Studio without losing existing assistant settings.
+
+## Agreed product scope: personal avatar creation and multi-device video call
+
+The user explicitly requested a reusable Android app for different devices, not a Note 10+-only implementation. The call experience should resemble WhatsApp: Juanita's avatar fills the main screen and the user/current interlocutor appears in a smaller picture-in-picture tile.
+
+Every user can create and save an avatar using one of three sources:
+1. Text description of appearance, age impression, hair, eyes, facial features, clothing and other visual details.
+2. A user-selected photo used only as a visual reference, with explicit consent before any external processing.
+3. Randomized appearance generation with controls to regenerate or edit the result.
+
+The user selects a style independently: photorealistic human, realistic 3D, stylized 3D, or cartoon/animated. A profile metadata record is not a generated avatar: the implementation must produce a previewable and renderable asset before claiming generation is complete.
+
+The saved avatar should persist as the visual identity used in the call screen. Preserve the current Juanita portrait unless the user chooses a different design. Do not implement face recognition or identify a person from the source photograph.
+
+The renderer must adapt to different Android devices (GPU/WebGL, memory, thermal limits, screen size, frame rate and texture/model detail). Test at minimum on Galaxy Note 10+ and S22 Ultra when devices are available.
+
+No paid generation APIs, hosted GPU services, paid hosting, billing activation or Firebase Blaze. Prefer local/open-source generation. If on-device photorealistic generation is not feasible, disclose the limit and offer a free alternative rather than silently routing photos to a paid service.
 
 ## Avatar Studio creation modes
 
