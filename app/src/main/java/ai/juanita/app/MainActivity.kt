@@ -298,6 +298,7 @@ private fun JuanitaApp(
     }
     val liveState by JuanitaVoiceService.state.collectAsState()
     val visionState by JuanitaVoiceService.visionState.collectAsState()
+    val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
     var locationContext by remember { mutableStateOf("") }
@@ -618,6 +619,7 @@ private fun JuanitaApp(
                     gold = gold,
                     initialArchiveEnabled = archiveEnabled,
                     initialAutoMemoryEnabled = initialAutoMemoryEnabled,
+                    memoryStatus = memoryState,
                     onAutoMemoryEnabledChanged = onAutoMemoryEnabledChanged,
                     onRefreshMemories = onRefreshMemories,
                     initialMemories = memories,
