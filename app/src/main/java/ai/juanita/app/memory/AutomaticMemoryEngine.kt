@@ -19,7 +19,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
 
     suspend fun acceptTurn(role: String, text: String) = mutex.withLock {
         if (!store.isAutomaticMemoryEnabled || text.isBlank()) return@withLock
-        val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return@withLock
+        val safeRole = role.uppercase().takeIf { it == "USER" } ?: return@withLock
         val clearVersion = store.memoryClearVersion
         if (pendingTurns.isEmpty()) pendingClearVersion = clearVersion
         else if (pendingClearVersion != clearVersion) {
@@ -48,13 +48,13 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 .generativeModel(modelName = MODEL_NAME)
             val prompt = """
                 You are the memory curator for a personal assistant. Extract at most 5
-                concise, useful, durable facts from this short conversation excerpt.
+                concise, useful, durable facts from the USER messages in this excerpt.
                 Return ONLY a JSON array. Each object must have: "text" (string),
                 "category" (one of preference, interest, project, routine, goal, language,
                 communication, important_event, general), "confidence" (number 0..1),
                 and "sensitive" (boolean).
 
-                Save only information clearly stated by the user or a stable project decision.
+                Save only information explicitly stated by the user in USER messages. Ignore assistant statements as evidence.
                 Prefer facts likely to help in future conversations. Do not save greetings,
                 small talk, one-off questions, temporary moods, jokes, hypotheticals, guesses,
                 or facts about third parties unless essential and non-sensitive.
@@ -102,7 +102,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     }
     companion object {
         private const val MODEL_NAME = "gemini-3.8-flash"
-        private const val BATCH_TURNS = 4
+        private const val BATCH_TURNS = 3
         private const val MAX_BATCH_TURNS = 8
         private const val MAX_TURN_CHARS = 1800
         private const val MIN_MEMORY_CHARS = 8
