@@ -420,7 +420,7 @@ private fun JuanitaApp(
                                         selectedLiveVoice = voice
                                         onLiveVoiceChanged(voice.id)
                                         liveVoiceMenuExpanded = false
-                                        liveState = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
                                     }
                                 )
                             }
