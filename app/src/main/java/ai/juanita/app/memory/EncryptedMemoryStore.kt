@@ -43,6 +43,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun appendConversationTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis()) {
         if (!isConversationArchiveEnabled || text.isBlank()) return
+        purgeExpiredArchive()
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         val records = readRecords()
         records.put(JSONObject().apply {
