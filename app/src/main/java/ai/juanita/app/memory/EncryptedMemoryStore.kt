@@ -221,7 +221,7 @@ class EncryptedMemoryStore(context: Context) {
 
         if (memoryLines.isBlank() && recentTurns.isEmpty()) return ""
 
-        val transcript = recentTurns.joinToString("\\n") { turn ->
+        val transcript = recentTurns.joinToString("\n") { turn ->
             "${turn.role}: ${turn.text.take(700)}"
         }.take(4200)
 
