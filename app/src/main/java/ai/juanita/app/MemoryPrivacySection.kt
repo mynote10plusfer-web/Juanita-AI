@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -64,6 +65,9 @@ internal fun MemoryPrivacySection(
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var editingMemory by remember { mutableStateOf<MemoryItem?>(null) }
     var editText by remember { mutableStateOf("") }
+    LaunchedEffect(memoryStatus) {
+        memories = onRefreshMemories()
+    }
     val retentionLabel = when (retentionDays) {
         7 -> "7 giorni"
         30 -> "30 giorni"
