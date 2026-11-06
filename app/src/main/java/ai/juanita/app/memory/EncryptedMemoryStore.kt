@@ -43,7 +43,10 @@ class EncryptedMemoryStore(context: Context) {
         get() = preferences.getLong(KEY_MEMORY_CLEAR_VERSION, 0L)
 
     fun setAutomaticMemoryEnabled(enabled: Boolean) {
-        preferences.edit().putBoolean(KEY_AUTO_MEMORY_ENABLED, enabled).apply()
+        preferences.edit()
+            .putBoolean(KEY_AUTO_MEMORY_ENABLED, enabled)
+            .putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L)
+            .apply()
     }
 
     /** Disabling pauses future transcript storage but preserves existing records. */
