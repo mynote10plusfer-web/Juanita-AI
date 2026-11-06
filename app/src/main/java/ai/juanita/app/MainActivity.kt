@@ -136,12 +136,14 @@ class MainActivity : ComponentActivity() {
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
+                initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
                 initialArchivedConversations = memoryStore.listArchivedConversations(),
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
+                onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
@@ -211,12 +213,14 @@ private fun JuanitaApp(
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
     initialArchiveEnabled: Boolean,
+    initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialAvatarProfiles: List<AvatarProfile>,
     initialActiveAvatarProfileId: String?,
     initialRetentionDays: Int,
     onArchiveEnabledChanged: (Boolean) -> Unit,
+    onAutoMemoryEnabledChanged: (Boolean) -> Unit,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
@@ -607,6 +611,8 @@ private fun JuanitaApp(
                     panel = panel,
                     gold = gold,
                     initialArchiveEnabled = archiveEnabled,
+                    initialAutoMemoryEnabled = initialAutoMemoryEnabled,
+                    onAutoMemoryEnabledChanged = onAutoMemoryEnabledChanged,
                     initialMemories = memories,
                     initialArchivedConversations = initialArchivedConversations,
                     initialRetentionDays = initialRetentionDays,
@@ -628,7 +634,7 @@ private fun JuanitaApp(
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                    Text("Gemini Live è integrato per le prove vocali. La wake word, la memoria automatica e le voci regionali native sono ancora in sviluppo.",
+                    Text("Gemini Live è integrato per le prove vocali. La memoria automatica è attiva quando abilitata nelle impostazioni; la wake word e le voci regionali native sono ancora in sviluppo.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
