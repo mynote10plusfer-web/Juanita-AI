@@ -79,7 +79,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 val confidence = candidate.optDouble("confidence", 0.0).toFloat()
                 val sensitive = candidate.optBoolean("sensitive", true)
                 if (text.length !in MIN_MEMORY_CHARS..MAX_MEMORY_CHARS) continue
-                if (confidence < MIN_CONFIDENCE || sensitive) continue
+                if (confidence < MIN_CONFIDENCE || sensitive || looksSensitive(text)) continue
                 if (category !in ALLOWED_CATEGORIES) continue
                 store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f))
             }
@@ -88,6 +88,18 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
         }
     }
 
+    private fun looksSensitive(text: String): Boolean {
+        val value = text.lowercase()
+        val blockedTerms = listOf(
+            "diagnosi", "malattia", "patologia", "terapia", "farmaco", "medicinale",
+            "depressione", "disturbo bipolare", "diabete", "tumore", "cancro", "hiv",
+            "gravidanza", "orientamento sessuale", "vita sessuale", "religione",
+            "credenza religiosa", "partito politico", "ideologia politica", "etnia",
+            "password", "codice fiscale", "iban", "carta di credito", "conto bancario",
+            "condanna penale", "precedenti penali"
+        )
+        return blockedTerms.any { value.contains(it) }
+    }
     companion object {
         private const val MODEL_NAME = "gemini-3.8-flash"
         private const val BATCH_TURNS = 4
