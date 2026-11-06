@@ -1,8 +1,26 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — 0.9.1 GPS and weather context
+Last updated: 2026-11-06 — 0.9.2 automatic foreground GPS context
 
-## Latest implementation update — 0.9.1 (foreground location and weather context)\n\n- Added Android foreground location permission flow for precise GPS or approximate network location.\n- Added on-demand current weather and two-day forecast retrieval using Open-Meteo, with current temperature, feels-like temperature, humidity, wind, precipitation and weather codes.\n- The location is not continuously tracked or saved by the app. Coordinates are sent to Open-Meteo for the forecast; a concise place/weather summary is included in the Gemini Live system instruction at the next voice-session start.\n- Weather context is not dynamically refreshed inside an already-running Live session; refresh the location/weather and restart the voice session to apply it.\n- Free Open-Meteo API terms are for non-commercial use; if Juanita is commercialized later, replace the provider or obtain the appropriate commercial plan.\n- Physical-device GPS permission and weather-response tests remain pending.\n\n## Previous implementation update — 0.9.0 (camera integration)\n\n- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.\n- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.\n- Physical-device camera tests remain pending.\n\n## Previous implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Important limitation: Gemini Live transcript capture is not yet connected to the archive. The UI explicitly discloses this; no automatic conversation transcript is currently stored. Raw audio is not archived.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
+## Latest implementation update — 0.9.2 (automatic foreground GPS context)
+
+- Removed the weather-only screen and Open-Meteo request from the GPS feature.
+- Android asks for foreground location permission on the first app launch, using the standard Android runtime permission prompt (precise or approximate).
+- When permission is granted, the app reads the current device location automatically while in use and refreshes it before each Gemini Live session.
+- The current locality, coordinates, estimated accuracy and age of the fix are passed to Gemini Live as contextual information, so Juanita can use location for local information, nearby places, distances and travel questions.
+- Location is not continuously tracked in the background and no location history or persistent coordinates are stored by the app.
+- If permission is denied or a fix is unavailable, Juanita must not pretend to know the user's location.
+- Physical-device GPS testing is required; GPS quality depends on Android permission choice, device settings, satellite reception and network conditions.
+
+- Removed the weather-only screen and Open-Meteo request from the GPS feature.
+- Android asks for foreground location permission on the first app launch, using the standard Android runtime permission prompt (precise or approximate).
+- When permission is granted, the app reads the current device location automatically while in use and refreshes it before each Gemini Live session.
+- The current locality, coordinates, estimated accuracy and age of the fix are passed to Gemini Live as contextual information, so Juanita can use location for local information, nearby places, distances and travel questions.
+- Location is not continuously tracked in the background and no location history or persistent coordinates are stored by the app.
+- If permission is denied or a fix is unavailable, Juanita must not pretend to know the user's location.
+- Physical-device GPS testing is required; GPS quality depends on Android permission choice, device settings, satellite reception and network conditions.
+
+## Previous implementation update — 0.9.0 (camera integration)\n\n- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.\n- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.\n- Physical-device camera tests remain pending.\n\n## Previous implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Important limitation: Gemini Live transcript capture is not yet connected to the archive. The UI explicitly discloses this; no automatic conversation transcript is currently stored. Raw audio is not archived.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
 
 - Added `JuanitaVoiceService`, an Android microphone foreground service that owns the Gemini Live assistant lifecycle independently of MainActivity.
 - The user starts the service explicitly from the visible app after granting RECORD_AUDIO permission.
@@ -91,9 +109,10 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Clear distinction between model-generated voice and Android system TTS preview.
 
 ### E. Location, weather and alerts
-- Request foreground location only when needed and with clear consent; provide manual city/location fallback.
-- Do not continuously track location by default.
-- Answer current weather, forecast, rain, wind and local official weather alerts for the chosen/current permitted location.
+- [IMPLEMENTED IN 0.9.2 — DEVICE TEST PENDING] Request foreground location permission on first app launch; automatically read current location while app is in use and before each Gemini Live session.
+- [IMPLEMENTED IN 0.9.2 — DEVICE TEST PENDING] Pass current locality and coordinates into the active Gemini Live session for location-aware answers about nearby places, distances and travel.
+- Do not continuously track location by default; do not store location history or persistent coordinates.
+- Current weather, forecasts, rain, wind and local official weather alerts require a separate live-data integration and are not part of the GPS permission feature.
 - Optional weather notifications and morning briefing.
 - Location history is not required; do not retain GPS coordinates unnecessarily.
 - Background location must not be requested unless a specific feature genuinely requires it and the user separately opts in.
@@ -139,7 +158,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 2. **Privacy foundation:** local archive APIs and memory/privacy UI implemented in 0.8.8. Personal memories can be edited/deleted independently; archive consent, retention and deletion controls are exposed. Actual Gemini Live transcript capture remains pending; archive remains opt-in and no transcript is currently captured automatically.
 3. **Personal onboarding:** gradual “Conosciamoci”, profile editor, explicit save/forget controls, non-intrusive follow-up.
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
-5. **Daily utilities:** foreground GPS and current weather context implemented in 0.9.1 (physical-device test pending); next add manual location fallback, official alerts, then local alarms/reminders, morning briefing and calendar.
+5. **Daily utilities:** foreground GPS context implemented in 0.9.2 (physical-device test pending); next build separate live-data integrations for weather/local alerts, then local alarms/reminders, morning briefing and calendar.
 6. **Notification companion:** opt-in notification listener, per-app allowlist, read-on-request, confirmed replies.
 7. **Avatar:** staged 2D animation, then evaluate PCM/viseme lip sync without sacrificing audio stability.
 8. **Extended integrations:** motorcycle/travel, translation, smart home and other capabilities.
