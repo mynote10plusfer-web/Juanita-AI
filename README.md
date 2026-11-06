@@ -2,7 +2,7 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current version: 0.8.8 (versionCode 17)
+## Current version: 0.9.1 (versionCode 20)
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
@@ -15,7 +15,9 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 - Android system TTS sample playback; the device's installed voice is used and regional authenticity is not guaranteed.
 - Gemini Live response voice selector with seven documented female voices; selection is saved locally and applied when a new Live session starts.
 - Android speech-recognition intent remains available as a separate microphone test.
+- Foreground GPS/approximate-location permission and on-demand current weather/forecast via Open-Meteo; weather context is passed to Gemini Live at the next voice-session start. No background tracking or persistent coordinate storage.
 - Android Keystore-backed encrypted manual memory with a dedicated privacy screen: list/edit/delete individual memories, clear all personal memories, enable/disable transcript archiving, choose retention (manual/7/30/90 days), delete individual archived conversations or clear the archive independently. Gemini Live transcript capture is not yet wired into the archive; no automatic conversation transcript is currently stored.
+- CameraX front/rear camera preview and optional 1 FPS image frames to the active Gemini Live session are implemented in 0.9.0; physical-device testing is pending.
 - GitHub Actions builds a debug APK and a permanently signed release APK.
 
 ## AI provider and cost constraints
@@ -34,6 +36,8 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 - Always-on wake phrase detection (not implemented; the current foreground service is user-started and does not listen for a wake phrase).
 - Automatic extraction, summarization and curation of conversation memories.
 - Offline ASR/TTS runtime and model downloads.
+- Automatic personal-memory extraction and curation.
+- Background location tracking (intentionally not requested).
 - LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar), each requiring explicit permissions.
 
 ## Product roadmap
