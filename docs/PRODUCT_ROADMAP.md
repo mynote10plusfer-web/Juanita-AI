@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — 0.9.2 automatic foreground GPS context
+Last updated: 2026-11-06 — 0.9.3 call-screen preview foundation
 
 ## Latest implementation update — 0.9.2 (automatic foreground GPS context)
 
@@ -12,7 +12,7 @@ Last updated: 2026-11-06 — 0.9.2 automatic foreground GPS context
 - If permission is denied or a fix is unavailable, Juanita must not pretend to know the user's location.
 - Physical-device GPS testing is required; GPS quality depends on Android permission choice, device settings, satellite reception and network conditions.
 
-## Previous implementation update — 0.9.0 (camera integration)\n\n- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.\n- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.\n- Physical-device camera tests remain pending.\n\n## Previous implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Gemini Live transcript capture is connected in 0.8.9: user and assistant text can be stored in the local archive only when the user explicitly enables it. Raw audio is never archived. Automatic personal-memory extraction remains pending.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
+## Previous implementation update — 0.9.0 (camera integration)\n\n- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.\n- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.\n- Physical-device camera tests remain pending.\n\n## Previous implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Gemini Live transcript capture is connected: user and assistant text is stored in the encrypted local archive only when the user explicitly enables it. Raw audio is never archived. Automatic personal-memory extraction remains pending.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
 
 - Added `JuanitaVoiceService`, an Android microphone foreground service that owns the Gemini Live assistant lifecycle independently of MainActivity.
 - The user starts the service explicitly from the visible app after granting RECORD_AUDIO permission.
@@ -52,7 +52,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Language and regional profile selectors (Italian, Spanish, Czech, English, Colombian Spanish; experimental Sicilian, Canarian and Paisa profiles).
 - Nine personality sliders are saved locally and included in the system instruction when a Live session starts. They do not dynamically change an already-running session; apply changes on next session/restart.
 - Encrypted on-device manual memories exist. The 0.8.8 UI supports listing, editing, deleting individual memories and clearing all personal memories. Separate archive controls expose opt-in, retention, per-conversation deletion and clear-archive. Live transcript capture remains pending; archive entries will remain empty until that connection is implemented.
-- Conversation archive consent toggle exists, OFF by default; Live text transcript capture is wired in 0.8.9, with retention/deletion management available. Automatic personal-memory extraction remains pending.
+- Conversation archive consent toggle exists, OFF by default; Live text transcript capture is wired, with retention/deletion management available. Personal memories are also injected into new Live sessions; archived transcript context is included only when archive consent is enabled. Automatic personal-memory extraction remains pending.
 - Existing photorealistic Juanita portrait is displayed in an avatar card; animated face and lip sync are not implemented.
 - Wake phrase field exists, but wake-word detection is not connected.
 - Android TTS preview exists; Gemini Live voice is selectable among seven documented female voices (Kore, Aoede, Sulafat, Achernar, Vindemiatrix, Zephyr, Pulcherrima) and the choice is persisted locally. A voice change applies on the next Live session; no in-session voice switching or dedicated preview has been implemented yet.
@@ -129,7 +129,8 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ### H. Avatar and expression
 - Keep the existing exact photorealistic brunette, green-eyed portrait; do not replace it with a generic 3D character.
-- [INITIAL STUDIO ADDED IN avatar-call-foundation BRANCH] Compose editor supports description/photo-reference/random sources, photorealistic/realistic 3D/stylized 3D/cartoon styles, motion presets, random appearance briefs, and local profile save/select/delete. This stores profile metadata only; it does not generate or animate models yet.
+- [IMPLEMENTED IN 0.9.3 FOUNDATION] Compose Avatar Studio supports description/photo-reference/random sources, photorealistic/realistic 3D/stylized 3D/cartoon styles, motion presets, random appearance briefs, and local profile save/select/delete. This stores profile metadata only; it does not generate or animate models yet.
+- [IMPLEMENTED IN 0.9.3 PREVIEW] Full-screen call-style shell shows the existing Juanita portrait with a local CameraX picture-in-picture preview, camera permission/toggle and front/back switch. The portrait is static; the camera preview is not sent to Gemini from this screen. The voice service remains independent; closing the screen does not end audio.
 - Build a WhatsApp-style call screen: large Juanita avatar, user/interlocutor camera preview in a small picture-in-picture tile, camera/mic controls and clear end-call action.
 - Avatar Studio UI: description editor, Android Photo Picker, randomize controls, style selection, preview, save/select/delete.
 - Progressive 2D animation: blinking, gaze, subtle head movement and expressions.
@@ -150,12 +151,12 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 ## Delivery plan (ordered; update status as work lands)
 
 1. **Reliability foundation:** foreground-service lifecycle and Stop notification implemented in 0.8.6; next add detailed live status/transcript and verify screen-off behavior, reconnects and repeated long conversations on the physical device.
-2. **Privacy foundation:** local archive APIs and memory/privacy UI implemented in 0.8.8. Personal memories can be edited/deleted independently; archive consent, retention and deletion controls are exposed. Actual Gemini Live transcript capture remains pending; archive remains opt-in and no transcript is currently captured automatically.
+2. **Privacy foundation:** local archive APIs and memory/privacy UI implemented. Gemini Live text transcript capture is connected and opt-in; AES-GCM local storage and retention/deletion controls are present. Manual personal memories and (only with archive consent) recent turns are included in the next Live session context. Automatic memory extraction and physical-device verification remain pending.
 3. **Personal onboarding:** gradual “Conosciamoci”, profile editor, explicit save/forget controls, non-intrusive follow-up.
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
 5. **Daily utilities:** foreground GPS context implemented in 0.9.2 (physical-device test pending); next build separate live-data integrations for weather/local alerts, then local alarms/reminders, morning briefing and calendar.
 6. **Notification companion:** opt-in notification listener, per-app allowlist, read-on-request, confirmed replies.
-7. **Avatar:** profile model/local store foundation added on `feature/avatar-call-foundation`; next Avatar Studio UI and bundled, openly licensed model assets, then adaptive WebView renderer + CameraX picture-in-picture call screen; finally PCM/viseme lip sync after a supported Gemini audio-output bridge is verified.
+7. **Avatar:** local profile model/store and Avatar Studio editor are merged into `main`. A first full-screen call-style preview now uses the existing portrait and CameraX PiP locally. Next: select and bundle an openly licensed rigged model; add adaptive WebView/Three.js/TalkingHead renderer; connect the saved profile to its rendered asset; then investigate a supported Gemini PCM/viseme bridge without changing the stable SDK-managed audio route.
 8. **Extended integrations:** motorcycle/travel, translation, smart home and other capabilities.
 
 ## Definition of done for every phase
@@ -167,4 +168,4 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Update this roadmap's implementation status and known limitations.
 
 
-Avatar architecture details: see [AVATAR_VIDEO_CALL_ARCHITECTURE.md](AVATAR_VIDEO_CALL_ARCHITECTURE.md). The profile foundation is not a finished avatar generator or video-call feature; keep implementation status explicit.
+Avatar architecture details: see [AVATAR_VIDEO_CALL_ARCHITECTURE.md](AVATAR_VIDEO_CALL_ARCHITECTURE.md). The profile editor and call-style preview are foundations, not a finished generated/animated avatar or full bidirectional video-call feature; keep implementation status explicit.
