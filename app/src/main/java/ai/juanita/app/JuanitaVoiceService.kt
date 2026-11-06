@@ -62,7 +62,7 @@ class JuanitaVoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                requestStop(startId)
+                requestStop()
                 return START_NOT_STICKY
             }
             ACTION_START -> {
@@ -132,7 +132,7 @@ class JuanitaVoiceService : Service() {
      * Stop audio first. Memory extraction is best-effort cleanup and must never
      * keep the microphone open while a network request is pending.
      */
-    private fun requestStop(startId: Int?) {
+    private fun requestStop() {
         sessionJob?.cancel()
         if (stopJob?.isActive == true) return
         stopJob = serviceScope.launch {
@@ -149,7 +149,7 @@ class JuanitaVoiceService : Service() {
                 startRequested = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 _state.value = "Conversazione terminata"
-                if (startId != null) stopSelf(startId) else stopSelf()
+                stopSelf()
             }
         }
     }
