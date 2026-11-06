@@ -189,7 +189,7 @@ fun AvatarCallScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    "Microfono Gemini Live attivo · il ritratto è ancora statico in questa versione",
+                    "Microfono Gemini Live attivo · animazione di presenza di base, volto non ancora animato",
                     color = Color.White
                 )
                 Row(
