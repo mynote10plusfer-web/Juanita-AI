@@ -39,6 +39,7 @@ internal fun MemoryPrivacySection(
     gold: Color,
     initialArchiveEnabled: Boolean,
     initialAutoMemoryEnabled: Boolean,
+    memoryStatus: String,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialRetentionDays: Int,
@@ -91,6 +92,8 @@ internal fun MemoryPrivacySection(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
             }
+            Text(if (autoMemoryEnabled) memoryStatus else "Memoria automatica in pausa.",
+                color = if (autoMemoryEnabled) gold else Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("Per selezionare i ricordi, brevi estratti testuali vengono inviati a Gemini. Nel livello gratuito Google può usare i contenuti inviati per migliorare i propri prodotti, secondo i suoi termini. Non viene salvato l’audio e non serve attivare l’archivio completo. Puoi disattivare questa funzione in qualsiasi momento.",
                 color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
