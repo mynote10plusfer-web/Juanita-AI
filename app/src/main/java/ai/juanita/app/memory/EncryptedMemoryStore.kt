@@ -290,7 +290,7 @@ class EncryptedMemoryStore(context: Context) {
                 appendLine(transcript)
             }
         }
-        return packet.takeLast(maxCharacters.coerceIn(1000, 12000))
+        return packet.take(maxCharacters.coerceIn(1000, 12000))
     }
 
     /** Deletes archived turns in [startInclusive, endExclusive), preserving personal memories. */
