@@ -3,7 +3,6 @@ package ai.juanita.app
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
@@ -17,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -37,7 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.util.concurrent.Executors
 
 @Composable
@@ -67,7 +67,7 @@ fun CameraVisionSection(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = panel)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("VISIONE DI JUANITA", color = gold)
             Text(
                 "La videocamera si attiva solo quando la apri. Le immagini vengono inviate a Gemini in tempo reale e non vengono salvate nell'app.",
@@ -136,7 +136,7 @@ private fun JuanitaCameraPreview(
     onFrame: (Bitmap) -> Unit
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = context as LifecycleOwner
+    val lifecycleOwner = LocalLifecycleOwner.current
     val currentOnFrame by rememberUpdatedState(onFrame)
     val previewView = remember {
         PreviewView(context).apply {
