@@ -133,10 +133,10 @@ class JuanitaVoiceService : Service() {
                                     if (role.equals("USER", ignoreCase = true)) {
                                         try {
                                             val saved = automaticMemoryEngine.acceptTurn(role, combinedText)
-                                            _memoryState.value = if (saved > 0) {
-                                                "Memoria aggiornata: $saved ricordi salvati o confermati."
-                                            } else {
-                                                "Memoria attiva: raccolta informazioni utili in corso."
+                                            _memoryState.value = when {
+                                                saved > 0 -> "Memoria aggiornata: $saved ricordi salvati o confermati."
+                                                saved < 0 -> "Memoria in attesa di rete o quota: riproverò automaticamente."
+                                                else -> "Memoria attiva: raccolta informazioni utili in corso."
                                             }
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
@@ -201,6 +201,8 @@ class JuanitaVoiceService : Service() {
                 }
                 if (flushedCount != null && flushedCount > 0) {
                     _memoryState.value = "Memoria aggiornata: $flushedCount ricordi salvati o confermati."
+                } else if (flushedCount == -1) {
+                    _memoryState.value = "Memoria in attesa: rete o quota non disponibili; riproverò al prossimo collegamento."
                 } else if (flushedCount != null) {
                     _memoryState.value = "Controllo completato: nessun nuovo ricordo durevole da aggiungere."
                 } else {
