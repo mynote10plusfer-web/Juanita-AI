@@ -132,7 +132,12 @@ class JuanitaVoiceService : Service() {
                                     runCatching { memoryStore.appendConversationTurn(conversationId, role, combinedText) }
                                     if (role.equals("USER", ignoreCase = true)) {
                                         try {
-                                            automaticMemoryEngine.acceptTurn(role, combinedText)
+                                            val saved = automaticMemoryEngine.acceptTurn(role, combinedText)
+                                            _memoryState.value = if (saved > 0) {
+                                                "Memoria aggiornata: $saved ricordi salvati o confermati."
+                                            } else {
+                                                "Memoria attiva: raccolta informazioni utili in corso."
+                                            }
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
                                         } catch (_: Exception) {
@@ -143,6 +148,11 @@ class JuanitaVoiceService : Service() {
                             }
                             assistant.start(sessionInstruction, voice) { role, text ->
                                 transcriptQueue.trySend(role to text)
+                            }
+                            _memoryState.value = if (memoryStore.isAutomaticMemoryEnabled) {
+                                "Memoria automatica attiva · analisi ogni 3 interventi utente."
+                            } else {
+                                "Memoria automatica in pausa."
                             }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
@@ -182,10 +192,15 @@ class JuanitaVoiceService : Service() {
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
-                withTimeoutOrNull(5_000L) {
-                    withContext(Dispatchers.IO) {
-                        runCatching { automaticMemoryEngine.flush() }
-                    }
+                val flushedCount = withTimeoutOrNull(5_000L) {
+                    withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
+                }
+                if (flushedCount != null && flushedCount > 0) {
+                    _memoryState.value = "Memoria aggiornata: $flushedCount ricordi salvati o confermati."
+                } else if (flushedCount != null) {
+                    _memoryState.value = "Controllo completato: nessun nuovo ricordo durevole da aggiungere."
+                } else {
+                    _memoryState.value = "Memoria in attesa: riprenderà al prossimo collegamento."
                 }
                 startRequested = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -293,6 +308,9 @@ class JuanitaVoiceService : Service() {
 
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
+
+        private val _memoryState = MutableStateFlow("Memoria automatica pronta.")
+        val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
         fun start(context: Context, instruction: String, voiceName: String) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
