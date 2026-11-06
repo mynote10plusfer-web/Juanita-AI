@@ -3,6 +3,10 @@ package ai.juanita.app
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.ComponentName
+import android.content.ServiceConnection
+import android.graphics.Bitmap
+import android.os.IBinder
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
@@ -39,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
@@ -247,7 +252,29 @@ private fun JuanitaApp(
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
     val context = LocalContext.current
+    var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
+    val cameraServiceConnection = remember(context) {
+        object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+                cameraServiceBinder = service as? JuanitaVoiceService.LocalBinder
+            }
+            override fun onServiceDisconnected(name: ComponentName?) {
+                cameraServiceBinder = null
+            }
+        }
+    }
+    DisposableEffect(context, cameraServiceConnection) {
+        val bound = context.bindService(
+            Intent(context, JuanitaVoiceService::class.java),
+            cameraServiceConnection,
+            android.content.Context.BIND_AUTO_CREATE
+        )
+        onDispose {
+            if (bound) runCatching { context.unbindService(cameraServiceConnection) }
+        }
+    }
     val liveState by JuanitaVoiceService.state.collectAsState()
+    val visionState by JuanitaVoiceService.visionState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     val livePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -466,6 +493,14 @@ private fun JuanitaApp(
                     Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
+
+                CameraVisionSection(
+                    panel = panel,
+                    gold = gold,
+                    voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
+                    visionStatus = visionState,
+                    onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
+                )
 
                 MemoryPrivacySection(
                     panel = panel,
