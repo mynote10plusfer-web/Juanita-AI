@@ -1,6 +1,6 @@
 # Juanita AI — Avatar Studio and video-call architecture
 
-Status: architecture and local profile foundation only. This document is a plan, not a claim that the avatar studio or video-call screen is already implemented.
+Status: local profile model/store and initial Compose Avatar Studio editor are present in this branch. Model generation, avatar rendering and the video-call screen are not yet implemented.
 
 ## Product experience
 
@@ -28,7 +28,7 @@ Render styles:
 - Stylized 3D.
 - 2D/cartoon.
 
-The profile model and private local catalogue are introduced in `avatar/AvatarProfile.kt` and `avatar/AvatarProfileStore.kt`. They store metadata only. They do not yet generate, rig, or animate a model.
+The profile model, private local catalogue and initial Compose editor are introduced in `avatar/AvatarProfile.kt`, `avatar/AvatarProfileStore.kt` and `avatar/AvatarStudioSection.kt`. The editor supports source/style/motion choices, a photo reference via Android document picker, random appearance briefs, and local save/select/delete. These components store profile metadata only; they do not yet generate, rig, or animate a model.
 
 ## Runtime architecture
 
