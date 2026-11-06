@@ -2,7 +2,7 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current version: 0.8.6 (versionCode 15)
+## Current version: 0.8.7 (versionCode 16)
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
@@ -15,7 +15,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 - Android system TTS sample playback; the device's installed voice is used and regional authenticity is not guaranteed.
 - Gemini Live response voice selector with seven documented female voices; selection is saved locally and applied when a new Live session starts.
 - Android speech-recognition intent remains available as a separate microphone test.
-- Android Keystore-backed encrypted manual memory; conversation archive is opt-in and automatic memory extraction is not implemented.
+- Android Keystore-backed encrypted manual memory; conversation archive is opt-in. Local APIs now support listing/deleting conversations independently, retention (never/7/30/90 days), date-range deletion, and clearing archive without deleting personal memories. The Live transcript is not yet wired into this archive; automatic memory extraction is not implemented.
 - GitHub Actions builds a debug APK and a permanently signed release APK.
 
 ## AI provider and cost constraints
