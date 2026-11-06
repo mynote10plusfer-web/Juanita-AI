@@ -73,8 +73,8 @@ class EncryptedMemoryStore(context: Context) {
 
     /** Saves an automatically curated, non-sensitive memory; duplicate facts are not added twice. */
     @Synchronized
-    fun addAutomaticMemory(text: String, category: String, confidence: Float): MemoryItem? {
-        if (!isAutomaticMemoryEnabled || text.isBlank()) return null
+    fun addAutomaticMemory(text: String, category: String, confidence: Float, expectedClearVersion: Long = memoryClearVersion): MemoryItem? {
+        if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion || text.isBlank()) return null
         val normalized = normalizeMemoryText(text)
         val records = readRecords()
         for (index in 0 until records.length()) {
@@ -154,6 +154,7 @@ class EncryptedMemoryStore(context: Context) {
             if (record.optString("id") != id) kept.put(record)
         }
         writeRecords(kept)
+        preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
     }
 
     /** Summary of one locally archived voice/text conversation. */
@@ -331,7 +332,10 @@ class EncryptedMemoryStore(context: Context) {
                 break
             }
         }
-        if (updated) writeRecords(records)
+        if (updated) {
+            writeRecords(records)
+            preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+        }
         return updated
     }
 
