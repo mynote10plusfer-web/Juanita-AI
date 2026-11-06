@@ -601,13 +601,17 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
-                CameraVisionSection(
-                    panel = panel,
-                    gold = gold,
-                    voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
-                    visionStatus = visionState,
-                    onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
-                )
+                // The call screen owns the camera while visible. Dispose the other
+                // CameraX preview first so two UI surfaces never fight for the camera.
+                if (!callScreenVisible) {
+                    CameraVisionSection(
+                        panel = panel,
+                        gold = gold,
+                        voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
+                        visionStatus = visionState,
+                        onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
+                    )
+                }
 
                 MemoryPrivacySection(
                     panel = panel,
@@ -651,7 +655,11 @@ private fun JuanitaApp(
                         avatarName = activeAvatarName,
                         portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
                         connectionStatus = liveState,
-                        onDismiss = { callScreenVisible = false },
+                        onDismiss = {
+                            // Leaving the call UI also ends audio: never leave a hidden hot mic.
+                            JuanitaVoiceService.stop(context)
+                            callScreenVisible = false
+                        },
                         onEndCall = {
                             JuanitaVoiceService.stop(context)
                             callScreenVisible = false
