@@ -39,14 +39,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -231,26 +232,24 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
-    var liveState by remember { mutableStateOf("Non connessa") }
-    val liveAssistant = remember { GeminiLiveAssistant() }
-    val liveScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val liveState by JuanitaVoiceService.state.collectAsState()
+    var liveStartError by remember { mutableStateOf<String?>(null) }
     val livePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            liveScope.launch {
-                liveState = "Connessione a Gemini Live…"
-                try {
-                    liveAssistant.start(
-                        persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label),
-                        selectedLiveVoice.id
-                    )
-                    liveState = "Juanita è in ascolto. Puoi parlare normalmente."
-                } catch (error: Exception) {
-                    liveState = "Connessione non riuscita: ${error.localizedMessage ?: "controlla App Check e rete"}"
-                }
+            liveStartError = null
+            try {
+                JuanitaVoiceService.start(
+                    context,
+                    persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label),
+                    selectedLiveVoice.id
+                )
+            } catch (error: Exception) {
+                liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
             }
-        } else liveState = "Permesso microfono negato"
+        } else liveStartError = "Permesso microfono negato"
     }
 
     val speechLauncher = rememberLauncherForActivityResult(
@@ -433,7 +432,7 @@ private fun JuanitaApp(
 
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    Text(liveState, color = Color.White, fontSize = 14.sp)
+                    Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
                     Button(
                         onClick = { livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                         modifier = Modifier.fillMaxWidth(),
@@ -444,15 +443,13 @@ private fun JuanitaApp(
                     }
                     Button(
                         onClick = {
-                            liveScope.launch {
-                                liveAssistant.stop()
-                                liveState = "Conversazione terminata"
-                            }
+                            liveStartError = null
+                            JuanitaVoiceService.stop(context)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
                     ) { Text("Termina conversazione") }
-                    Text("Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
+                    Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
