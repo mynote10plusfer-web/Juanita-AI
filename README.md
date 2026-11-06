@@ -34,6 +34,10 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 - Offline ASR/TTS runtime and model downloads.
 - LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar), each requiring explicit permissions.
 
+## Product roadmap
+
+The canonical feature checklist, privacy requirements and phased implementation plan are maintained in [`docs/PRODUCT_ROADMAP.md`](docs/PRODUCT_ROADMAP.md). This roadmap distinguishes existing functionality from planned work.
+
 ## Build
 
 - Debug APK: `.github/workflows/android.yml`
