@@ -18,9 +18,9 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     private val pendingTurns = mutableListOf<String>()
     private var pendingClearVersion = -1L
 
-    suspend fun acceptTurn(role: String, text: String) = mutex.withLock {
-        if (!store.isAutomaticMemoryEnabled || text.isBlank()) return@withLock
-        val safeRole = role.uppercase().takeIf { it == "USER" } ?: return@withLock
+    suspend fun acceptTurn(role: String, text: String): Int = mutex.withLock {
+        if (!store.isAutomaticMemoryEnabled || text.isBlank()) return@withLock 0
+        val safeRole = role.uppercase().takeIf { it == "USER" } ?: return@withLock 0
         val clearVersion = store.memoryClearVersion
         if (pendingTurns.isEmpty()) pendingClearVersion = clearVersion
         else if (pendingClearVersion != clearVersion) {
@@ -28,24 +28,24 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
             pendingClearVersion = clearVersion
         }
         pendingTurns += "$safeRole: ${text.take(MAX_TURN_CHARS)}"
-        if (pendingTurns.size >= BATCH_TURNS) extractPendingLocked()
+        if (pendingTurns.size >= BATCH_TURNS) extractPendingLocked() else 0
     }
 
-    suspend fun flush() = mutex.withLock {
-        if (pendingTurns.isNotEmpty()) extractPendingLocked()
+    suspend fun flush(): Int = mutex.withLock {
+        if (pendingTurns.isNotEmpty()) extractPendingLocked() else 0
     }
 
-    private suspend fun extractPendingLocked() {
+    private suspend fun extractPendingLocked(): Int {
         if (!store.isAutomaticMemoryEnabled || pendingClearVersion != store.memoryClearVersion) {
             pendingTurns.clear()
             pendingClearVersion = store.memoryClearVersion
-            return
+            return 0
         }
         val batchVersion = pendingClearVersion
         val batchTurns = pendingTurns.takeLast(MAX_BATCH_TURNS)
         val batch = batchTurns.joinToString("\n")
         pendingTurns.clear()
-        if (batch.isBlank()) return
+        if (batch.isBlank()) return 0
         try {
             val model = Firebase.ai(backend = GenerativeBackend.googleAI())
                 .generativeModel(modelName = MODEL_NAME)
@@ -73,11 +73,12 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
             val raw = model.generateContent(prompt).text.orEmpty().trim()
             val start = raw.indexOf("[")
             val end = raw.lastIndexOf("]")
-            if (start < 0 || end <= start) return
-            if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return
+            if (start < 0 || end <= start) return 0
+            if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return 0
             val candidates = JSONArray(raw.substring(start, end + 1))
+            var savedCount = 0
             for (index in 0 until minOf(candidates.length(), MAX_CANDIDATES)) {
-                if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return
+                if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return savedCount
                 val candidate = candidates.optJSONObject(index) ?: continue
                 val text = candidate.optString("text").trim()
                 val category = candidate.optString("category", "general")
@@ -86,8 +87,9 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 if (text.length !in MIN_MEMORY_CHARS..MAX_MEMORY_CHARS) continue
                 if (confidence < MIN_CONFIDENCE || sensitive || looksSensitive(text)) continue
                 if (category !in ALLOWED_CATEGORIES) continue
-                store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f), batchVersion)
+                if (store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f), batchVersion) != null) savedCount++
             }
+            return savedCount
         } catch (cancelled: CancellationException) {
             // If shutdown cancels a request, retain its small batch in RAM unless
             // the user paused or cleared memory while it was running.
@@ -102,6 +104,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 pendingTurns.addAll(0, batchTurns)
                 while (pendingTurns.size > MAX_BATCH_TURNS) pendingTurns.removeAt(0)
             }
+            return 0
         }
     }
 
