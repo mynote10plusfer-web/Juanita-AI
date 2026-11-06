@@ -239,6 +239,8 @@ class EncryptedMemoryStore(context: Context) {
      */
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 18, maxCharacters: Int = 7000): String {
+        // Compact legacy data on IO before constructing the next-session context.
+        writeRecords(readRecords())
         val memoryLines = listMemories()
             .take(40)
             .map { item ->
