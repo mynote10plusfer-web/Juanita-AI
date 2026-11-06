@@ -1,13 +1,13 @@
 # Juanita AI — Avatar Studio and video-call architecture
 
-Status: local profile model/store and initial Compose Avatar Studio editor are present in this branch. Model generation, avatar rendering and the video-call screen are not yet implemented.
+Status: local profile model/store and Compose Avatar Studio editor are merged into main. A first full-screen call-style preview with local CameraX picture-in-picture is implemented. Generated 3D models, animated rendering, and PCM/viseme lip sync are not yet implemented.
 
 ## Product experience
 
 The call screen is designed like a video call:
 
 - Juanita's avatar occupies the main, large area.
-- The current speaker/user appears in a small movable picture-in-picture window.
+- The current speaker/user appears in a small picture-in-picture window. The first preview currently anchors this tile at the upper-right; drag-to-move is a later refinement.
 - The user can mute/unmute, enable/disable the camera, switch front/rear camera, and end the call.
 - Camera and microphone are activated only after an explicit user action and permission.
 - The call screen must continue to use the existing Gemini Live session; opening or closing the call UI must not silently start or stop the voice service.
@@ -28,7 +28,7 @@ Render styles:
 - Stylized 3D.
 - 2D/cartoon.
 
-The profile model, private local catalogue and initial Compose editor are introduced in `avatar/AvatarProfile.kt`, `avatar/AvatarProfileStore.kt` and `avatar/AvatarStudioSection.kt`. The editor supports source/style/motion choices, a photo reference via Android document picker, random appearance briefs, and local save/select/delete. These components store profile metadata only; they do not yet generate, rig, or animate a model.
+The profile model, private local catalogue and Compose editor live in `avatar/AvatarProfile.kt`, `avatar/AvatarProfileStore.kt` and `avatar/AvatarStudioSection.kt`. The editor supports source/style/motion choices, a photo reference via Android document picker, random appearance briefs, and local save/select/delete. These components store profile metadata only; they do not yet generate, rig, or animate a model. `avatar/AvatarCallScreen.kt` adds a full-screen preview using the locally saved Juanita portrait and a user-controlled CameraX PiP. The camera preview is local-only in this phase and is not streamed to Gemini.
 
 ## Runtime architecture
 
@@ -66,9 +66,9 @@ These are target profiles, not guaranteed frame rates. Real devices must be benc
 1. **Profile foundation** — implemented in this branch: typed profile model, creation source/style/motion choices, local metadata persistence.
 2. **Avatar Studio UI** — description editor, Photo Picker, randomize controls, style preview, save/select/delete profiles.
 3. **Renderer proof of concept** — bundle TalkingHead and one properly licensed, pre-rigged sample model; test in Android WebView on API 26+.
-4. **Video-call layout** — full-screen avatar renderer with CameraX PiP and call controls; keep Gemini Live lifecycle in the foreground service.
+4. **Call-screen preview** — implemented as a full-screen still-portrait view with CameraX PiP, camera permission/toggle, front/back switch, and separate close-screen/end-call actions. Next replace the still portrait with the adaptive renderer.
 5. **Audio synchronization** — investigate and test a supported Gemini audio PCM output path; add streaming lip sync only after audio is available without changing the stable audio route prematurely.
-6. **Motion and vision** — listening/speaking states, subtle gaze/blinks, gesture scheduling and optional camera context.
+6. **Motion and vision** — pending: listening/speaking states, subtle gaze/blinks, gesture scheduling and optional camera context. The call-screen camera preview currently remains local-only.
 7. **Device matrix and release** — test low/mid/high Android hardware, thermal throttling, battery, interruptions, camera lifecycle, WebView recovery and release signing.
 
 ## Privacy and safety
