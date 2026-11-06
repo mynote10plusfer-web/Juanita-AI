@@ -37,7 +37,7 @@ class AvatarProfileStore(context: Context) {
 
     @Synchronized
     fun save(profile: AvatarProfile, makeActive: Boolean = true): AvatarProfile {
-        val valid = profile.validated()
+        val valid = profile.copy(updatedAtEpochMillis = System.currentTimeMillis()).validated()
         val profiles = listProfiles().filterNot { it.id == valid.id } + valid
         persist(profiles)
         if (makeActive) prefs.edit().putString(KEY_ACTIVE_ID, valid.id).apply()
