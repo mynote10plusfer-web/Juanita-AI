@@ -21,6 +21,10 @@ class AssistantPreferences(context: Context) {
         get() = storage.getString(KEY_DIALECT_ID, DEFAULT_DIALECT_ID) ?: DEFAULT_DIALECT_ID
         set(value) { storage.edit().putString(KEY_DIALECT_ID, value).apply() }
 
+    var liveVoiceName: String
+        get() = storage.getString(KEY_LIVE_VOICE, DEFAULT_LIVE_VOICE) ?: DEFAULT_LIVE_VOICE
+        set(value) { storage.edit().putString(KEY_LIVE_VOICE, value).apply() }
+
     var assistantName: String
         get() = storage.getString(KEY_ASSISTANT_NAME, DEFAULT_ASSISTANT_NAME) ?: DEFAULT_ASSISTANT_NAME
         set(value) { storage.edit().putString(KEY_ASSISTANT_NAME, value.trim()).apply() }
@@ -44,6 +48,7 @@ class AssistantPreferences(context: Context) {
         private const val KEY_WAKE_PHRASE = "wake_phrase"
         private const val KEY_DIALECT_ID = "dialect_id"
         private const val KEY_ASSISTANT_NAME = "assistant_name"
+        private const val KEY_LIVE_VOICE = "live_voice_name"
         private const val KEY_IRONY = "trait_irony"
         private const val KEY_SWEETNESS = "trait_sweetness"
         private const val KEY_SENSUALITY = "trait_sensuality"
@@ -58,5 +63,6 @@ class AssistantPreferences(context: Context) {
         const val DEFAULT_WAKE_PHRASE = "Hola Juanita"
         const val DEFAULT_DIALECT_ID = "canarian"
         const val DEFAULT_ASSISTANT_NAME = "Juanita"
+        const val DEFAULT_LIVE_VOICE = "Kore"
     }
 }
