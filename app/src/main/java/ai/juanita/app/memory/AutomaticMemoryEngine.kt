@@ -84,7 +84,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 if (text.length !in MIN_MEMORY_CHARS..MAX_MEMORY_CHARS) continue
                 if (confidence < MIN_CONFIDENCE || sensitive || looksSensitive(text)) continue
                 if (category !in ALLOWED_CATEGORIES) continue
-                store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f))
+                store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f), batchVersion)
             }
         } catch (_: Exception) {
             // Best-effort only: a network/quota/JSON error must never interrupt Live audio.
