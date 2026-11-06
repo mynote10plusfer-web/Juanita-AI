@@ -12,7 +12,21 @@ Last updated: 2026-11-06 — 0.9.3 call-screen preview foundation
 - If permission is denied or a fix is unavailable, Juanita must not pretend to know the user's location.
 - Physical-device GPS testing is required; GPS quality depends on Android permission choice, device settings, satellite reception and network conditions.
 
-## Previous implementation update — 0.9.0 (camera integration)\n\n- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.\n- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.\n- Physical-device camera tests remain pending.\n\n## Previous implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Gemini Live transcript capture is connected: user and assistant text is stored in the encrypted local archive only when the user explicitly enables it. Raw audio is never archived. Automatic personal-memory extraction remains pending.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
+## Previous implementation update — 0.9.0 (camera integration)
+
+- CameraX preview supports front and rear cameras, one-shot image sending and optional low-rate live frames to the active Gemini Live session.
+- Camera is not activated until the user opens/enables it. Cloud frames are sent only while requested; the app does not archive raw camera frames.
+- Physical-device camera tests remain pending.
+
+## Previous implementation update — 0.8.8 (memory and privacy controls)
+
+- Added a dedicated “Memoria e privacy” screen section in the Android app.
+- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.
+- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.
+- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.
+- Gemini Live transcript capture is connected: user and assistant text is stored in the encrypted local archive only when the user explicitly enables it. Raw audio is never archived. Automatic personal-memory extraction remains pending.
+
+## Previous implementation update — 0.8.6 (foreground audio service)
 
 - Added `JuanitaVoiceService`, an Android microphone foreground service that owns the Gemini Live assistant lifecycle independently of MainActivity.
 - The user starts the service explicitly from the visible app after granting RECORD_AUDIO permission.
@@ -51,7 +65,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Microphone permission and explicit start/stop controls.
 - Language and regional profile selectors (Italian, Spanish, Czech, English, Colombian Spanish; experimental Sicilian, Canarian and Paisa profiles).
 - Nine personality sliders are saved locally and included in the system instruction when a Live session starts. They do not dynamically change an already-running session; apply changes on next session/restart.
-- Encrypted on-device manual memories exist. The 0.8.8 UI supports listing, editing, deleting individual memories and clearing all personal memories. Separate archive controls expose opt-in, retention, per-conversation deletion and clear-archive. Live transcript capture remains pending; archive entries will remain empty until that connection is implemented.
+- Encrypted on-device manual memories exist. The UI supports listing, editing, deleting individual memories and clearing all personal memories. Separate archive controls expose opt-in, retention, per-conversation deletion and clear-archive. Gemini Live text transcript capture is connected and guarded by the opt-in setting; raw audio is never stored. Personal memories are included in new Live session context, while transcript context is included only when archiving is enabled.
 - Conversation archive consent toggle exists, OFF by default; Live text transcript capture is wired, with retention/deletion management available. Personal memories are also injected into new Live sessions; archived transcript context is included only when archive consent is enabled. Automatic personal-memory extraction remains pending.
 - Existing photorealistic Juanita portrait is displayed in an avatar card; animated face and lip sync are not implemented.
 - Wake phrase field exists, but wake-word detection is not connected.
