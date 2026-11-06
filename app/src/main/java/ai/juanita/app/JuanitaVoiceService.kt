@@ -13,29 +13,28 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
+import ai.juanita.app.memory.EncryptedMemoryStore
+import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
-/**
- * Owns the Gemini Live session independently from the Activity.
- * It is started only by the user's explicit tap while the app is visible
- * and RECORD_AUDIO permission has already been granted.
- */
+/** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val assistant = GeminiLiveAssistant()
+    private lateinit var memoryStore: EncryptedMemoryStore
     private var startRequested = false
 
     override fun onCreate() {
         super.onCreate()
+        memoryStore = EncryptedMemoryStore(applicationContext)
         createNotificationChannel()
     }
 
@@ -59,8 +58,6 @@ class JuanitaVoiceService : Service() {
                     stopSelf(startId)
                     return START_NOT_STICKY
                 }
-
-                // Promote immediately, before doing network or SDK work.
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
@@ -73,7 +70,13 @@ class JuanitaVoiceService : Service() {
                     serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
                         try {
-                            assistant.start(instruction, voice)
+                            val conversationId = UUID.randomUUID().toString()
+                            assistant.start(instruction, voice) { role, text ->
+                                // Storage is a no-op unless the user enabled archive consent.
+                                serviceScope.launch(Dispatchers.IO) {
+                                    memoryStore.appendConversationTurn(conversationId, role, text)
+                                }
+                            }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
                         } catch (cancelled: CancellationException) {
