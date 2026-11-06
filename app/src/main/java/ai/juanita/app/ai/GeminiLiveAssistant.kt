@@ -41,7 +41,7 @@ class GeminiLiveAssistant {
                 input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("USER", it) }
                 output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("ASSISTANT", it) }
             },
-            enableInterruptions = true
+            enableInterruptions = false
         )
     }
 
