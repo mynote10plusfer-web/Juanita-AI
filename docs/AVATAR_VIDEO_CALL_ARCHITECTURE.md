@@ -1,6 +1,15 @@
 # Juanita AI — Memory, learning and evolving digital identity architecture
 
-Status: automatic extraction pipeline and bounded encrypted storage have been added on the PR branch; CI build and physical-device verification are pending. Continuous biography consolidation and source-linked Internet knowledge learning remain future phases.
+Status: automatic extraction and bounded encrypted storage are present; reliability corrections for Live transcription, session shutdown and CameraX ownership are on the reliability branch and await CI/device verification. Full facial animation, true lip sync, biography consolidation and source-linked Internet learning remain future phases.
+
+## Reliability and lifecycle rules
+
+- Configure `inputAudioTranscription` and `outputAudioTranscription` on the Live model whenever the app depends on transcript callbacks for memory, captions or avatar state.
+- The voice foreground service is the single owner of the Live session. A stop request must stop audio capture first, then close the websocket, then attempt bounded best-effort memory extraction. Network work must never precede microphone shutdown.
+- Task removal from Recents and dismissal of the call UI terminate the session. Background continuation is allowed only while the user intentionally leaves the voice session active, with a persistent foreground-service notification and an obvious Stop action.
+- Each CameraX screen owns only its own `Preview` / `ImageAnalysis` use cases. Never call `unbindAll()` from a reusable composable because it can tear down unrelated camera features.
+- A black preview must expose a useful error state. Use a lifecycle-bound `PreviewView`, check permission and camera availability, and release only the use cases created by that screen.
+- Portrait breathing/idle motion is a visual placeholder, not face animation. True expression and lip sync require a rigged avatar and access to synchronized audio output/viseme timing; never label a still portrait as a completed video avatar.
 
 ## Product principle
 
