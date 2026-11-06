@@ -424,9 +424,9 @@ class EncryptedMemoryStore(context: Context) {
         val keptTurns = turns.sortedByDescending { it.optLong("createdAt") }
             .take(MAX_ARCHIVE_RECORDS)
         return JSONArray().apply {
-            other.forEach(::put)
-            keptMemories.forEach(::put)
-            keptTurns.sortedBy { it.optLong("createdAt") }.forEach(::put)
+            other.forEach { put(it) }
+            keptMemories.forEach { put(it) }
+            keptTurns.sortedBy { it.optLong("createdAt") }.forEach { put(it) }
         }
     }
 
