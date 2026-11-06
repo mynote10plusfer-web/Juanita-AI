@@ -184,11 +184,15 @@ class JuanitaVoiceService : Service() {
      */
     private fun requestStop() {
         sessionJob?.cancel()
+        // Synchronously stop SDK audio capture before launching any asynchronous cleanup.
+        assistant.stopAudioCapture()
+        _state.value = "Microfono disattivato · chiusura sessione…"
         if (stopJob?.isActive == true) return
         stopJob = serviceScope.launch {
-            _state.value = "Chiusura della conversazione…"
             try {
                 withTimeoutOrNull(5_000L) { assistant.stop() }
+                _state.value = "Microfono disattivato · salvataggio dei ricordi…"
+                updateNotification("Microfono disattivato · salvataggio in corso")
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
