@@ -179,7 +179,7 @@ internal fun MemoryPrivacySection(
                     Text("SVUOTA TUTTO L'ARCHIVIO", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
             }
-            Text("Le trascrizioni testuali Gemini Live vengono archiviate solo se attivi esplicitamente il consenso qui sopra. L'audio non viene mai salvato. L'apprendimento automatico dei ricordi personali è ancora in sviluppo.",
+            Text("Le trascrizioni complete vengono archiviate solo con consenso esplicito. La memoria automatica conserva solo ricordi selezionati, con limiti di spazio: massimo 100 ricordi e 32.000 caratteri complessivi. Puoi cancellarli singolarmente o tutti insieme.",
                 color = gold, fontSize = 11.sp)
         }
     }
