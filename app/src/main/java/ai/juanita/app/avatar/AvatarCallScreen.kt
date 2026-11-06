@@ -23,6 +23,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
@@ -36,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -64,6 +70,7 @@ fun AvatarCallScreen(
     val context = LocalContext.current
     var cameraEnabled by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(true) }
+    var cameraError by remember { mutableStateOf<String?>(null) }
     val cameraPermissionGranted = remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -94,10 +101,29 @@ fun AvatarCallScreen(
             modifier = Modifier.fillMaxSize().background(Color(0xFF090A0C))
         ) {
             if (portrait != null) {
+                // Gentle idle motion makes the portrait feel present without pretending
+                // that this is facial animation or true audio lip-sync.
+                val idleMotion = rememberInfiniteTransition(label = "juanita-idle")
+                val idleScale by idleMotion.animateFloat(
+                    initialValue = 1.0f,
+                    targetValue = 1.018f,
+                    animationSpec = infiniteRepeatable(tween(2600), repeatMode = RepeatMode.Reverse),
+                    label = "breathing-scale"
+                )
+                val idleTilt by idleMotion.animateFloat(
+                    initialValue = -0.25f,
+                    targetValue = 0.25f,
+                    animationSpec = infiniteRepeatable(tween(3400), repeatMode = RepeatMode.Reverse),
+                    label = "idle-tilt"
+                )
                 Image(
                     bitmap = portrait.asImageBitmap(),
                     contentDescription = "Ritratto di $avatarName",
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        scaleX = idleScale
+                        scaleY = idleScale
+                        rotationZ = idleTilt
+                    },
                     contentScale = ContentScale.Crop
                 )
                 Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.30f)))
@@ -129,7 +155,14 @@ fun AvatarCallScreen(
                     .background(Color(0xFF242830))
             ) {
                 if (cameraEnabled) {
-                    UserCameraPreview(frontCamera = frontCamera)
+                    UserCameraPreview(frontCamera = frontCamera, onError = { cameraError = it })
+                    if (cameraError != null) {
+                        Text(
+                            cameraError.orEmpty(),
+                            color = Color.White,
+                            modifier = Modifier.align(Alignment.BottomCenter).background(Color(0xCC8B2028)).padding(4.dp)
+                        )
+                    }
                 } else {
                     Column(
                         modifier = Modifier.fillMaxSize().padding(8.dp),
@@ -209,40 +242,54 @@ fun AvatarCallScreen(
 }
 
 @Composable
-private fun UserCameraPreview(frontCamera: Boolean) {
+private fun UserCameraPreview(
+    frontCamera: Boolean,
+    onError: (String?) -> Unit
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember(context) {
         PreviewView(context).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         }
     }
 
     DisposableEffect(frontCamera, lifecycleOwner, previewView) {
         val providerFuture = ProcessCameraProvider.getInstance(context)
         var provider: ProcessCameraProvider? = null
+        var boundPreview: Preview? = null
         var disposed = false
         providerFuture.addListener({
             if (!disposed) {
-                runCatching {
-                    provider = providerFuture.get()
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                try {
+                    val cameraProvider = providerFuture.get()
+                    provider = cameraProvider
+                    val preview = Preview.Builder().build()
+                    boundPreview = preview
+                    preview.setSurfaceProvider(previewView.surfaceProvider)
                     val selector = if (frontCamera) {
                         CameraSelector.DEFAULT_FRONT_CAMERA
                     } else {
                         CameraSelector.DEFAULT_BACK_CAMERA
                     }
-                    provider?.unbindAll()
-                    provider?.bindToLifecycle(lifecycleOwner, selector, preview)
+                    // Never call unbindAll(): the call preview owns only this use case.
+                    cameraProvider.bindToLifecycle(lifecycleOwner, selector, preview)
+                    if (!disposed) onError(null)
+                } catch (error: Exception) {
+                    if (!disposed) onError(
+                        error.localizedMessage ?: "Impossibile avviare la fotocamera"
+                    )
                 }
             }
         }, ContextCompat.getMainExecutor(context))
 
         onDispose {
             disposed = true
-            runCatching { provider?.unbindAll() }
+            runCatching {
+                val preview = boundPreview
+                if (preview != null) provider?.unbind(preview)
+            }
         }
     }
 
