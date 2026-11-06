@@ -56,8 +56,7 @@ data class AvatarProfile(
         }
         return copy(
             displayName = displayName.trim().take(MAX_NAME_LENGTH),
-            appearancePrompt = appearancePrompt.trim(),
-            updatedAtEpochMillis = System.currentTimeMillis()
+            appearancePrompt = appearancePrompt.trim()
         )
     }
 
