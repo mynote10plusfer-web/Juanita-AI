@@ -70,6 +70,18 @@ private data class RegionalDialect(
     val note: String
 )
 
+private data class LiveVoice(val id: String, val label: String, val quality: String)
+
+private val liveVoices = listOf(
+    LiveVoice("Kore", "Kore", "Equilibrata"),
+    LiveVoice("Aoede", "Aoede", "Fresca e leggera"),
+    LiveVoice("Sulafat", "Sulafat", "Calda e avvolgente"),
+    LiveVoice("Achernar", "Achernar", "Morbida e delicata"),
+    LiveVoice("Vindemiatrix", "Vindemiatrix", "Dolce e gentile"),
+    LiveVoice("Zephyr", "Zephyr", "Vivace e luminosa"),
+    LiveVoice("Pulcherrima", "Pulcherrima", "Decisa e presente")
+)
+
 private val voiceLanguages = listOf(
     VoiceLanguage("Español (España)", "es-ES"),
     VoiceLanguage("Italiano", "it-IT"),
@@ -107,6 +119,7 @@ class MainActivity : ComponentActivity() {
                 initialLanguageTag = preferences.languageTag,
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
+                initialLiveVoiceName = preferences.liveVoiceName,
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
@@ -120,6 +133,7 @@ class MainActivity : ComponentActivity() {
                     preferences.languageTag = languageTag
                 },
                 onNameChanged = { preferences.assistantName = it },
+                onLiveVoiceChanged = { preferences.liveVoiceName = it },
                 onWakePhraseChanged = { preferences.wakePhrase = it },
                 onPersonaChanged = { profile ->
                     preferences.irony = profile.irony
@@ -168,6 +182,7 @@ private fun JuanitaApp(
     initialLanguageTag: String,
     initialDialectId: String,
     initialName: String,
+    initialLiveVoiceName: String,
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
     initialArchiveEnabled: Boolean,
@@ -178,6 +193,7 @@ private fun JuanitaApp(
     onLanguageSelected: (String) -> Unit,
     onDialectSelected: (String, String) -> Unit,
     onNameChanged: (String) -> Unit,
+    onLiveVoiceChanged: (String) -> Unit,
     onWakePhraseChanged: (String) -> Unit,
     onPersonaChanged: (PersonaProfile) -> Unit,
     onSpeak: (String, VoiceLanguage) -> String
@@ -187,6 +203,10 @@ private fun JuanitaApp(
     val gold = Color(0xFFE4BD69)
     val initialLanguage = voiceLanguages.firstOrNull { it.tag == initialLanguageTag } ?: voiceLanguages.first()
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
+    var selectedLiveVoice by remember {
+        mutableStateOf(liveVoices.firstOrNull { it.id == initialLiveVoiceName } ?: liveVoices.first())
+    }
+    var liveVoiceMenuExpanded by remember { mutableStateOf(false) }
     val dialects = listOf(
         RegionalDialect("sicilian-palermo", "Siciliano · area palermitana", "it-IT",
             "Chi bedda jurnata! Nni facemu 'na passiata?",
@@ -221,7 +241,10 @@ private fun JuanitaApp(
             liveScope.launch {
                 liveState = "Connessione a Gemini Live…"
                 try {
-                    liveAssistant.start(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                    liveAssistant.start(
+                        persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label),
+                        selectedLiveVoice.id
+                    )
                     liveState = "Juanita è in ascolto. Puoi parlare normalmente."
                 } catch (error: Exception) {
                     liveState = "Connessione non riuscita: ${error.localizedMessage ?: "controlla App Check e rete"}"
@@ -376,6 +399,36 @@ private fun JuanitaApp(
                         Icon(Icons.Default.Mic, contentDescription = null)
                         Text("  Parla")
                     }
+                }
+
+                SettingsCard(panel, gold, "VOCE DI JUANITA · GEMINI LIVE") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(selectedLiveVoice.quality, color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                        }
+                        TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
+                        DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
+                            liveVoices.forEach { voice ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(voice.label)
+                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedLiveVoice = voice
+                                        onLiveVoiceChanged(voice.id)
+                                        liveVoiceMenuExpanded = false
+                                        liveState = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Text("La scelta viene salvata sul telefono. Per applicarla, termina e riavvia la conversazione vocale.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
