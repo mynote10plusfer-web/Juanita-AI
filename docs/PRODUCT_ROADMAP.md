@@ -128,15 +128,6 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Add subtle idle portrait movement only. This is not facial expression animation or true lip sync; a rigged renderer and verified audio/viseme bridge remain separate required milestones.
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
 
-## Reliability corrections — 2026-11-06
-
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Explicitly enable Gemini Live input and output audio transcription. Automatic memory depends on these transcript events; a transcript callback alone is not enough when the model is not configured to emit transcriptions.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Stop microphone capture and close the Live session before attempting memory flush. Bound shutdown and memory cleanup so a network/quota delay cannot leave the microphone active.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Stop the voice session when the user dismisses the call UI or removes the app task from Recents. Screen-off/background continuation remains available while the app task/session is intentionally active.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Scope CameraX cleanup to the preview/analysis use cases owned by each screen; remove global `unbindAll()` calls from the call and vision previews. Hide the separate vision preview while the call screen owns the camera, use PreviewView COMPATIBLE mode, and surface camera errors instead of silently showing a black tile.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Add subtle idle portrait movement only. This is not facial expression animation or true lip sync; a rigged renderer and verified audio/viseme bridge remain separate required milestones.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
-
 ## Delivery plan
 
 1. Memory engine: first automatic extraction pipeline, local encrypted persistence, duplicate suppression, sensitive-content guard, pause control, memory list refresh and hard storage caps implemented on PR branch; next validate build/device behavior, add robust provenance/conflict resolution and improve retrieval.
