@@ -35,6 +35,14 @@ class EncryptedMemoryStore(context: Context) {
     val isConversationArchiveEnabled: Boolean
         get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, false)
 
+    /** Automatic curated memory is enabled by default; transcript archiving remains separate. */
+    val isAutomaticMemoryEnabled: Boolean
+        get() = preferences.getBoolean(KEY_AUTO_MEMORY_ENABLED, true)
+
+    fun setAutomaticMemoryEnabled(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_AUTO_MEMORY_ENABLED, enabled).apply()
+    }
+
     /** Disabling pauses future transcript storage but preserves existing records. */
     fun setConversationArchiveEnabled(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_ARCHIVE_ENABLED, enabled).apply()
@@ -51,12 +59,48 @@ class EncryptedMemoryStore(context: Context) {
             put("id", UUID.randomUUID().toString())
             put("sessionId", sessionId)
             put("role", safeRole)
-            put("text", text.take(MAX_TEXT_LENGTH))
+            put("text", text.take(MAX_TURN_TEXT_LENGTH))
             put("createdAt", timestampMillis)
         })
         while (records.length() > MAX_ARCHIVE_RECORDS) records.remove(0)
         writeRecords(records)
     }
+
+    /** Saves an automatically curated, non-sensitive memory; duplicate facts are not added twice. */
+    @Synchronized
+    fun addAutomaticMemory(text: String, category: String, confidence: Float): MemoryItem? {
+        if (!isAutomaticMemoryEnabled || text.isBlank()) return null
+        val normalized = normalizeMemoryText(text)
+        val records = readRecords()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "memory" &&
+                record.optString("category") == category &&
+                normalizeMemoryText(record.optString("text")) == normalized
+            ) {
+                record.put("confidence", maxOf(record.optDouble("confidence", 0.0), confidence.toDouble()))
+                record.put("lastSeenAt", System.currentTimeMillis())
+                writeRecords(records)
+                return runCatching { jsonToMemory(record) }.getOrNull()
+            }
+        }
+        val item = MemoryItem(
+            id = UUID.randomUUID().toString(),
+            text = text.trim().take(MAX_MEMORY_TEXT_LENGTH),
+            category = category.take(80),
+            source = "automatic",
+            createdAtMillis = System.currentTimeMillis(),
+            confidence = confidence.coerceIn(0f, 1f),
+            confirmedByUser = false,
+            sensitive = false
+        )
+        records.put(memoryToJson(item))
+        writeRecords(records)
+        return item
+    }
+
+    private fun normalizeMemoryText(value: String): String =
+        value.trim().lowercase().replace(Regex("\\s+"), " ")
 
     /** Explicitly saved semantic memory. Sensitive items require user confirmation. */
     @Synchronized
@@ -72,7 +116,7 @@ class EncryptedMemoryStore(context: Context) {
         require(!sensitive || confirmedByUser) { "Sensitive memories require explicit confirmation" }
         val item = MemoryItem(
             id = UUID.randomUUID().toString(),
-            text = text.trim().take(MAX_TEXT_LENGTH),
+            text = text.trim().take(MAX_MEMORY_TEXT_LENGTH),
             category = category.take(80),
             source = source.take(160),
             createdAtMillis = System.currentTimeMillis(),
@@ -276,7 +320,7 @@ class EncryptedMemoryStore(context: Context) {
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") == "memory" && record.optString("id") == id) {
-                record.put("text", newText.trim().take(MAX_TEXT_LENGTH))
+                record.put("text", newText.trim().take(MAX_MEMORY_TEXT_LENGTH))
                 updated = true
                 break
             }
@@ -323,13 +367,57 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     private fun writeRecords(records: JSONArray) {
+        val boundedRecords = applyStorageLimits(records)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val encrypted = cipher.doFinal(records.toString().toByteArray(Charsets.UTF_8))
+        val encrypted = cipher.doFinal(boundedRecords.toString().toByteArray(Charsets.UTF_8))
         preferences.edit().putString(
             KEY_ENCRYPTED_DATA,
             Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
         ).apply()
+    }
+
+
+    /**
+     * Hard storage ceilings: max 100 curated memories / 32 KB of memory text,
+     * and max 300 archived transcript turns. Manual memories are retained ahead
+     * of automatic ones; within each group higher-confidence and newer items win.
+     */
+    private fun applyStorageLimits(records: JSONArray): JSONArray {
+        val memories = mutableListOf<JSONObject>()
+        val turns = mutableListOf<JSONObject>()
+        val other = mutableListOf<JSONObject>()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            when (record.optString("kind")) {
+                "memory" -> memories += record
+                "turn" -> turns += record
+                else -> other += record
+            }
+        }
+
+        val keptMemories = mutableListOf<JSONObject>()
+        var memoryChars = 0
+        val rankedMemories = memories.sortedWith(
+            compareByDescending<JSONObject> { it.optString("source") != "automatic" }
+                .thenByDescending { it.optDouble("confidence", 0.0) }
+                .thenByDescending { it.optLong("createdAt") }
+        )
+        for (memory in rankedMemories) {
+            val textLength = memory.optString("text").length
+            if (keptMemories.size >= MAX_MEMORY_ITEMS) continue
+            if (memoryChars + textLength > MAX_MEMORY_CHARS) continue
+            keptMemories += memory
+            memoryChars += textLength
+        }
+
+        val keptTurns = turns.sortedByDescending { it.optLong("createdAt") }
+            .take(MAX_ARCHIVE_RECORDS)
+        return JSONArray().apply {
+            other.forEach(::put)
+            keptMemories.forEach(::put)
+            keptTurns.sortedBy { it.optLong("createdAt") }.forEach(::put)
+        }
     }
 
     private fun getOrCreateKey(): SecretKey {
@@ -350,7 +438,7 @@ class EncryptedMemoryStore(context: Context) {
     private fun memoryToJson(item: MemoryItem) = JSONObject().apply {
         put("kind", "memory")
         put("id", item.id)
-        put("text", item.text)
+        put("text", item.text.take(MAX_MEMORY_TEXT_LENGTH))
         put("category", item.category)
         put("source", item.source)
         put("createdAt", item.createdAtMillis)
@@ -373,6 +461,7 @@ class EncryptedMemoryStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "juanita_encrypted_memory"
         private const val KEY_ARCHIVE_ENABLED = "conversation_archive_enabled"
+        private const val KEY_AUTO_MEMORY_ENABLED = "automatic_memory_enabled"
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
         private const val MILLIS_PER_DAY = 86_400_000L
         private val ALLOWED_RETENTION_DAYS = setOf(0, 7, 30, 90)
@@ -383,6 +472,10 @@ class EncryptedMemoryStore(context: Context) {
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
         private const val MAX_TEXT_LENGTH = 4000
-        private const val MAX_ARCHIVE_RECORDS = 1000
+        private const val MAX_MEMORY_TEXT_LENGTH = 500
+        private const val MAX_TURN_TEXT_LENGTH = 1800
+        private const val MAX_MEMORY_ITEMS = 100
+        private const val MAX_MEMORY_CHARS = 32_000
+        private const val MAX_ARCHIVE_RECORDS = 300
     }
 }
