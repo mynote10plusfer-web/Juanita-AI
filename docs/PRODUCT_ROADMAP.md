@@ -1,8 +1,8 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — 0.8.7 privacy storage APIs
+Last updated: 2026-11-06 — 0.8.8 memory and privacy controls
 
-## Latest implementation update — 0.8.6 (foreground audio service)
+## Latest implementation update — 0.8.8 (memory and privacy controls)\n\n- Added a dedicated “Memoria e privacy” screen section in the Android app.\n- Personal memories can be listed, edited, deleted individually, or cleared as a group after confirmation.\n- Conversation archive controls are separate: opt-in toggle, retention setting (manual/7/30/90 days), per-conversation deletion and clear-archive action, each with confirmation for destructive operations.\n- Clearing personal memories does not clear conversation history; clearing the archive does not clear personal memories.\n- Important limitation: Gemini Live transcript capture is not yet connected to the archive. The UI explicitly discloses this; no automatic conversation transcript is currently stored. Raw audio is not archived.\n\n## Previous implementation update — 0.8.6 (foreground audio service)
 
 - Added `JuanitaVoiceService`, an Android microphone foreground service that owns the Gemini Live assistant lifecycle independently of MainActivity.
 - The user starts the service explicitly from the visible app after granting RECORD_AUDIO permission.
@@ -41,7 +41,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Microphone permission and explicit start/stop controls.
 - Language and regional profile selectors (Italian, Spanish, Czech, English, Colombian Spanish; experimental Sicilian, Canarian and Paisa profiles).
 - Nine personality sliders are saved locally and included in the system instruction when a Live session starts. They do not dynamically change an already-running session; apply changes on next session/restart.
-- Encrypted on-device manual memories exist. New local APIs support archive summaries, turn retrieval, per-conversation deletion, date-range deletion, archive-only clearing, memory-only clearing, memory editing and configurable archive retention (never/7/30/90 days). The UI and Live transcript connection remain pending.
+- Encrypted on-device manual memories exist. The 0.8.8 UI supports listing, editing, deleting individual memories and clearing all personal memories. Separate archive controls expose opt-in, retention, per-conversation deletion and clear-archive. Live transcript capture remains pending; archive entries will remain empty until that connection is implemented.
 - Conversation archive consent toggle exists, OFF by default; automatic transcript archive and retention/deletion management are not complete.
 - Existing photorealistic Juanita portrait is displayed in an avatar card; animated face and lip sync are not implemented.
 - Wake phrase field exists, but wake-word detection is not connected.
@@ -136,7 +136,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 ## Delivery plan (ordered; update status as work lands)
 
 1. **Reliability foundation:** foreground-service lifecycle and Stop notification implemented in 0.8.6; next add detailed live status/transcript and verify screen-off behavior, reconnects and repeated long conversations on the physical device.
-2. **Privacy foundation:** local archive management APIs implemented in 0.8.7 (conversation listing/retrieval/deletion, date-range deletion, archive-only and memory-only clearing, memory editing, retention 0/7/30/90 days). UI controls and actual Gemini Live transcript capture are still pending; archive remains opt-in and no transcript is currently captured automatically.
+2. **Privacy foundation:** local archive APIs and memory/privacy UI implemented in 0.8.8. Personal memories can be edited/deleted independently; archive consent, retention and deletion controls are exposed. Actual Gemini Live transcript capture remains pending; archive remains opt-in and no transcript is currently captured automatically.
 3. **Personal onboarding:** gradual “Conosciamoci”, profile editor, explicit save/forget controls, non-intrusive follow-up.
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
 5. **Daily utilities:** local alarms/reminders first, then morning briefing and calendar; weather/location with manual fallback and opt-in notifications.
