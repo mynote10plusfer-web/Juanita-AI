@@ -2,7 +2,7 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current version: 0.8.0 (versionCode 9)
+## Current version: 0.8.5 (versionCode 14)
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
@@ -12,6 +12,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 - Experimental regional profiles: Sicilian (Palermo area), Canarian Spanish, and Colombian Paisa (Antioquia/Medellin).
 - Regional instructions are included in the Gemini Live system prompt. This guides language and vocabulary but does not guarantee a native regional voice.
 - Android system TTS sample playback; the device's installed voice is used and regional authenticity is not guaranteed.
+- Gemini Live response voice selector with seven documented female voices; selection is saved locally and applied when a new Live session starts.
 - Android speech-recognition intent remains available as a separate microphone test.
 - Android Keystore-backed encrypted manual memory; conversation archive is opt-in and automatic memory extraction is not implemented.
 - GitHub Actions builds a debug APK and a permanently signed release APK.
@@ -29,7 +30,7 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 ## Not implemented yet
 
 - Native regional neural voices guaranteed to sound authentically Sicilian, Canarian or Paisa.
-- Always-on wake phrase detection / foreground listening service.
+- Always-on wake phrase detection / foreground listening service (planned; current Live audio still runs from the Activity).
 - Automatic extraction, summarization and curation of conversation memories.
 - Offline ASR/TTS runtime and model downloads.
 - LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar), each requiring explicit permissions.
