@@ -1,6 +1,8 @@
 package ai.juanita.app
 
 import android.app.Notification
+import android.graphics.Bitmap
+import android.os.Binder
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -32,6 +34,17 @@ class JuanitaVoiceService : Service() {
     private lateinit var memoryStore: EncryptedMemoryStore
     private var startRequested = false
 
+    inner class LocalBinder : Binder() {
+        fun sendVideoFrame(bitmap: Bitmap) {
+            serviceScope.launch {
+                runCatching { assistant.sendVideoFrame(bitmap) }
+                    .onFailure { _visionState.value = "Invio immagine non riuscito: ${it.localizedMessage ?: "errore"}" }
+            }
+        }
+    }
+
+    private val localBinder = LocalBinder()
+
     override fun onCreate() {
         super.onCreate()
         memoryStore = EncryptedMemoryStore(applicationContext)
@@ -44,6 +57,7 @@ class JuanitaVoiceService : Service() {
                 serviceScope.launch {
                     _state.value = "Chiusura della conversazione…"
                     runCatching { assistant.stop() }
+                    startRequested = false
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     _state.value = "Conversazione terminata"
                     stopSelf(startId)
@@ -85,6 +99,7 @@ class JuanitaVoiceService : Service() {
                             _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
                             updateNotification("Connessione non riuscita · apri Juanita per riprovare")
                             runCatching { assistant.stop() }
+                            startRequested = false
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf(startId)
                         }
@@ -141,7 +156,7 @@ class JuanitaVoiceService : Service() {
             .notify(NOTIFICATION_ID, buildNotification(message))
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onDestroy() {
         serviceScope.cancel()
@@ -155,6 +170,9 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_VOICE = "extra_voice_name"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
+
+        private val _visionState = MutableStateFlow("La visione è inattiva")
+        val visionState: StateFlow<String> = _visionState.asStateFlow()
 
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
