@@ -38,19 +38,23 @@ internal fun MemoryPrivacySection(
     panel: Color,
     gold: Color,
     initialArchiveEnabled: Boolean,
+    initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialRetentionDays: Int,
     onArchiveEnabledChanged: (Boolean) -> Unit,
+    onAutoMemoryEnabledChanged: (Boolean) -> Unit,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onClearArchive: () -> Unit,
-    onRetentionChanged: (Int) -> Unit
+    onRetentionChanged: (Int) -> Unit,
+    onRefreshMemories: () -> List<MemoryItem>
 ) {
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
+    var autoMemoryEnabled by remember { mutableStateOf(initialAutoMemoryEnabled) }
     var memories by remember { mutableStateOf(initialMemories) }
     var conversations by remember { mutableStateOf(initialArchivedConversations) }
     var retentionDays by remember { mutableStateOf(initialRetentionDays) }
@@ -75,7 +79,25 @@ internal fun MemoryPrivacySection(
             Text("MEMORIA E PRIVACY", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text("I dati sono conservati in forma cifrata sul telefono. Puoi modificarli o cancellarli quando vuoi.",
                 color = Color(0xFF9A9DA4), fontSize = 12.sp)
+            Text("MEMORIA AUTOMATICA", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = autoMemoryEnabled, onCheckedChange = { enabled ->
+                    autoMemoryEnabled = enabled
+                    onAutoMemoryEnabledChanged(enabled)
+                })
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Ricorda automaticamente le informazioni importanti", color = Color.White, fontSize = 13.sp)
+                    Text(if (autoMemoryEnabled) "Attiva: analizza brevi blocchi di testo delle conversazioni per estrarre ricordi utili." else "In pausa: nessun nuovo ricordo automatico verrà creato.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                }
+            }
+            Text("Per selezionare i ricordi, brevi estratti testuali vengono inviati a Gemini. Non viene salvato l’audio e non serve attivare l’archivio completo. Puoi disattivare questa funzione in qualsiasi momento.",
+                color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${memories.size}/100 ricordi · ${memories.sumOf { it.text.length }}/32.000 caratteri", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { memories = onRefreshMemories() }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
+            }
             OutlinedTextField(
                 value = memoryDraft, onValueChange = { memoryDraft = it },
                 label = { Text("Nuovo ricordo") },
