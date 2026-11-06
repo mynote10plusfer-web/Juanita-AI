@@ -44,10 +44,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -276,23 +278,79 @@ private fun JuanitaApp(
     val liveState by JuanitaVoiceService.state.collectAsState()
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
-    var weatherContext by remember { mutableStateOf("") }
+    var locationContext by remember { mutableStateOf("") }
+    var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
+    val uiScope = rememberCoroutineScope()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val allowed = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (allowed) {
+            locationStatus = "Posizione autorizzata · acquisizione in corso"
+            uiScope.launch {
+                val result = runCatching { readDeviceLocationContext(context) }.getOrNull()
+                locationContext = result.orEmpty()
+                locationStatus = if (result.isNullOrBlank()) "Permesso attivo · posizione non ancora disponibile" else "Posizione disponibile per Juanita"
+            }
+        } else {
+            locationStatus = "Posizione non autorizzata · Juanita continuerà a funzionare senza GPS"
+        }
+    }
+    LaunchedEffect(Unit) {
+        val fineGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val coarseGranted = androidx.core.content.ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (fineGranted || coarseGranted) {
+            locationStatus = "Posizione autorizzata · acquisizione in corso"
+            val result = runCatching { readDeviceLocationContext(context) }.getOrNull()
+            locationContext = result.orEmpty()
+            locationStatus = if (result.isNullOrBlank()) "Permesso attivo · posizione non ancora disponibile" else "Posizione disponibile per Juanita"
+        } else {
+            val permissionPrefs = context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
+            if (!permissionPrefs.getBoolean("location_permission_requested", false)) {
+                permissionPrefs.edit().putBoolean("location_permission_requested", true).apply()
+                locationPermissionLauncher.launch(arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                ))
+            } else {
+                locationStatus = "Permesso posizione non concesso · puoi abilitarlo dalle impostazioni Android"
+            }
+        }
+    }
     val livePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
             liveStartError = null
-            try {
-                JuanitaVoiceService.start(
-                    context,
-                    buildString {
+            uiScope.launch {
+                val hasLocationPermission =
+                    androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                    androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (hasLocationPermission) {
+                    locationStatus = "Aggiornamento della posizione per la nuova conversazione…"
+                    locationContext = runCatching { readDeviceLocationContext(context) }.getOrNull().orEmpty()
+                    locationStatus = if (locationContext.isBlank()) "GPS autorizzato ma posizione non disponibile" else "Posizione aggiornata per la conversazione"
+                }
+                try {
+                    val instruction = buildString {
                         append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
-                        if (weatherContext.isNotBlank()) append("\n\n").append(weatherContext)
-                    },
-                    selectedLiveVoice.id
-                )
-            } catch (error: Exception) {
-                liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
+                        if (locationContext.isNotBlank()) {
+                            append("\n\n")
+                            append(locationContext)
+                        } else {
+                            append("\n\n")
+                            append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
+                        }
+                    }
+                    JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id)
+                } catch (error: Exception) {
+                    liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
+                }
             }
         } else liveStartError = "Permesso microfono negato"
     }
@@ -475,15 +533,11 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
-                LocationWeatherSection(
-                    panel = panel,
-                    gold = gold,
-                    onContextReady = { weatherContext = it }
-                )
-
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                     Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
+                    Text(locationStatus, color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Text("La posizione viene letta automaticamente con il tuo permesso quando apri Juanita e aggiornata all’avvio della conversazione. Nessun tracciamento in background.", color = Color(0xFF777D87), fontSize = 11.sp)
                     Button(
                         onClick = { livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                         modifier = Modifier.fillMaxWidth(),
