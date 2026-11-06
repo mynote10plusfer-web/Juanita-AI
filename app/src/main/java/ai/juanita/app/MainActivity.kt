@@ -276,6 +276,7 @@ private fun JuanitaApp(
     val liveState by JuanitaVoiceService.state.collectAsState()
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
+    var weatherContext by remember { mutableStateOf("") }
     val livePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -284,7 +285,10 @@ private fun JuanitaApp(
             try {
                 JuanitaVoiceService.start(
                     context,
-                    persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label),
+                    buildString {
+                        append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                        if (weatherContext.isNotBlank()) append("\n\n").append(weatherContext)
+                    },
                     selectedLiveVoice.id
                 )
             } catch (error: Exception) {
@@ -470,6 +474,12 @@ private fun JuanitaApp(
                     Text("La scelta viene salvata sul telefono. Per applicarla, termina e riavvia la conversazione vocale.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
+
+                LocationWeatherSection(
+                    panel = panel,
+                    gold = gold,
+                    onContextReady = { weatherContext = it }
+                )
 
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
