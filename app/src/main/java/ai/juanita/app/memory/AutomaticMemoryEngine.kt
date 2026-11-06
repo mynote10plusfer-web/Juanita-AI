@@ -40,6 +40,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
             pendingClearVersion = store.memoryClearVersion
             return
         }
+        val batchVersion = pendingClearVersion
         val batch = pendingTurns.takeLast(MAX_BATCH_TURNS).joinToString("\n")
         pendingTurns.clear()
         if (batch.isBlank()) return
@@ -71,8 +72,10 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
             val start = raw.indexOf("[")
             val end = raw.lastIndexOf("]")
             if (start < 0 || end <= start) return
+            if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return
             val candidates = JSONArray(raw.substring(start, end + 1))
             for (index in 0 until minOf(candidates.length(), MAX_CANDIDATES)) {
+                if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return
                 val candidate = candidates.optJSONObject(index) ?: continue
                 val text = candidate.optString("text").trim()
                 val category = candidate.optString("category", "general")
