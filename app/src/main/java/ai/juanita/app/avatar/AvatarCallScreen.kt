@@ -55,9 +55,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 
 /**
- * Full-screen call-style shell. The portrait remains a still image in this
- * phase; the adaptive 3D renderer and PCM/viseme bridge are separate milestones.
- * Closing this window does not stop the independently owned Gemini Live service.
+ * Full-screen call UI. Dismissing this window also ends the voice session so
+ * the microphone cannot remain active behind a closed call screen. The portrait
+ * currently has subtle idle motion; facial animation and true lip sync remain separate milestones.
  */
 @Composable
 fun AvatarCallScreen(
@@ -223,7 +223,7 @@ fun AvatarCallScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)
                 ) {
-                    TextButton(onClick = onDismiss) { Text("Chiudi schermata", color = Color.White) }
+                    TextButton(onClick = onDismiss) { Text("Termina e chiudi", color = Color.White) }
                     Button(
                         onClick = onEndCall,
                         colors = ButtonDefaults.buttonColors(
@@ -233,7 +233,7 @@ fun AvatarCallScreen(
                     ) { Text("Termina chiamata") }
                 }
                 Text(
-                    "Chiudere questa schermata non interrompe l'audio. Solo “Termina chiamata” chiude Gemini Live. La videocamera mostra l'anteprima sul dispositivo e non invia immagini a Gemini.",
+                    "Chiudere questa schermata termina anche la conversazione e arresta il microfono. La videocamera mostra l'anteprima sul dispositivo e non invia immagini a Gemini.",
                     color = Color(0xFFB9BBC1)
                 )
             }
