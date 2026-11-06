@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
@@ -85,8 +86,15 @@ class JuanitaVoiceService : Service() {
                         _state.value = "Connessione a Gemini Live…"
                         try {
                             val conversationId = UUID.randomUUID().toString()
-                            assistant.start(instruction, voice) { role, text ->
-                                // Storage is a no-op unless the user enabled archive consent.
+                            // Restore relevant local memories and recent turns before opening
+                            // the new Live session. Nothing is uploaded to a separate memory store.
+                            val localContext = withContext(Dispatchers.IO) {
+                                memoryStore.buildAssistantContext()
+                            }
+                            val sessionInstruction = if (localContext.isBlank()) instruction else {
+                                "$instruction\n\n$localContext"
+                            }
+                            assistant.start(sessionInstruction, voice) { role, text ->
                                 serviceScope.launch(Dispatchers.IO) {
                                     memoryStore.appendConversationTurn(conversationId, role, text)
                                 }
