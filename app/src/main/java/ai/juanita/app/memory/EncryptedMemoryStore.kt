@@ -39,6 +39,9 @@ class EncryptedMemoryStore(context: Context) {
     val isAutomaticMemoryEnabled: Boolean
         get() = preferences.getBoolean(KEY_AUTO_MEMORY_ENABLED, true)
 
+    val memoryClearVersion: Long
+        get() = preferences.getLong(KEY_MEMORY_CLEAR_VERSION, 0L)
+
     fun setAutomaticMemoryEnabled(enabled: Boolean) {
         preferences.edit().putBoolean(KEY_AUTO_MEMORY_ENABLED, enabled).apply()
     }
@@ -309,6 +312,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun clearPersonalMemories() {
         filterRecords { it.optString("kind") != "memory" }
+        preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
     }
 
     @Synchronized
@@ -461,6 +465,7 @@ class EncryptedMemoryStore(context: Context) {
         private const val PREFS_NAME = "juanita_encrypted_memory"
         private const val KEY_ARCHIVE_ENABLED = "conversation_archive_enabled"
         private const val KEY_AUTO_MEMORY_ENABLED = "automatic_memory_enabled"
+        private const val KEY_MEMORY_CLEAR_VERSION = "memory_clear_version"
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
         private const val MILLIS_PER_DAY = 86_400_000L
         private val ALLOWED_RETENTION_DAYS = setOf(0, 7, 30, 90)
