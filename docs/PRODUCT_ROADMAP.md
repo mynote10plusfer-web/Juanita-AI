@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — 0.9.3 call-screen preview foundation
+Last updated: 2026-11-06 — 0.9.3 call-screen preview foundation; user-approved avatar creation and multi-device call experience
 
 ## Latest implementation update — 0.9.2 (automatic foreground GPS context)
 
@@ -40,6 +40,19 @@ Repository: https://github.com/mynote10plusfer-web/Juanita-AI
 This document is the canonical product checklist. Keep it updated whenever scope, implementation status, or user-approved constraints change. A requirement listed here is not a claim that the feature is already implemented.
 
 ## Product vision
+
+### User-approved avatar and video-call experience (scope agreed 2026-11-06)
+
+- Juanita is a multi-device Android application, not an app designed only for the Galaxy Note 10+. Support a range of Android phones and adapt rendering quality to device capability (GPU/WebGL support, memory, thermal state, screen size and camera availability).
+- The primary conversation presentation should feel like a WhatsApp-style video call: Juanita/avatar fills the main area; the user or current interlocutor appears in a smaller picture-in-picture tile. Provide clear call controls and an obvious end-call action.
+- Avatar creation must be available to each user through three paths: (1) describe the desired character in text; (2) choose a photograph as a visual reference; or (3) generate a randomized character brief/model. Allow users to edit and regenerate before saving.
+- The user chooses the visual style independently of the creation path: photorealistic human, realistic 3D, stylized 3D, or cartoon/animated style.
+- The saved avatar becomes the persistent visual identity for the assistant profile and is used in the call screen. Preserve the existing Juanita portrait and its recognizable appearance unless the user explicitly chooses to replace/customize it.
+- A photo is a reference, not permission to identify the pictured person. Do not infer identity or perform face recognition. Do not upload a photo to an external service without separate, explicit consent.
+- A creation option is not complete merely because its prompt or metadata is saved: the feature is complete only when it produces a usable preview and a renderable avatar asset, or clearly explains any unsupported path.
+- Prefer local/on-device generation and open-source tools. No paid API, paid GPU, paid hosting, billing activation or Firebase Blaze. If a fully local photorealistic generator is not feasible on the phone, provide a transparent free workflow or clearly mark the limitation rather than silently using a paid/cloud endpoint.
+- The call experience should include natural lip synchronization, eye gaze/blinks, facial expression and body/hand gestures as progressive milestones. Do not claim real-time animation until implemented and tested.
+- Keep user camera access explicit and revocable. Show a local camera preview only after permission and user action; transmitting camera frames to Gemini is a separate opt-in action.
 
 Juanita should feel like a warm, expressive, multilingual personal voice assistant and a familiar conversational presence: she should get to know the user gradually, remember only what the user permits, take useful initiative without being intrusive, and help with practical daily tasks. She is software, not a conscious person; do not claim otherwise.
 
@@ -144,11 +157,12 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 ### H. Avatar and expression
 - Keep the existing exact photorealistic brunette, green-eyed portrait; do not replace it with a generic 3D character.
 - [IMPLEMENTED IN 0.9.3 FOUNDATION] Compose Avatar Studio supports description/photo-reference/random sources, photorealistic/realistic 3D/stylized 3D/cartoon styles, motion presets, random appearance briefs, and local profile save/select/delete. This stores profile metadata only; it does not generate or animate models yet.
-- [IMPLEMENTED IN 0.9.3 PREVIEW] Full-screen call-style shell shows the existing Juanita portrait with a local CameraX picture-in-picture preview, camera permission/toggle and front/back switch. The portrait is static; the camera preview is not sent to Gemini from this screen. The voice service remains independent; closing the screen does not end audio.
-- Build a WhatsApp-style call screen: large Juanita avatar, user/interlocutor camera preview in a small picture-in-picture tile, camera/mic controls and clear end-call action.
-- Avatar Studio UI: description editor, Android Photo Picker, randomize controls, style selection, preview, save/select/delete.
-- Progressive 2D animation: blinking, gaze, subtle head movement and expressions.
-- Speech-synchronized mouth movement; amplitude-based mouth animation may be an initial approximation.
+- [IMPLEMENTED IN 0.9.3 PREVIEW — PR #3 BUILD PENDING] Full-screen call-style shell shows the existing Juanita portrait with a local CameraX picture-in-picture preview, camera permission/toggle and front/back switch. The portrait is static; the camera preview is not sent to Gemini from this screen. The voice service remains independent; closing the screen does not end audio.
+- [PARTIAL — PR #3, NOT YET MERGED/BUILD-VERIFIED] Build a WhatsApp-style call screen: large Juanita/avatar area and user/interlocutor camera preview in a small picture-in-picture tile. Current preview has camera permission/on-off/front-back and separate close-screen/end-call actions. Still pending: movable/resizable PiP, verified microphone mute/unmute, polished incoming/outgoing call states, and animated avatar renderer. Keep Gemini Live lifecycle independent of the call UI.
+- [PROFILE EDITOR IMPLEMENTED; MODEL GENERATION PENDING] Avatar Studio UI: description editor, Android Photo Picker, randomize controls, style selection, local profile preview/metadata, save/select/delete. Next implement actual generation/conversion into usable 2D/3D assets for each supported path; photo-reference processing must be consent-based and preserve source-photo privacy.
+- Adaptive cross-device renderer: bundle open-source WebView/Three.js/TalkingHead assets and a correctly licensed, rigged starter model; detect device capability and choose model detail, texture size, frame rate and fallback rendering. Verify on Galaxy Note 10+, S22 Ultra and additional Android hardware.
+- Progressive animation: blinking, gaze, subtle head movement, listening/speaking states, facial expressions, upper-body movement and gestures; add full-body animation where the model/device budget supports it.
+- Speech-synchronized mouth movement; amplitude-based mouth animation may be an initial approximation. Real phoneme/viseme lip sync requires access to PCM/timing data and a custom audio pipeline; do not claim true lip sync before implemented and tested.
 - Real phoneme/viseme lip sync requires access to PCM/timing data and a custom audio pipeline; do not claim true lip sync before implemented and tested.
 - Facial expressions should be subtle, coherent and not childish.
 - Keep the current stable audio path until an alternative PCM pipeline has been independently validated.
@@ -170,7 +184,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
 5. **Daily utilities:** foreground GPS context implemented in 0.9.2 (physical-device test pending); next build separate live-data integrations for weather/local alerts, then local alarms/reminders, morning briefing and calendar.
 6. **Notification companion:** opt-in notification listener, per-app allowlist, read-on-request, confirmed replies.
-7. **Avatar:** local profile model/store and Avatar Studio editor are merged into `main`. A first full-screen call-style preview now uses the existing portrait and CameraX PiP locally. Next: select and bundle an openly licensed rigged model; add adaptive WebView/Three.js/TalkingHead renderer; connect the saved profile to its rendered asset; then investigate a supported Gemini PCM/viseme bridge without changing the stable SDK-managed audio route.
+7. **Avatar and video-call experience:** profile model/store and Avatar Studio editor are merged into `main`. PR #3 adds a first full-screen call-style preview with the existing portrait and local CameraX PiP; it is still under review/build validation and must not be described as released. Agreed product scope: user-created avatar from text description, photo reference or random generation; user-selected photorealistic, realistic 3D, stylized 3D or cartoon style; persistent saved avatar; WhatsApp-style call layout with large avatar and small user/interlocutor tile; adaptive quality across Android devices. Delivery sequence: (a) finish/verify PR #3; (b) bundle an openly licensed rigged starter model and prove WebView renderer; (c) implement actual generation/asset workflow, not metadata-only profiles; (d) connect profile assets to the call renderer; (e) add facial/body motion and gesture states; (f) investigate Gemini PCM/viseme bridge without changing stable SDK-managed audio until validated; (g) add PiP movement/resize, microphone controls and device matrix tests. No paid services or billing.
 8. **Extended integrations:** motorcycle/travel, translation, smart home and other capabilities.
 
 ## Definition of done for every phase
@@ -182,4 +196,4 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Update this roadmap's implementation status and known limitations.
 
 
-Avatar architecture details: see [AVATAR_VIDEO_CALL_ARCHITECTURE.md](AVATAR_VIDEO_CALL_ARCHITECTURE.md). The profile editor and call-style preview are foundations, not a finished generated/animated avatar or full bidirectional video-call feature; keep implementation status explicit.
+Avatar architecture details: see [AVATAR_VIDEO_CALL_ARCHITECTURE.md](AVATAR_VIDEO_CALL_ARCHITECTURE.md). The profile editor stores choices/metadata but does not yet generate models. PR #3 call-screen code is under build validation and is not merged yet. The current call preview uses a static portrait and a local-only CameraX preview; it is not yet an animated avatar or full bidirectional video-call feature. Keep implementation status explicit.
