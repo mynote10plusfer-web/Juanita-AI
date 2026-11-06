@@ -110,7 +110,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
         private const val MAX_TURN_CHARS = 1800
         private const val MIN_MEMORY_CHARS = 8
         private const val MAX_MEMORY_CHARS = 500
-        private const val MIN_CONFIDENCE = 0.82
+        private const val MIN_CONFIDENCE = 0.82f
         private const val MAX_CANDIDATES = 5
         private val ALLOWED_CATEGORIES = setOf("preference", "interest", "project", "routine", "goal", "language", "communication", "important_event", "general")
     }
