@@ -22,7 +22,7 @@ import com.google.firebase.ai.type.liveGenerationConfig
 class GeminiLiveAssistant {
     private var session: LiveSession? = null
 
-    suspend fun start(systemInstruction: String) {
+    suspend fun start(systemInstruction: String, voiceName: String = DEFAULT_VOICE) {
         stop()
 
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
@@ -30,7 +30,7 @@ class GeminiLiveAssistant {
             systemInstruction = content { text(systemInstruction) },
             generationConfig = liveGenerationConfig {
                 responseModality = ResponseModality.AUDIO
-                speechConfig = SpeechConfig(voice = Voice("Kore"))
+                speechConfig = SpeechConfig(voice = Voice(voiceName.ifBlank { DEFAULT_VOICE }))
             }
         )
 
@@ -52,5 +52,6 @@ class GeminiLiveAssistant {
 
     companion object {
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
+        const val DEFAULT_VOICE = "Kore"
     }
 }
