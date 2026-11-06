@@ -129,6 +129,9 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ### H. Avatar and expression
 - Keep the existing exact photorealistic brunette, green-eyed portrait; do not replace it with a generic 3D character.
+- [FOUNDATION ADDED IN avatar-call-foundation BRANCH] Portable avatar profile model and private local metadata store support description/photo-reference/random sources, photorealistic/realistic 3D/stylized 3D/cartoon styles, motion presets and an active profile selection. This stores profile metadata only; it does not generate or animate models yet.
+- Build a WhatsApp-style call screen: large Juanita avatar, user/interlocutor camera preview in a small picture-in-picture tile, camera/mic controls and clear end-call action.
+- Avatar Studio UI: description editor, Android Photo Picker, randomize controls, style selection, preview, save/select/delete.
 - Progressive 2D animation: blinking, gaze, subtle head movement and expressions.
 - Speech-synchronized mouth movement; amplitude-based mouth animation may be an initial approximation.
 - Real phoneme/viseme lip sync requires access to PCM/timing data and a custom audio pipeline; do not claim true lip sync before implemented and tested.
@@ -152,7 +155,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
 5. **Daily utilities:** foreground GPS context implemented in 0.9.2 (physical-device test pending); next build separate live-data integrations for weather/local alerts, then local alarms/reminders, morning briefing and calendar.
 6. **Notification companion:** opt-in notification listener, per-app allowlist, read-on-request, confirmed replies.
-7. **Avatar:** staged 2D animation, then evaluate PCM/viseme lip sync without sacrificing audio stability.
+7. **Avatar:** profile model/local store foundation added on `feature/avatar-call-foundation`; next Avatar Studio UI and bundled, openly licensed model assets, then adaptive WebView renderer + CameraX picture-in-picture call screen; finally PCM/viseme lip sync after a supported Gemini audio-output bridge is verified.
 8. **Extended integrations:** motorcycle/travel, translation, smart home and other capabilities.
 
 ## Definition of done for every phase
@@ -162,3 +165,6 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - No claim of implementation based on documentation alone.
 - Test permission denied, feature disabled, offline, app restart, screen off and deletion paths as applicable.
 - Update this roadmap's implementation status and known limitations.
+
+
+Avatar architecture details: see [AVATAR_VIDEO_CALL_ARCHITECTURE.md](AVATAR_VIDEO_CALL_ARCHITECTURE.md). The profile foundation is not a finished avatar generator or video-call feature; keep implementation status explicit.
