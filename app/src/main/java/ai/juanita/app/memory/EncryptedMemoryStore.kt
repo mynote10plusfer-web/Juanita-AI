@@ -106,7 +106,144 @@ class EncryptedMemoryStore(context: Context) {
         writeRecords(kept)
     }
 
-    /** Clears every archived turn and semantic memory record. */
+    /** Summary of one locally archived voice/text conversation. */
+    data class ArchivedConversation(
+        val sessionId: String,
+        val turnCount: Int,
+        val startedAtMillis: Long,
+        val updatedAtMillis: Long,
+        val preview: String
+    )
+
+    /** Retention: 0 means keep until manually deleted; otherwise 7, 30 or 90 days. */
+    var archiveRetentionDays: Int
+        get() = preferences.getInt(KEY_ARCHIVE_RETENTION_DAYS, 0).coerceIn(0, 90)
+        set(value) {
+            require(value in ALLOWED_RETENTION_DAYS) { "Unsupported archive retention period" }
+            preferences.edit().putInt(KEY_ARCHIVE_RETENTION_DAYS, value).apply()
+            purgeExpiredArchive()
+        }
+
+    @Synchronized
+    fun listArchivedConversations(): List<ArchivedConversation> {
+        purgeExpiredArchive()
+        val grouped = linkedMapOf<String, MutableList<JSONObject>>()
+        val records = readRecords()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "turn") continue
+            val sessionId = record.optString("sessionId")
+            if (sessionId.isNotBlank()) grouped.getOrPut(sessionId) { mutableListOf() }.add(record)
+        }
+        return grouped.map { (sessionId, turns) ->
+            val ordered = turns.sortedBy { it.optLong("createdAt") }
+            ArchivedConversation(
+                sessionId = sessionId,
+                turnCount = ordered.size,
+                startedAtMillis = ordered.first().optLong("createdAt"),
+                updatedAtMillis = ordered.last().optLong("createdAt"),
+                preview = ordered.firstOrNull { it.optString("role") == "USER" }
+                    ?.optString("text").orEmpty().take(120)
+            )
+        }.sortedByDescending { it.updatedAtMillis }
+    }
+
+    @Synchronized
+    fun listConversationTurns(sessionId: String): List<ArchivedTurn> {
+        purgeExpiredArchive()
+        val records = readRecords()
+        return buildList {
+            for (index in 0 until records.length()) {
+                val record = records.optJSONObject(index) ?: continue
+                if (record.optString("kind") == "turn" && record.optString("sessionId") == sessionId) {
+                    add(ArchivedTurn(
+                        id = record.optString("id"),
+                        role = record.optString("role"),
+                        text = record.optString("text"),
+                        timestampMillis = record.optLong("createdAt")
+                    ))
+                }
+            }
+        }.sortedBy { it.timestampMillis }
+    }
+
+    data class ArchivedTurn(
+        val id: String,
+        val role: String,
+        val text: String,
+        val timestampMillis: Long
+    )
+
+    @Synchronized
+    fun deleteConversation(sessionId: String) {
+        filterRecords { record ->
+            record.optString("kind") != "turn" || record.optString("sessionId") != sessionId
+        }
+    }
+
+    /** Deletes archived turns in [startInclusive, endExclusive), preserving personal memories. */
+    @Synchronized
+    fun deleteArchiveRange(startInclusive: Long, endExclusive: Long) {
+        require(endExclusive > startInclusive)
+        filterRecords { record ->
+            if (record.optString("kind") != "turn") true
+            else {
+                val timestamp = record.optLong("createdAt")
+                timestamp < startInclusive || timestamp >= endExclusive
+            }
+        }
+    }
+
+    /** Clears conversation transcripts only; saved personal memories are preserved. */
+    @Synchronized
+    fun clearConversationArchive() {
+        filterRecords { it.optString("kind") != "turn" }
+    }
+
+    /** Clears saved personal memories only; archived conversation turns are preserved. */
+    @Synchronized
+    fun clearPersonalMemories() {
+        filterRecords { it.optString("kind") != "memory" }
+    }
+
+    @Synchronized
+    fun updateMemory(id: String, newText: String): Boolean {
+        require(newText.isNotBlank()) { "Memory text cannot be blank" }
+        val records = readRecords()
+        var updated = false
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "memory" && record.optString("id") == id) {
+                record.put("text", newText.trim().take(MAX_TEXT_LENGTH))
+                updated = true
+                break
+            }
+        }
+        if (updated) writeRecords(records)
+        return updated
+    }
+
+    @Synchronized
+    private fun purgeExpiredArchive() {
+        val days = archiveRetentionDays
+        if (days == 0) return
+        val cutoff = System.currentTimeMillis() - days * MILLIS_PER_DAY
+        filterRecords { record ->
+            record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff
+        }
+    }
+
+    private fun filterRecords(keep: (JSONObject) -> Boolean) {
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (keep(record)) kept.put(record)
+        }
+        writeRecords(kept)
+    }
+
+    /** Clears every archived turn and semantic memory record (legacy all-data operation). */
     @Synchronized
     fun clearAll() {
         preferences.edit().remove(KEY_ENCRYPTED_DATA).apply()
@@ -174,6 +311,9 @@ class EncryptedMemoryStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "juanita_encrypted_memory"
         private const val KEY_ARCHIVE_ENABLED = "conversation_archive_enabled"
+        private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
+        private const val MILLIS_PER_DAY = 86_400_000L
+        private val ALLOWED_RETENTION_DAYS = setOf(0, 7, 30, 90)
         private const val KEY_ENCRYPTED_DATA = "encrypted_records"
         private const val KEY_ALIAS = "juanita.memory.aes.v1"
         private const val ANDROID_KEY_STORE = "AndroidKeyStore"
