@@ -8,7 +8,7 @@ The call screen is designed like a video call:
 
 - Juanita's avatar occupies the main, large area.
 - The current speaker/user appears in a small picture-in-picture window. The first preview currently anchors this tile at the upper-right; drag-to-move is a later refinement.
-- The user can mute/unmute, enable/disable the camera, switch front/rear camera, and end the call.
+- The first preview supports camera on/off, front/rear switching, closing the call screen and explicitly ending the call. A microphone mute control is deferred because the current SDK-managed audio path has no verified mute control.
 - Camera and microphone are activated only after an explicit user action and permission.
 - The call screen must continue to use the existing Gemini Live session; opening or closing the call UI must not silently start or stop the voice service.
 - The user can choose a saved avatar and open Avatar Studio without losing existing assistant settings.
