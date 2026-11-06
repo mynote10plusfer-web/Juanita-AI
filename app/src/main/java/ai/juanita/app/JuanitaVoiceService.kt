@@ -109,7 +109,13 @@ class JuanitaVoiceService : Service() {
                                 for ((role, text) in transcriptQueue) {
                                     // Archive errors must never block automatic memory.
                                     runCatching { memoryStore.appendConversationTurn(conversationId, role, text) }
-                                    runCatching { automaticMemoryEngine.acceptTurn(role, text) }
+                                    try {
+                                        automaticMemoryEngine.acceptTurn(role, text)
+                                    } catch (cancelled: CancellationException) {
+                                        throw cancelled
+                                    } catch (_: Exception) {
+                                        // Memory errors must not break the voice conversation.
+                                    }
                                 }
                             }
                             assistant.start(sessionInstruction, voice) { role, text ->
