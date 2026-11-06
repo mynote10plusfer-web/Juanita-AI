@@ -60,6 +60,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.ai.PersonaProfile
+import ai.juanita.app.avatar.AvatarProfile
+import ai.juanita.app.avatar.AvatarProfileStore
+import ai.juanita.app.avatar.AvatarStudioSection
 import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
@@ -107,6 +110,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         preferences = AssistantPreferences(applicationContext)
         val memoryStore = EncryptedMemoryStore(applicationContext)
+        val avatarStore = AvatarProfileStore(applicationContext)
         tts = TextToSpeech(this) { result -> ttsReady = result == TextToSpeech.SUCCESS }
 
         val savedPersona = PersonaProfile(
@@ -133,6 +137,8 @@ class MainActivity : ComponentActivity() {
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialMemories = memoryStore.listMemories(),
                 initialArchivedConversations = memoryStore.listArchivedConversations(),
+                initialAvatarProfiles = avatarStore.listProfiles(),
+                initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onSaveMemory = { memoryStore.addMemory(it) },
@@ -142,6 +148,9 @@ class MainActivity : ComponentActivity() {
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
+                onSaveAvatarProfile = { avatarStore.save(it) },
+                onSetActiveAvatarProfile = { avatarStore.setActive(it) },
+                onDeleteAvatarProfile = { avatarStore.delete(it) },
                 onLanguageSelected = { preferences.languageTag = it },
                 onDialectSelected = { dialectId, languageTag ->
                     preferences.dialectId = dialectId
@@ -203,6 +212,8 @@ private fun JuanitaApp(
     initialArchiveEnabled: Boolean,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialAvatarProfiles: List<AvatarProfile>,
+    initialActiveAvatarProfileId: String?,
     initialRetentionDays: Int,
     onArchiveEnabledChanged: (Boolean) -> Unit,
     onSaveMemory: (String) -> MemoryItem,
@@ -212,6 +223,9 @@ private fun JuanitaApp(
     onDeleteConversation: (String) -> Unit,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
+    onSaveAvatarProfile: (AvatarProfile) -> AvatarProfile,
+    onSetActiveAvatarProfile: (String) -> Boolean,
+    onDeleteAvatarProfile: (String) -> Unit,
     onLanguageSelected: (String) -> Unit,
     onDialectSelected: (String, String) -> Unit,
     onNameChanged: (String) -> Unit,
@@ -391,6 +405,16 @@ private fun JuanitaApp(
                     fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                 Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
                 JuanitaAvatarCard()
+
+                AvatarStudioSection(
+                    panel = panel,
+                    gold = gold,
+                    initialProfiles = initialAvatarProfiles,
+                    initialActiveProfileId = initialActiveAvatarProfileId,
+                    onSaveProfile = onSaveAvatarProfile,
+                    onSetActiveProfile = onSetActiveAvatarProfile,
+                    onDeleteProfile = onDeleteAvatarProfile
+                )
 
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     OutlinedTextField(
