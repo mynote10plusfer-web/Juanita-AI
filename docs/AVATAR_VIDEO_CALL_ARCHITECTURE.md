@@ -1,6 +1,6 @@
 # Juanita AI — Memory, learning and evolving digital identity architecture
 
-Status: requirements approved 2026-11-06. Existing encrypted manual memory and opt-in transcript archive are present. Automatic extraction, continuous consolidation, biography/self-model and source-linked knowledge learning are not yet implemented.
+Status: automatic extraction pipeline and bounded encrypted storage have been added on the PR branch; CI build and physical-device verification are pending. Continuous biography consolidation and source-linked Internet knowledge learning remain future phases.
 
 ## Product principle
 
@@ -22,7 +22,7 @@ The user's request is for automatic useful memory, not silent indefinite storage
 
 ## 2. Automatic memory pipeline
 
-At safe checkpoints (completed turn, idle window or session end), process eligible user/assistant text asynchronously so it does not block real-time audio.
+Current first implementation batches three user transcript turns in RAM, then runs a best-effort Gemini extraction asynchronously from the Live transcript callback. It also flushes a pending batch when the user ends the voice session. Assistant transcript text is not used as evidence for personal facts. Extraction errors must never interrupt real-time audio.
 
 For each candidate memory, classify:
 - type: user fact, preference, project/decision, important event, relationship/context, routine, goal, correction, learned topic;
@@ -82,7 +82,10 @@ Do not crawl the entire Internet indiscriminately. Respect access restrictions, 
 
 ## 6. Privacy and user control
 
-- Automatic curated memory is a core feature for eligible ordinary conversation facts; transcript archiving remains separate and opt-in.
+- Automatic curated memory is enabled by default for eligible ordinary facts; the user can pause it in Memory & Privacy settings. Transcript archiving remains separate and opt-in.
+- The first implementation sends short batches of recognized user text to Gemini through Firebase AI Logic for extraction; this is disclosed in the UI. Raw audio and full transcripts are not saved by the memory engine.
+- Hard local limits: 100 personal memories, 32,000 total memory-text characters, 500 characters per memory, and 300 archived transcript turns. Manually saved memories take priority over automatically extracted items when limits are reached.
+- Clearing memories increments a clear-version marker so an in-flight/pending batch cannot silently recreate deleted memories.
 - No raw audio retention.
 - Sensitive/intimate information is not retained without explicit confirmation.
 - User can inspect, correct, export, pause and delete memory and biography.
@@ -93,11 +96,11 @@ Do not crawl the entire Internet indiscriminately. Respect access restrictions, 
 
 ## 7. Implementation stages
 
-1. Audit existing EncryptedMemoryStore, transcript record schema, appendConversationTurn and context builder. Do not assume the existing archive records are compatible with the new curator.
-2. Implement background automatic candidate extraction with sensitivity and durability filters.
-3. Add robust memory record schema, provenance, confidence, timestamps, deduplication, contradiction handling and expiry.
-4. Integrate relevant-memory retrieval into new Gemini Live sessions without changing the stable audio pipeline.
-5. Build biography consolidation and a UI to inspect/edit/delete/pause.
+1. Audit existing EncryptedMemoryStore, transcript record schema and context builder — initial audit completed.
+2. Automatic Gemini extraction, user-only evidence, local sensitive-term guard, deduplication and pause control — implemented on PR branch; CI/device verification pending.
+3. Storage ceilings and UI controls (refresh, edit, delete one, clear all) — implemented on PR branch; verify on device.
+4. Improve provenance, confidence history, contradiction/correction handling, expiry and semantic retrieval.
+5. Build the evolving biography/self-model UI with evidence-backed chronology.
 6. Add focused web research and source-linked knowledge notes; test freshness and provenance.
 7. Add encrypted user-controlled export/restore and regression tests for corrections/deletion.
 8. Verify on physical Android devices, including offline mode, long sessions, app restarts and free-tier quotas.
