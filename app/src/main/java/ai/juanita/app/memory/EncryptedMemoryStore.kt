@@ -62,7 +62,6 @@ class EncryptedMemoryStore(context: Context) {
             put("text", text.take(MAX_TURN_TEXT_LENGTH))
             put("createdAt", timestampMillis)
         })
-        while (records.length() > MAX_ARCHIVE_RECORDS) records.remove(0)
         writeRecords(records)
     }
 
