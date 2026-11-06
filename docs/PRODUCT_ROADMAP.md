@@ -1,6 +1,13 @@
 # Juanita AI — Product requirements and implementation roadmap
 
 Last updated: 2026-11-06
+
+## Latest implementation update — 0.8.5
+
+- Added a local preference for the Gemini Live response voice.
+- Added a selector in the app for seven documented female voices; the selected voice is passed into the Live model configuration when a new session starts.
+- The existing stable SDK-managed audio path and interruption setting are unchanged.
+- Next engineering priority remains the microphone foreground-service lifecycle and screen-off reliability. Voice selection has not yet been verified on the physical device; GitHub Actions build results must be checked before distributing the APK.
 Repository: https://github.com/mynote10plusfer-web/Juanita-AI
 
 This document is the canonical product checklist. Keep it updated whenever scope, implementation status, or user-approved constraints change. A requirement listed here is not a claim that the feature is already implemented.
@@ -35,7 +42,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Conversation archive consent toggle exists, OFF by default; automatic transcript archive and retention/deletion management are not complete.
 - Existing photorealistic Juanita portrait is displayed in an avatar card; animated face and lip sync are not implemented.
 - Wake phrase field exists, but wake-word detection is not connected.
-- Android TTS preview exists; Live voice is currently hard-coded to Kore.
+- Android TTS preview exists; Gemini Live voice is selectable among seven documented female voices (Kore, Aoede, Sulafat, Achernar, Vindemiatrix, Zephyr, Pulcherrima) and the choice is persisted locally. A voice change applies on the next Live session; no in-session voice switching or dedicated preview has been implemented yet.
 - Debug and permanently signed release GitHub Actions workflows exist.
 
 ## Functional requirements
@@ -128,7 +135,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 1. **Reliability foundation:** inspect current branch/workflows; implement foreground-service lifecycle for Live audio; visible state and transcript; verify screen-off behavior and repeated long conversations.
 2. **Privacy foundation:** local transcript data model, opt-in archive, retention policy, delete by conversation/day/range/all; independently manage encrypted personal memories.
 3. **Personal onboarding:** gradual “Conosciamoci”, profile editor, explicit save/forget controls, non-intrusive follow-up.
-4. **Voice/personality:** selectable supported Live voices and persistent choice; personality presets and safe apply/restart.
+4. **Voice/personality:** selectable supported Live voices and persistent choice (voice selector implemented in 0.8.5); personality presets and safe apply/restart remain pending.
 5. **Daily utilities:** local alarms/reminders first, then morning briefing and calendar; weather/location with manual fallback and opt-in notifications.
 6. **Notification companion:** opt-in notification listener, per-app allowlist, read-on-request, confirmed replies.
 7. **Avatar:** staged 2D animation, then evaluate PCM/viseme lip sync without sacrificing audio stability.
