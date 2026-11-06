@@ -17,6 +17,19 @@ Juanita should behave as a continuous personal assistant: listen, understand, re
 
 This is a software architecture for persistent memory and an evolving self-model. It does not establish genuine subjective experience or human consciousness. Juanita must never fabricate experiences, emotions, memories, research or actions.
 
+## Avatar renderer research and selected direction
+
+The open-source `met4citizen/TalkingHead` project is the preferred renderer candidate for the next avatar milestone:
+
+- It is an MIT-licensed JavaScript/Three.js renderer that can run client-side in a WebView; it does not require a paid hosted avatar-rendering service.
+- It supports full-body GLB avatars and Mixamo FBX animations, facial expressions and real-time lip-sync.
+- The GLB must already have a compatible rig and ARKit/Oculus viseme blend shapes. A flat portrait JPEG cannot be turned into a convincing animated face merely by adding this renderer.
+- For accurate synchronization, the renderer needs audio PCM chunks plus viseme/blendshape timing, or a supported word/timestamp source. Its default Google Cloud TTS path must not be enabled because the project is constrained to free/no-billing services.
+- The current Firebase Live SDK-managed audio path does not expose the playback PCM stream to the Compose avatar screen. Do not replace the working voice pipeline until a separate custom-audio prototype is tested for mic capture, playback, echo cancellation, interruptions, audio focus, lifecycle cleanup and latency.
+- Before adopting it, test WebView/WebGL performance, thermal load, memory use, portrait orientation and context-loss recovery on both the Note 10+ and S22 Ultra. Use only avatar/animation assets whose licences explicitly permit this app's intended distribution.
+
+Reference implementation: https://github.com/met4citizen/TalkingHead (MIT software licence; individual sample avatar assets have separate licences and must be checked individually).
+
 ## 1. Separate data layers
 
 Do not conflate these stores:
