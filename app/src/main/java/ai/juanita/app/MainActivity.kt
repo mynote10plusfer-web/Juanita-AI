@@ -63,6 +63,7 @@ import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.avatar.AvatarProfile
 import ai.juanita.app.avatar.AvatarProfileStore
 import ai.juanita.app.avatar.AvatarStudioSection
+import ai.juanita.app.avatar.AvatarCallScreen
 import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
@@ -292,6 +293,7 @@ private fun JuanitaApp(
     val liveState by JuanitaVoiceService.state.collectAsState()
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
+    var callScreenVisible by remember { mutableStateOf(false) }
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
@@ -578,6 +580,17 @@ private fun JuanitaApp(
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
                     ) { Text("Termina conversazione") }
+
+                    Button(
+                        onClick = { callScreenVisible = true },
+                        enabled = liveState.contains("in ascolto", ignoreCase = true),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                    ) { Text("Apri videochiamata") }
+                    Text(
+                        "La modalità chiamata mostra Juanita a schermo intero e la tua fotocamera in un riquadro. La videocamera resta spenta finché non la attivi.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp
+                    )
                     Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
@@ -620,6 +633,22 @@ private fun JuanitaApp(
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+
+                if (callScreenVisible) {
+                    val activeAvatarName = initialAvatarProfiles
+                        .firstOrNull { it.id == initialActiveAvatarProfileId }
+                        ?.displayName ?: assistantName
+                    AvatarCallScreen(
+                        avatarName = activeAvatarName,
+                        portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
+                        connectionStatus = liveState,
+                        onDismiss = { callScreenVisible = false },
+                        onEndCall = {
+                            JuanitaVoiceService.stop(context)
+                            callScreenVisible = false
+                        }
+                    )
+                }
             }
         }
     }
