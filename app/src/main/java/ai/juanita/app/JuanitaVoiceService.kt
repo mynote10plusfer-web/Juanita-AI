@@ -106,15 +106,38 @@ class JuanitaVoiceService : Service() {
                             val transcriptQueue = Channel<Pair<String, String>>(Channel.UNLIMITED)
                             transcriptChannel = transcriptQueue
                             transcriptWorker = serviceScope.launch(Dispatchers.IO) {
-                                for ((role, text) in transcriptQueue) {
+                                var bufferedEvent: Pair<String, String>? = null
+                                while (true) {
+                                    val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
+                                    bufferedEvent = null
+                                    val role = first.first
+                                    var combinedText = first.second.trim()
+
+                                    // Live transcriptions can arrive as incremental chunks. Merge
+                                    // same-role updates until a short quiet gap or the next role.
+                                    while (true) {
+                                        val next = withTimeoutOrNull(900L) {
+                                            transcriptQueue.receiveCatching().getOrNull()
+                                        } ?: break
+                                        if (next.first.equals(role, ignoreCase = true)) {
+                                            combinedText = mergeTranscriptChunks(combinedText, next.second)
+                                        } else {
+                                            bufferedEvent = next
+                                            break
+                                        }
+                                    }
+
+                                    if (combinedText.isBlank()) continue
                                     // Archive errors must never block automatic memory.
-                                    runCatching { memoryStore.appendConversationTurn(conversationId, role, text) }
-                                    try {
-                                        automaticMemoryEngine.acceptTurn(role, text)
-                                    } catch (cancelled: CancellationException) {
-                                        throw cancelled
-                                    } catch (_: Exception) {
-                                        // Memory errors must not break the voice conversation.
+                                    runCatching { memoryStore.appendConversationTurn(conversationId, role, combinedText) }
+                                    if (role.equals("USER", ignoreCase = true)) {
+                                        try {
+                                            automaticMemoryEngine.acceptTurn(role, combinedText)
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (_: Exception) {
+                                            // Memory errors must not break the voice conversation.
+                                        }
                                     }
                                 }
                             }
@@ -170,6 +193,18 @@ class JuanitaVoiceService : Service() {
                 stopSelf()
             }
         }
+    }
+
+    private fun mergeTranscriptChunks(existing: String, incoming: String): String {
+        val oldText = existing.trim()
+        val newText = incoming.trim()
+        if (newText.isBlank()) return oldText
+        if (oldText.isBlank()) return newText
+        return when {
+            newText.startsWith(oldText, ignoreCase = true) -> newText
+            oldText.startsWith(newText, ignoreCase = true) -> oldText
+            else -> "$oldText $newText"
+        }.take(3_600)
     }
 
     private suspend fun drainTranscriptQueue() {
