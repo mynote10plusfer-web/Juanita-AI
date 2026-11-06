@@ -89,6 +89,12 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 store.addAutomaticMemory(text, category, confidence.coerceIn(0f, 1f), batchVersion)
             }
         } catch (cancelled: CancellationException) {
+            // If shutdown cancels a request, retain its small batch in RAM unless
+            // the user paused or cleared memory while it was running.
+            if (store.isAutomaticMemoryEnabled && store.memoryClearVersion == batchVersion) {
+                pendingTurns.addAll(0, batchTurns)
+                while (pendingTurns.size > MAX_BATCH_TURNS) pendingTurns.removeAt(0)
+            }
             throw cancelled
         } catch (_: Exception) {
             // Keep the short batch only in RAM for a later retry; never interrupt Live audio.
