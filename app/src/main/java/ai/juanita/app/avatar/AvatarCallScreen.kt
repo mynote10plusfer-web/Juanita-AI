@@ -136,9 +136,7 @@ fun AvatarCallScreen(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Text("La tua
-videocamera
-è spenta", color = Color.White)
+                        Text("La tua\nvideocamera\nè spenta", color = Color.White)
                         TextButton(
                             onClick = {
                                 if (cameraPermissionGranted.value) cameraEnabled = true
