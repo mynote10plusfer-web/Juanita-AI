@@ -16,6 +16,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.memory.EncryptedMemoryStore
+import ai.juanita.app.memory.AutomaticMemoryEngine
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +34,7 @@ class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val assistant = GeminiLiveAssistant()
     private lateinit var memoryStore: EncryptedMemoryStore
+    private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private var startRequested = false
 
     inner class LocalBinder : Binder() {
@@ -49,6 +51,7 @@ class JuanitaVoiceService : Service() {
     override fun onCreate() {
         super.onCreate()
         memoryStore = EncryptedMemoryStore(applicationContext)
+        automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
         createNotificationChannel()
     }
 
@@ -57,6 +60,7 @@ class JuanitaVoiceService : Service() {
             ACTION_STOP -> {
                 serviceScope.launch {
                     _state.value = "Chiusura della conversazione…"
+                    withContext(Dispatchers.IO) { runCatching { automaticMemoryEngine.flush() } }
                     runCatching { assistant.stop() }
                     startRequested = false
                     stopForeground(STOP_FOREGROUND_REMOVE)
@@ -96,7 +100,9 @@ class JuanitaVoiceService : Service() {
                             }
                             assistant.start(sessionInstruction, voice) { role, text ->
                                 serviceScope.launch(Dispatchers.IO) {
+                                    // Transcript archiving is opt-in; curated memory runs independently.
                                     memoryStore.appendConversationTurn(conversationId, role, text)
+                                    automaticMemoryEngine.acceptTurn(role, text)
                                 }
                             }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
