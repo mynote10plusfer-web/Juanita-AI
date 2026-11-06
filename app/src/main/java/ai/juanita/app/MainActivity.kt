@@ -125,9 +125,16 @@ class MainActivity : ComponentActivity() {
                 initialPersona = savedPersona,
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialMemories = memoryStore.listMemories(),
+                initialArchivedConversations = memoryStore.listArchivedConversations(),
+                initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
+                onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
+                onClearMemories = { memoryStore.clearPersonalMemories() },
+                onDeleteConversation = { memoryStore.deleteConversation(it) },
+                onClearArchive = { memoryStore.clearConversationArchive() },
+                onRetentionChanged = { memoryStore.archiveRetentionDays = it },
                 onLanguageSelected = { preferences.languageTag = it },
                 onDialectSelected = { dialectId, languageTag ->
                     preferences.dialectId = dialectId
@@ -188,9 +195,16 @@ private fun JuanitaApp(
     initialPersona: PersonaProfile,
     initialArchiveEnabled: Boolean,
     initialMemories: List<MemoryItem>,
+    initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialRetentionDays: Int,
     onArchiveEnabledChanged: (Boolean) -> Unit,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
+    onUpdateMemory: (String, String) -> Boolean,
+    onClearMemories: () -> Unit,
+    onDeleteConversation: (String) -> Unit,
+    onClearArchive: () -> Unit,
+    onRetentionChanged: (Int) -> Unit,
     onLanguageSelected: (String) -> Unit,
     onDialectSelected: (String, String) -> Unit,
     onNameChanged: (String) -> Unit,
@@ -453,59 +467,26 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
-                SettingsCard(panel, gold, "MEMORIA DI JUANITA") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = archiveEnabled,
-                            onCheckedChange = {
-                                archiveEnabled = it
-                                onArchiveEnabledChanged(it)
-                                status = if (it) "Consenso archivio conversazioni attivato" else "Archivio conversazioni in pausa"
-                            }
-                        )
-                        Text("Consenti archiviazione delle conversazioni", color = Color.White, fontSize = 13.sp)
-                    }
-                    Text(
-                        "Disattivato per impostazione predefinita. I ricordi salvati manualmente restano cifrati sul telefono. Lo streaming audio Live non viene archiviato da questa app.",
-                        color = Color(0xFF9A9DA4), fontSize = 12.sp
-                    )
-                    OutlinedTextField(
-                        value = memoryDraft,
-                        onValueChange = { memoryDraft = it },
-                        label = { Text("Ricordo da conservare") },
-                        placeholder = { Text("Scrivi un'informazione non sensibile…") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Button(
-                        onClick = {
-                            if (memoryDraft.isNotBlank()) {
-                                val saved = onSaveMemory(memoryDraft)
-                                memories = listOf(saved) + memories
-                                memoryDraft = ""
-                                status = "Ricordo salvato in forma cifrata sul dispositivo"
-                            }
-                        },
-                        enabled = memoryDraft.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-                    ) { Text("Salva ricordo") }
-                    if (memories.isEmpty()) {
-                        Text("Nessun ricordo salvato.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    } else {
-                        memories.take(20).forEach { item ->
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(item.text, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                TextButton(onClick = {
-                                    onDeleteMemory(item.id)
-                                    memories = memories.filterNot { it.id == item.id }
-                                    status = "Ricordo eliminato"
-                                }) { Text("Elimina", color = gold) }
-                            }
-                        }
-                    }
-                    Text("La memoria automatica delle conversazioni non è ancora attiva. Puoi salvare e cancellare ricordi manualmente.",
-                        color = gold, fontSize = 11.sp)
-                }
+                MemoryPrivacySection(
+                    panel = panel,
+                    gold = gold,
+                    initialArchiveEnabled = archiveEnabled,
+                    initialMemories = memories,
+                    initialArchivedConversations = initialArchivedConversations,
+                    initialRetentionDays = initialRetentionDays,
+                    onArchiveEnabledChanged = { enabled ->
+                        archiveEnabled = enabled
+                        onArchiveEnabledChanged(enabled)
+                        status = if (enabled) "Consenso archivio conversazioni attivato" else "Archivio conversazioni in pausa"
+                    },
+                    onSaveMemory = { text -> onSaveMemory(text) },
+                    onDeleteMemory = onDeleteMemory,
+                    onUpdateMemory = onUpdateMemory,
+                    onClearMemories = onClearMemories,
+                    onDeleteConversation = onDeleteConversation,
+                    onClearArchive = onClearArchive,
+                    onRetentionChanged = onRetentionChanged
+                )
 
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
