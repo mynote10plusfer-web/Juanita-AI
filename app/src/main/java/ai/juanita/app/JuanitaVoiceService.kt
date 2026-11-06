@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.channels.Channel
 
 /** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
@@ -40,6 +41,8 @@ class JuanitaVoiceService : Service() {
     private var startRequested = false
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
+    private var transcriptChannel: Channel<Pair<String, String>>? = null
+    private var transcriptWorker: Job? = null
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -98,12 +101,19 @@ class JuanitaVoiceService : Service() {
                             val sessionInstruction = if (localContext.isBlank()) instruction else {
                                 "$instruction\n\n$localContext"
                             }
-                            assistant.start(sessionInstruction, voice) { role, text ->
-                                serviceScope.launch(Dispatchers.IO) {
-                                    // Transcript archiving is opt-in; curated memory runs independently.
-                                    memoryStore.appendConversationTurn(conversationId, role, text)
-                                    automaticMemoryEngine.acceptTurn(role, text)
+                            // A single ordered worker prevents transcript callbacks racing
+                            // with one another or with the final memory flush.
+                            val transcriptQueue = Channel<Pair<String, String>>(Channel.UNLIMITED)
+                            transcriptChannel = transcriptQueue
+                            transcriptWorker = serviceScope.launch(Dispatchers.IO) {
+                                for ((role, text) in transcriptQueue) {
+                                    // Archive errors must never block automatic memory.
+                                    runCatching { memoryStore.appendConversationTurn(conversationId, role, text) }
+                                    runCatching { automaticMemoryEngine.acceptTurn(role, text) }
                                 }
+                            }
+                            assistant.start(sessionInstruction, voice) { role, text ->
+                                transcriptQueue.trySend(role to text)
                             }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
@@ -113,6 +123,7 @@ class JuanitaVoiceService : Service() {
                             _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
                             updateNotification("Connessione non riuscita · apri Juanita per riprovare")
                             runCatching { assistant.stop() }
+                            withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                             startRequested = false
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf(startId)
@@ -140,7 +151,8 @@ class JuanitaVoiceService : Service() {
             try {
                 withTimeoutOrNull(5_000L) { assistant.stop() }
             } finally {
-                // The SDK audio capture has already been stopped before this network work.
+                // Audio is stopped before draining callbacks or waiting on network work.
+                withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                 withTimeoutOrNull(5_000L) {
                     withContext(Dispatchers.IO) {
                         runCatching { automaticMemoryEngine.flush() }
@@ -154,9 +166,19 @@ class JuanitaVoiceService : Service() {
         }
     }
 
+    private suspend fun drainTranscriptQueue() {
+        val queue = transcriptChannel
+        queue?.close()
+        val worker = transcriptWorker
+        withTimeoutOrNull(3_000L) { worker?.join() }
+        if (worker?.isActive == true) worker.cancel()
+        transcriptChannel = null
+        transcriptWorker = null
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Swiping Juanita away from Recents is an explicit end-of-session action.
-        requestStop(null)
+        requestStop()
         super.onTaskRemoved(rootIntent)
     }
 
@@ -208,6 +230,8 @@ class JuanitaVoiceService : Service() {
         sessionJob?.cancel()
         // Stop capture synchronously even if Android is tearing down the service.
         assistant.stopAudioCapture()
+        transcriptChannel?.close()
+        transcriptWorker?.cancel()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { assistant.stop() }
         }
