@@ -240,12 +240,12 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 18, maxCharacters: Int = 7000): String {
         val memoryLines = listMemories()
-            .take(24)
+            .take(40)
             .map { item ->
                 "- [${item.category}; confidence=${item.confidence}] ${item.text}"
             }
             .joinToString("\n")
-            .take(2600)
+            .take(4200)
 
         val recentTurns = if (isConversationArchiveEnabled) {
             val turns = mutableListOf<ArchivedTurn>()
@@ -482,7 +482,6 @@ class EncryptedMemoryStore(context: Context) {
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
-        private const val MAX_TEXT_LENGTH = 4000
         private const val MAX_MEMORY_TEXT_LENGTH = 500
         private const val MAX_TURN_TEXT_LENGTH = 1800
         private const val MAX_MEMORY_ITEMS = 100
