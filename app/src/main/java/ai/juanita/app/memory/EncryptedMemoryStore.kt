@@ -33,7 +33,7 @@ class EncryptedMemoryStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     val isConversationArchiveEnabled: Boolean
-        get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, true)
+        get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, false)
 
     /** Disabling pauses future transcript storage but preserves existing records. */
     fun setConversationArchiveEnabled(enabled: Boolean) {
