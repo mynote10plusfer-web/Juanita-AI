@@ -20,6 +20,7 @@ import ai.juanita.app.memory.AutomaticMemoryEngine
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
@@ -36,6 +38,8 @@ class JuanitaVoiceService : Service() {
     private lateinit var memoryStore: EncryptedMemoryStore
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private var startRequested = false
+    private var sessionJob: Job? = null
+    private var stopJob: Job? = null
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -58,15 +62,7 @@ class JuanitaVoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                serviceScope.launch {
-                    _state.value = "Chiusura della conversazione…"
-                    withContext(Dispatchers.IO) { runCatching { automaticMemoryEngine.flush() } }
-                    runCatching { assistant.stop() }
-                    startRequested = false
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    _state.value = "Conversazione terminata"
-                    stopSelf(startId)
-                }
+                requestStop(startId)
                 return START_NOT_STICKY
             }
             ACTION_START -> {
@@ -84,9 +80,13 @@ class JuanitaVoiceService : Service() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
                 )
+                if (stopJob?.isActive == true) {
+                    _state.value = "Attendi la chiusura della conversazione precedente"
+                    return START_NOT_STICKY
+                }
                 if (!startRequested) {
                     startRequested = true
-                    serviceScope.launch {
+                    sessionJob = serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
                         try {
                             val conversationId = UUID.randomUUID().toString()
@@ -126,6 +126,38 @@ class JuanitaVoiceService : Service() {
             }
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Stop audio first. Memory extraction is best-effort cleanup and must never
+     * keep the microphone open while a network request is pending.
+     */
+    private fun requestStop(startId: Int?) {
+        sessionJob?.cancel()
+        if (stopJob?.isActive == true) return
+        stopJob = serviceScope.launch {
+            _state.value = "Chiusura della conversazione…"
+            try {
+                withTimeoutOrNull(5_000L) { assistant.stop() }
+            } finally {
+                // The SDK audio capture has already been stopped before this network work.
+                withTimeoutOrNull(5_000L) {
+                    withContext(Dispatchers.IO) {
+                        runCatching { automaticMemoryEngine.flush() }
+                    }
+                }
+                startRequested = false
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                _state.value = "Conversazione terminata"
+                if (startId != null) stopSelf(startId) else stopSelf()
+            }
+        }
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping Juanita away from Recents is an explicit end-of-session action.
+        requestStop(null)
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun createNotificationChannel() {
@@ -173,6 +205,12 @@ class JuanitaVoiceService : Service() {
     override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onDestroy() {
+        sessionJob?.cancel()
+        // Stop capture synchronously even if Android is tearing down the service.
+        assistant.stopAudioCapture()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { assistant.stop() }
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
