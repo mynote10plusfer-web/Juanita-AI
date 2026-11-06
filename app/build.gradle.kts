@@ -18,8 +18,8 @@ android {
         applicationId = "ai.juanita.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 18
-        versionName = "0.8.9"
+        versionCode = 19
+        versionName = "0.9.0"
     }
 
     signingConfigs {
@@ -55,6 +55,10 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.camera:camera-core:1.4.1")
+    implementation("androidx.camera:camera-camera2:1.4.1")
+    implementation("androidx.camera:camera-lifecycle:1.4.1")
+    implementation("androidx.camera:camera-view:1.4.1")
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
