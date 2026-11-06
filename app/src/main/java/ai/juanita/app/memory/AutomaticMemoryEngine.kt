@@ -104,7 +104,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 pendingTurns.addAll(0, batchTurns)
                 while (pendingTurns.size > MAX_BATCH_TURNS) pendingTurns.removeAt(0)
             }
-            return 0
+            return -1
         }
     }
 
