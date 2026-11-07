@@ -151,7 +151,11 @@ class JuanitaVoiceService : Service() {
 
                                     if (combinedText.isBlank()) continue
                                     // Archive errors must never block automatic memory.
-                                    runCatching { memoryStore.appendConversationTurn(conversationId, role, combinedText) }
+                                    try {
+                                        memoryStore.appendConversationTurn(conversationId, role, combinedText)
+                                    } catch (archiveFailure: Exception) {
+                                        _memoryState.value = "Archivio conversazione non riuscito: ${archiveFailure.localizedMessage ?: archiveFailure.javaClass.simpleName}"
+                                    }
                                     if (role.equals("USER", ignoreCase = true)) {
                                         userTranscriptCount++
                                         _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
