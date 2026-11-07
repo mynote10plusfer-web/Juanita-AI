@@ -1,10 +1,10 @@
 # Memory pipeline verification — PR #6
 
 ## Automated checks
-- [ ] Latest PR head Android debug CI passes after introducing persistent bottom navigation.
-- [x] Android debug APK workflow passed for the memory implementation head 1cccce87d928feec4712173b41f9aa0739f087b8 (run 42360447654; artifact 13569287248).
-- [ ] Re-run Android debug CI after roadmap, architecture and signed-release workflow corrections.
-- [ ] After merge to main, build the signed release and verify the permanent certificate fingerprint and application update metadata.
+- [x] Merged main head a6836e3676b937cc0ce4499cca7f715a6cf54b90 builds successfully in Android debug CI (run 42393573784).
+- [x] Signed Release compilation succeeded in run 42393574023; certificate verification correctly blocked publication because the workflow's pinned digest was incorrect.
+- [x] Extracted SHA-256 from the prior successful 0.9.5 APK (run 42325310890): 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1; it matches the signer reported by the new Release build.
+- [ ] Merge the corrective signing-pin PR, rerun Signed Release, and verify certificate plus application/version metadata before downloading an APK.
 - [ ] Install only a correctly signed release over the existing installation; never uninstall or clear app data to work around signing.
 
 ## Physical-device checks — Galaxy Note10+ (Android 12) and Galaxy S22 Ultra

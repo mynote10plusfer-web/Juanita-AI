@@ -72,7 +72,7 @@ jobs:
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$APKSIGNER" verify --verbose "$APK"
           CERT_SHA256=$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print toupper($2); exit}')
-          EXPECTED_CERT_SHA256="604702CB07D642474775040C5E60A8D5703A2EBABB63531E4725D6EB8B3308E1"
+          EXPECTED_CERT_SHA256="9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1"
           if [[ -z "$CERT_SHA256" || "$CERT_SHA256" != "$EXPECTED_CERT_SHA256" ]]; then
             echo "::error::Release certificate mismatch. Refusing to publish an APK that cannot update the known-good installation."
             echo "Expected permanent signer SHA-256: $EXPECTED_CERT_SHA256"

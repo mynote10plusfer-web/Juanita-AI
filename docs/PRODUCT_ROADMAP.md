@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #6 head b4690767c4c73c8b783e37450682e8572ba5c80c introduces persistent bottom navigation (Home, Avatar, Impostazioni, Memoria, Altro) to replace the single long screen; Android debug CI is running and physical-device verification is pending. Signed-release workflow version gate and device verification remain outstanding.
+Last updated: 2026-11-07 — PR #6 is merged to main (a6836e3676b937cc0ce4499cca7f715a6cf54b90). Persistent bottom navigation and archive/calendar changes compile in Android debug CI (run 42393573784, success); physical-device verification is pending. Signed Release build compiles, but publication is blocked by an incorrect pinned certificate digest; the successful 0.9.5 artifact and current build both verify as 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1. A corrective PR is in preparation.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -404,10 +404,10 @@ Acceptance: user can create and preview a sanitized report, share it manually, r
 The update pipeline must preserve all three Android package-update invariants:
 
 - Keep `applicationId = ai.juanita.app` unchanged.
-- Sign every distributable update with the permanent release certificate SHA-256 already pinned in `.github/workflows/release-signed.yml`; debug APKs are development-only and must never be presented as in-place updates.
+- Sign every distributable update with the permanent release certificate SHA-256 `9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1`, independently extracted from the successful 0.9.5 artifact (run 42325310890) and matched against the current Release build. Debug APKs are development-only and must never be presented as in-place updates.
 - Increase `versionCode` for every release. `versionName` is the human-readable label and does not replace the numeric update code.
 
-Known release baseline: `versionCode 30` / `versionName 0.10.1`. The next candidate is `versionCode 31` / `versionName 0.10.2`. The signed-release workflow now reads the expected package/version values from `app/build.gradle.kts`, rejects version codes not greater than 30, and compares the built APK metadata against those values. This prevents the release check from silently validating stale hard-coded metadata.
+Known release baseline: `versionCode 30` / `versionName 0.10.1`. The next candidate is `versionCode 31` / `versionName 0.10.2`. The signed-release workflow reads expected package/version values from `app/build.gradle.kts`, rejects version codes not greater than 30, and compares built APK metadata against those values. The 2026-11-07 run 42393574023 compiled the Release APK but failed its certificate gate because the pinned digest was stale/incorrect (`604702…`); `apksigner` reported `9092CEF…`, which was independently confirmed by extracting the certificate from the previously successful 0.9.5 artifact. PR `fix/release-signing-fingerprint` updates the pin; rerun the signed workflow after merge.
 
 Acceptance before sharing an APK: CI build succeeds; APK package ID matches; versionCode is strictly higher than the installed known-good release; APK signer SHA-256 matches the permanent certificate; install-over-existing-app succeeds on a test device without uninstalling or clearing app data. Never ask the user to uninstall as a workaround.
 
