@@ -86,7 +86,7 @@ class EncryptedMemoryStore(context: Context) {
                 put("turns", JSONArray(bounded))
             })
         }
-        writeRecords(kept)
+        writeRecords(kept, synchronous = true)
     }
 
     /**
@@ -130,7 +130,7 @@ class EncryptedMemoryStore(context: Context) {
                 kept.put(record)
             }
         }
-        writeRecords(kept)
+        writeRecords(kept, synchronous = true)
     }
 
     @Synchronized
@@ -142,7 +142,7 @@ class EncryptedMemoryStore(context: Context) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") != "pending_memory_batch") kept.put(record)
         }
-        writeRecords(kept)
+        writeRecords(kept, synchronous = true)
     }
 
     @Synchronized
@@ -491,15 +491,20 @@ class EncryptedMemoryStore(context: Context) {
         return JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
     }
 
-    private fun writeRecords(records: JSONArray) {
+    private fun writeRecords(records: JSONArray, synchronous: Boolean = false) {
         val boundedRecords = applyStorageLimits(records)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(boundedRecords.toString().toByteArray(Charsets.UTF_8))
-        preferences.edit().putString(
+        val editor = preferences.edit().putString(
             KEY_ENCRYPTED_DATA,
             Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
-        ).apply()
+        )
+        if (synchronous) {
+            check(editor.commit()) { "Unable to persist encrypted memory records" }
+        } else {
+            editor.apply()
+        }
     }
 
 
