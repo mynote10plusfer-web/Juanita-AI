@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #6 exact head 1cccce87d928feec4712173b41f9aa0739f087b8 passes Android debug CI; signed-release workflow version gate and physical-device verification remain outstanding.
+Last updated: 2026-11-07 — PR #6 head a2469bd25eb95b395f6440e72a3898d09459d7b4 includes the memory-management navigation and archive date-range deletion follow-up; latest-head CI and physical-device verification are pending. Signed-release workflow version gate and device verification remain outstanding.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
