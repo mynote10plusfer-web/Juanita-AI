@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -295,8 +296,33 @@ private fun UserCameraPreview(
                             val now = System.currentTimeMillis()
                             if (currentVoiceConnected && now - lastFrameAt >= 1000L) {
                                 lastFrameAt = now
-                                runCatching { currentOnFrame(image.toBitmap()) }
-                                    .onFailure { if (!disposed) onError("Invio video non riuscito") }
+                                runCatching {
+                                    // ImageAnalysis buffers are not automatically rotated like PreviewView.
+                                    // Apply CameraX's per-frame rotation before sending the image to Gemini.
+                                    val rawBitmap = image.toBitmap()
+                                    val rotationDegrees = image.imageInfo.rotationDegrees
+                                    val uprightBitmap = if (rotationDegrees == 0) {
+                                        rawBitmap
+                                    } else {
+                                        val matrix = Matrix().apply {
+                                            postRotate(rotationDegrees.toFloat())
+                                        }
+                                        Bitmap.createBitmap(
+                                            rawBitmap,
+                                            0,
+                                            0,
+                                            rawBitmap.width,
+                                            rawBitmap.height,
+                                            matrix,
+                                            true
+                                        ).also { rotated ->
+                                            if (rotated !== rawBitmap) rawBitmap.recycle()
+                                        }
+                                    }
+                                    currentOnFrame(uprightBitmap)
+                                }.onFailure {
+                                    if (!disposed) onError("Invio video non riuscito")
+                                }
                             }
                         } finally {
                             image.close()
