@@ -421,13 +421,13 @@ class EncryptedMemoryStore(context: Context) {
      * Lightweight on-device lexical ranking: phrase match, token overlap, recency.
      */
     @Synchronized
-    fun searchArchivedTurns(query: String, limit: Int = 8): List<ArchivedSearchHit> {
+    fun searchArchivedTurns(query: String, limit: Int = 8, excludeSessionId: String? = null): List<ArchivedSearchHit> {
         val normalized = normalizeSearchText(query)
         val terms = normalized.split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return emptyList()
         purgeExpiredArchive()
         val phrase = normalized.takeIf { it.length >= 5 }
-        return allArchivedTurns().mapNotNull { (sessionId, turn) ->
+        return allArchivedTurns().asSequence().filter { it.first != excludeSessionId }.mapNotNull { (sessionId, turn) ->
             val body = normalizeSearchText(turn.text)
             val matches = terms.count { term -> body.contains(term) }
             if (matches == 0) return@mapNotNull null
@@ -438,12 +438,12 @@ class EncryptedMemoryStore(context: Context) {
             val score = phraseBonus + density * 4.0 + matches * 0.35 + recency * 0.25
             ArchivedSearchHit(sessionId, turn, score, matches)
         }.sortedWith(compareByDescending<ArchivedSearchHit> { it.score }.thenByDescending { it.turn.timestampMillis })
-            .take(limit.coerceIn(1, 20))
+            .take(limit.coerceIn(1, 20)).toList()
     }
 
     /** Search both curated facts and full episodic history for a live conversational cue. */
     @Synchronized
-    fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200): String {
+    fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null): String {
         if (query.isBlank()) return ""
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
@@ -453,7 +453,7 @@ class EncryptedMemoryStore(context: Context) {
             if (hits == 0) null else memory to hits
         }.sortedWith(compareByDescending<Pair<MemoryItem, Int>> { it.second }
             .thenByDescending { it.first.confidence }).take(6)
-        val episodes = searchArchivedTurns(query, 8)
+        val episodes = searchArchivedTurns(query, 8, excludeSessionId)
         if (relevantMemories.isEmpty() && episodes.isEmpty()) return ""
         return buildString {
             appendLine("RECALLED PERSONAL EXPERIENCES — retrieved from Juanita's encrypted local archive.")
