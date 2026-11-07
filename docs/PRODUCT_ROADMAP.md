@@ -130,6 +130,34 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 - Automated tests cover storage encryption, deletion, threshold behavior and profile isolation; physical-device tests cover both target Samsung devices.
 - CI passing alone must not be described as proof of recognition accuracy.
 
+### Familiar-person visual profiles and optional camera matching — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
+
+Extend the familiar-person memory beyond voice to an optional visual profile, while keeping ordinary photo memory separate from biometric face recognition.
+
+**Visual profile (first stage)**
+- During a user-led introduction, Juanita may offer to create a person profile containing their confirmed preferred name, optional user/person-provided photo, and a concise description of visible, non-sensitive appearance features.
+- The person must know the photo is being added and explicitly agree. Prefer selecting a photo or capturing one in a clearly indicated enrollment flow; never silently save camera frames.
+- Link the visual profile to the same person record as the separately enrolled voice profile and user-approved facts, while keeping each modality independently optional and removable.
+- A stored photo is a reference for conversational context; displaying or recalling it is not proof that the person currently in front of the camera is that person.
+- Do not infer or store sensitive traits such as race/ethnicity, health, religion, sexuality, political views or other sensitive attributes from appearance.
+
+**Optional visual recognition (later stage; separate consent)**
+- Real-time face matching against enrolled profiles is a distinct biometric capability and must not be implied by merely having a photo.
+- Only research or implement it if a suitable on-device approach is available, with explicit, informed opt-in from each enrolled person, clear camera-use indication, local processing, encrypted templates, calibrated thresholds and an unknown/uncertain fallback.
+- No face images, face embeddings or biometric templates may be sent to Gemini, Firebase, ChatGPT or another cloud service by default.
+- Do not identify bystanders, passers-by or unenrolled people. Do not perform covert, continuous or background identification.
+- Never use a face match as authentication, access control or proof of identity. If uncertain, ask the user/person rather than guessing.
+- Provide separate inspect, pause, revoke and delete controls for the photo, appearance description and any biometric template. Deletion must remove the corresponding local data.
+
+**Acceptance criteria**
+- A consenting person can create a named visual profile from a chosen/captured photo, and it persists across sessions.
+- The user can see which photo/description belongs to which person and can replace or delete it independently of voice enrollment.
+- No biometric matching occurs unless separately enabled with explicit consent.
+- Unenrolled people and uncertain matches remain unidentified.
+- Local storage is encrypted; tests cover consent state, access boundaries, deletion and profile isolation.
+- Physical-device testing covers camera permission, privacy indication, performance and thermal impact on Note10+ Android 12 and S22 Ultra.
+- A profile photo alone must never be described as face recognition; CI passing alone does not establish recognition accuracy.
+
 ### Avatar generation gap — not implemented yet
 
 The current Avatar Studio only creates a text description (including random attribute combinations) and saves profile metadata in SharedPreferences. It does not call an image-generation model, create a portrait bitmap, generate a GLB/VRM, or attach a generated asset to the active call screen. The main Juanita portrait card still imports an existing image selected by the user. A profile with an empty assetPath is not a generated avatar.
