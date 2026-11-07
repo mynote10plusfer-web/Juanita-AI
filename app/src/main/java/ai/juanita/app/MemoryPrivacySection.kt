@@ -38,7 +38,6 @@ import java.util.Date
 
 @Composable
 internal fun MemoryPrivacySection(
-    modifier: Modifier = Modifier,
     panel: Color,
     gold: Color,
     initialArchiveEnabled: Boolean,
@@ -88,7 +87,7 @@ internal fun MemoryPrivacySection(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = panel),
         shape = RoundedCornerShape(20.dp)
     ) {
