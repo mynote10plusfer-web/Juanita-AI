@@ -42,11 +42,168 @@ class EncryptedMemoryStore(context: Context) {
     val memoryClearVersion: Long
         get() = preferences.getLong(KEY_MEMORY_CLEAR_VERSION, 0L)
 
+    /**
+     * Durable encrypted queue for automatic-memory extraction. Unlike the old
+     * in-memory buffer, these short transcript snippets survive process death.
+     * They share the AES-GCM encrypted record file and are never exposed in logs.
+     */
+    @Synchronized
+    fun readPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion): List<String> {
+        if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion) return emptyList()
+        val records = readRecords()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "pending_memory_batch" &&
+                record.optLong("clearVersion", -1L) == expectedClearVersion
+            ) {
+                val turns = record.optJSONArray("turns") ?: return emptyList()
+                return buildList {
+                    for (turnIndex in 0 until turns.length()) {
+                        turns.optString(turnIndex).takeIf { it.isNotBlank() }?.let { add(it.take(1800)) }
+                    }
+                }.takeLast(8)
+            }
+        }
+        return emptyList()
+    }
+
+    /**
+     * Atomically append one recognized user turn to the bounded encrypted queue.
+     * This prevents a stale read/modify/write from racing with batch acknowledgement.
+     *
+     * Returns the pending count, 0 when disabled/invalidated, or -2 when full.
+     */
+    @Synchronized
+    fun enqueuePendingAutomaticMemoryTurn(
+        turn: String,
+        expectedClearVersion: Long = memoryClearVersion
+    ): Int {
+        if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion || turn.isBlank()) return 0
+        val records = readRecords()
+        val pendingRecord = (0 until records.length())
+            .mapNotNull { records.optJSONObject(it) }
+            .firstOrNull {
+                it.optString("kind") == "pending_memory_batch" &&
+                    it.optLong("clearVersion", -1L) == expectedClearVersion
+            }
+        val current = buildList {
+            val turns = pendingRecord?.optJSONArray("turns") ?: JSONArray()
+            for (index in 0 until turns.length()) {
+                turns.optString(index).takeIf { it.isNotBlank() }?.let { add(it.take(1800)) }
+            }
+        }
+        if (current.size >= 8) return -2
+
+        val updated = current + turn.take(1800)
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+        }
+        kept.put(JSONObject().apply {
+            put("kind", "pending_memory_batch")
+            put("id", "automatic")
+            put("clearVersion", expectedClearVersion)
+            put("updatedAt", System.currentTimeMillis())
+            put("turns", JSONArray(updated))
+        })
+        writeRecords(kept, synchronous = true)
+        return updated.size
+    }
+
+    @Synchronized
+    fun savePendingAutomaticMemoryTurns(turns: List<String>, expectedClearVersion: Long = memoryClearVersion) {
+        if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion) return
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+        }
+        val bounded = turns.filter { it.isNotBlank() }.takeLast(8).map { it.take(1800) }
+        if (bounded.isNotEmpty()) {
+            kept.put(JSONObject().apply {
+                put("kind", "pending_memory_batch")
+                put("id", "automatic")
+                put("clearVersion", expectedClearVersion)
+                put("updatedAt", System.currentTimeMillis())
+                put("turns", JSONArray(bounded))
+            })
+        }
+        writeRecords(kept, synchronous = true)
+    }
+
+    /**
+     * Acknowledge only the batch that was actually processed. New turns can be appended
+     * while Gemini is working; they must survive the completion of the older request.
+     */
+    @Synchronized
+    fun removeProcessedAutomaticMemoryTurns(
+        processedTurns: List<String>,
+        expectedClearVersion: Long = memoryClearVersion
+    ) {
+        if (processedTurns.isEmpty() || memoryClearVersion != expectedClearVersion) return
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch" ||
+                record.optLong("clearVersion", -1L) != expectedClearVersion
+            ) {
+                kept.put(record)
+                continue
+            }
+
+            val stored = record.optJSONArray("turns") ?: JSONArray()
+            val current = buildList {
+                for (turnIndex in 0 until stored.length()) {
+                    stored.optString(turnIndex).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+            if (current.size < processedTurns.size ||
+                current.take(processedTurns.size) != processedTurns
+            ) {
+                // Unexpected queue mutation: retain it intact rather than risk data loss.
+                kept.put(record)
+                continue
+            }
+            val remaining = current.drop(processedTurns.size)
+            if (remaining.isNotEmpty()) {
+                record.put("turns", JSONArray(remaining))
+                record.put("updatedAt", System.currentTimeMillis())
+                kept.put(record)
+            }
+        }
+        writeRecords(kept, synchronous = true)
+    }
+
+    @Synchronized
+    fun clearPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion) {
+        if (memoryClearVersion != expectedClearVersion) return
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+        }
+        writeRecords(kept, synchronous = true)
+    }
+
+    @Synchronized
     fun setAutomaticMemoryEnabled(enabled: Boolean) {
+        val nextVersion = memoryClearVersion + 1L
         preferences.edit()
             .putBoolean(KEY_AUTO_MEMORY_ENABLED, enabled)
-            .putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L)
+            .putLong(KEY_MEMORY_CLEAR_VERSION, nextVersion)
             .apply()
+        // A pause/resume invalidates any queued text from the previous state.
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+        }
+        writeRecords(kept)
     }
 
     /** Disabling pauses future transcript storage but preserves existing records. */
@@ -151,10 +308,14 @@ class EncryptedMemoryStore(context: Context) {
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("id") != id) kept.put(record)
+            if (record.optString("kind") == "pending_memory_batch") continue
+            if (record.optString("kind") == "memory" && record.optString("id") == id) continue
+            kept.put(record)
         }
-        writeRecords(kept)
-        preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+        writeRecords(kept, synchronous = true)
+        check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
+            "Unable to invalidate pending memory after deletion"
+        }
     }
 
     /** Summary of one locally archived voice/text conversation. */
@@ -317,8 +478,12 @@ class EncryptedMemoryStore(context: Context) {
     /** Clears saved personal memories only; archived conversation turns are preserved. */
     @Synchronized
     fun clearPersonalMemories() {
-        filterRecords { it.optString("kind") != "memory" }
-        preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+        filterRecords {
+            it.optString("kind") != "memory" && it.optString("kind") != "pending_memory_batch"
+        }
+        check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
+            "Unable to invalidate pending memory after clearing"
+        }
     }
 
     @Synchronized
@@ -335,8 +500,15 @@ class EncryptedMemoryStore(context: Context) {
             }
         }
         if (updated) {
-            writeRecords(records)
-            preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+            val kept = JSONArray()
+            for (index in 0 until records.length()) {
+                val record = records.optJSONObject(index) ?: continue
+                if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+            }
+            writeRecords(kept, synchronous = true)
+            check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
+                "Unable to invalidate pending memory after editing"
+            }
         }
         return updated
     }
@@ -378,15 +550,20 @@ class EncryptedMemoryStore(context: Context) {
         return JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
     }
 
-    private fun writeRecords(records: JSONArray) {
+    private fun writeRecords(records: JSONArray, synchronous: Boolean = false) {
         val boundedRecords = applyStorageLimits(records)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(boundedRecords.toString().toByteArray(Charsets.UTF_8))
-        preferences.edit().putString(
+        val editor = preferences.edit().putString(
             KEY_ENCRYPTED_DATA,
             Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
-        ).apply()
+        )
+        if (synchronous) {
+            check(editor.commit()) { "Unable to persist encrypted memory records" }
+        } else {
+            editor.apply()
+        }
     }
 
 

@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — call lifecycle, CameraX ownership and Live transcription corrections added on reliability branch; CI/device verification pending
+Last updated: 2026-11-07 — PR #3 reliability work merged; PR #4 adds encrypted retryable memory queue; PR #5 separates transcript intake from background Gemini extraction; physical-device verification still required
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -76,14 +76,15 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Kotlin + Jetpack Compose; package ai.juanita.app.
 - Firebase AI Logic / Gemini Developer API Live model gemini-3.1-flash-live-preview.
 - Encrypted on-device manual memories exist; user can list/edit/delete them. Transcript archive is separately opt-in and OFF by default.
-- Live text transcript capture is wired only when archive consent is enabled; raw audio is never stored.
-- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory engine receives user transcript text independently of transcript archiving, batches three user turns, asks Firebase AI Logic/Gemini to extract a maximum of five durable non-sensitive facts, and saves only curated candidates. It does not store raw audio or full transcripts. Model/network/quota errors are non-fatal to the Live session.
+- Live text transcript events feed automatic-memory processing independently of transcript archiving. Only the optional full transcript archive is gated by the user's explicit consent; raw audio is never stored.
+- [IMPLEMENTED IN PR #4 BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory engine receives user transcript text independently of transcript archiving, batches three user turns, asks Firebase AI Logic/Gemini to extract a maximum of five durable non-sensitive facts, and saves only curated candidates. It does not store raw audio or full transcripts. Model/network/quota errors are non-fatal to the Live session.
+- [PROPOSED IN PR #5 — BUILD/DEVICE VERIFICATION PENDING] Persist each eligible user turn to the encrypted pending queue without making the transcript intake worker wait for Gemini. A separate conflated worker processes ready batches; each turn is atomically and synchronously persisted, processed turns are acknowledged by prefix, and the existing eight-turn queue is preserved instead of silently overwriting old pending turns when full. Editing/deleting/clearing memories also removes pending transcript snippets.
 - [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory is enabled by default and can be paused in Memory & Privacy settings. The UI can refresh the memory list and supports individual edit/delete and clear-all.
 - [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Hard storage ceilings: at most 100 personal memories and 32,000 characters of memory text; each memory is capped at 500 characters. Automatic memories are lower priority than manually saved memories when pruning is required. The separate transcript archive is still opt-in and capped at 300 turns. Clearing memories invalidates pending extraction batches so deleted items are not re-added from buffered turns.
 - Memory retrieval into each new Live session already reads saved personal memories; retrieval quality, contradiction handling, semantic consolidation, biography generation and source-linked Internet knowledge library remain future work.
 - Existing photorealistic Juanita portrait is static; animated face/lip sync not implemented.
 - Avatar Studio stores profile metadata; it does not yet generate rigged models.
-- PR #3 call screen is a partial preview and remains unmerged/build validation pending.
+- PR #3 call screen and reliability fixes are merged to main (commit dc05adbe065d0955352dce91a0c95cb751dfe8db). The signed 0.9.5 release workflow completed successfully on 2026-11-07 and verified the APK signature; camera hardware and end-to-end memory behavior still require physical-device verification.
 
 ## Functional requirements
 
@@ -126,13 +127,14 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Stop the voice session when the user dismisses the call UI or removes the app task from Recents. Screen-off/background continuation remains available while the app task/session is intentionally active.
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Scope CameraX cleanup to the preview/analysis use cases owned by each screen; remove global `unbindAll()` calls from the call and vision previews. Hide the separate vision preview while the call screen owns the camera, use PreviewView COMPATIBLE mode, and surface camera errors instead of silently showing a black tile.
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Add subtle idle portrait movement only. This is not facial expression animation or true lip sync; a rigged renderer and verified audio/viseme bridge remain separate required milestones.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
+- [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
+- [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
 ## Delivery plan
 
-1. Memory engine: first automatic extraction pipeline, local encrypted persistence, duplicate suppression, sensitive-content guard, pause control, memory list refresh and hard storage caps implemented on PR branch; next validate build/device behavior, add robust provenance/conflict resolution and improve retrieval.
+1. Memory engine: initial automatic extraction, encrypted local memories, duplicate suppression, sensitive-content guard, pause control, memory list refresh and storage caps are in main. PR #4 adds a durable encrypted pending-turn queue and explicit diagnostics. PR #5 decouples transcript intake from Gemini extraction to avoid blocking the transcript worker, atomically persists and acknowledges pending turns, and clears pending text on memory edit/delete/clear. Version target 0.9.7 / versionCode 26. Next verify CI and real-device transcript-to-recall behavior, then add provenance/conflict resolution and contextual retrieval.
 2. Biography and self-model: build an inspectable evolving biography with chronology, learned topics, projects, milestones and clear separation between user facts and Juanita's software history.
-3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions.
+3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Not implemented yet. Research must use a free-tier-supported model/tool configuration and hard quota limits; do not enable billing. Grounded responses must display Google's required Search suggestions and source links.
 4. Reliability and privacy: test long sessions, background service, memory pause/disable, export/restore, deletion and offline behavior.
 5. Avatar/video call: finish and verify PR #3, then integrate a licensed rigged renderer, real avatar assets, motion, lip sync and device adaptation.
 6. Daily assistant capabilities: reminders, calendar, travel, notifications and other integrations with explicit permissions.

@@ -43,6 +43,8 @@ class JuanitaVoiceService : Service() {
     private var stopJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
     private var transcriptWorker: Job? = null
+    private var memoryWorkChannel: Channel<Unit>? = null
+    private var memoryWorker: Job? = null
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -103,9 +105,22 @@ class JuanitaVoiceService : Service() {
                             }
                             // A single ordered worker prevents transcript callbacks racing
                             // with one another or with the final memory flush.
-                            val transcriptQueue = Channel<Pair<String, String>>(Channel.UNLIMITED)
+                            val transcriptQueue = Channel<Pair<String, String>>(capacity = 64)
                             transcriptChannel = transcriptQueue
+                            val memoryQueue = Channel<Unit>(Channel.CONFLATED)
+                            memoryWorkChannel = memoryQueue
+                            memoryWorker = serviceScope.launch(Dispatchers.IO) {
+                                for (signal in memoryQueue) {
+                                    val saved = automaticMemoryEngine.processReadyBatch()
+                                    _memoryState.value = when {
+                                        saved > 0 -> "Memoria verificata: $saved ricordi salvati o aggiornati."
+                                        saved < 0 -> "Analisi non riuscita: batch conservato in memoria cifrata per il prossimo tentativo."
+                                        else -> _memoryState.value
+                                    }
+                                }
+                            }
                             transcriptWorker = serviceScope.launch(Dispatchers.IO) {
+                                var userTranscriptCount = 0
                                 var bufferedEvent: Pair<String, String>? = null
                                 while (true) {
                                     val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
@@ -131,28 +146,45 @@ class JuanitaVoiceService : Service() {
                                     // Archive errors must never block automatic memory.
                                     runCatching { memoryStore.appendConversationTurn(conversationId, role, combinedText) }
                                     if (role.equals("USER", ignoreCase = true)) {
+                                        userTranscriptCount++
+                                        _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
                                         try {
-                                            val saved = automaticMemoryEngine.acceptTurn(role, combinedText)
+                                            val pendingCount = automaticMemoryEngine.queueTurn(role, combinedText)
                                             _memoryState.value = when {
-                                                saved > 0 -> "Memoria aggiornata: $saved ricordi salvati o confermati."
-                                                saved < 0 -> "Memoria in attesa di rete o quota: riproverò automaticamente."
-                                                else -> "Memoria attiva: raccolta informazioni utili in corso."
+                                                pendingCount == -2 -> "Coda memoria piena: gli 8 turni non elaborati sono conservati; avvia una nuova sessione quando la rete torna disponibile."
+                                                pendingCount > 0 -> "Trascrizione ricevuta ($userTranscriptCount) · $pendingCount turni cifrati in attesa."
+                                                else -> "Memoria automatica in pausa o nessun testo idoneo."
                                             }
+                                            if (pendingCount >= 3) memoryQueue.trySend(Unit)
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
-                                        } catch (_: Exception) {
-                                            // Memory errors must not break the voice conversation.
+                                        } catch (failure: Exception) {
+                                            _memoryState.value = "Errore memoria (${failure.javaClass.simpleName}): trascrizione ricevuta, conversazione vocale non interrotta."
                                         }
                                     }
                                 }
                             }
-                            assistant.start(sessionInstruction, voice) { role, text ->
-                                transcriptQueue.trySend(role to text)
-                            }
                             _memoryState.value = if (memoryStore.isAutomaticMemoryEnabled) {
-                                "Memoria automatica attiva · analisi ogni 3 interventi utente."
+                                "Memoria automatica attiva · trascrizioni monitorate; batch cifrati e recuperabili."
                             } else {
                                 "Memoria automatica in pausa."
+                            }
+                            // Retry an encrypted pending batch from an earlier process/session.
+                            if (memoryStore.isAutomaticMemoryEnabled) {
+                                serviceScope.launch(Dispatchers.IO) {
+                                    val recovered = automaticMemoryEngine.flush()
+                                    if (recovered > 0) {
+                                        _memoryState.value = "Memoria recuperata: $recovered ricordi salvati dal batch precedente."
+                                    } else if (recovered < 0) {
+                                        _memoryState.value = "Batch precedente conservato: rete/quota o risposta AI non disponibile."
+                                    }
+                                }
+                            }
+                            assistant.start(sessionInstruction, voice) { role, text ->
+                                val sent = transcriptQueue.trySend(role to text)
+                                if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
+                                    _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                                }
                             }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
@@ -196,6 +228,7 @@ class JuanitaVoiceService : Service() {
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                withTimeoutOrNull(5_000L) { drainMemoryWorker() }
                 val flushedCount = withTimeoutOrNull(5_000L) {
                     withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
                 }
@@ -236,6 +269,16 @@ class JuanitaVoiceService : Service() {
         if (worker?.isActive == true) worker.cancel()
         transcriptChannel = null
         transcriptWorker = null
+    }
+
+    private suspend fun drainMemoryWorker() {
+        val queue = memoryWorkChannel
+        queue?.close()
+        val worker = memoryWorker
+        withTimeoutOrNull(5_000L) { worker?.join() }
+        if (worker?.isActive == true) worker.cancel()
+        memoryWorkChannel = null
+        memoryWorker = null
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -294,6 +337,8 @@ class JuanitaVoiceService : Service() {
         assistant.stopAudioCapture()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
+        memoryWorkChannel?.close()
+        memoryWorker?.cancel()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { assistant.stop() }
         }
