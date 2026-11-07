@@ -300,13 +300,18 @@ class EncryptedMemoryStore(context: Context) {
     }.sortedByDescending { it.createdAtMillis }
 
     @Synchronized
-    fun deleteMemory(id: String) {
+    fun deleteMemory(id: String) = deleteMemories(setOf(id))
+
+    /** Delete a user-selected group of curated memories in one encrypted-store update. */
+    @Synchronized
+    fun deleteMemories(ids: Set<String>) {
+        if (ids.isEmpty()) return
         val records = readRecords()
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") == "pending_memory_batch") continue
-            if (record.optString("kind") == "memory" && record.optString("id") == id) continue
+            if (record.optString("kind") == "memory" && record.optString("id") in ids) continue
             kept.put(record)
         }
         writeRecords(kept, synchronous = true)
