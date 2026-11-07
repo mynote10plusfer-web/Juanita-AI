@@ -86,6 +86,36 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Avatar Studio stores profile metadata; it does not yet generate rigged models.
 - PR #3 call screen and reliability fixes are merged to main (commit dc05adbe065d0955352dce91a0c95cb751dfe8db). The signed 0.9.5 release workflow completed successfully on 2026-11-07 and verified the APK signature; camera hardware and end-to-end memory behavior still require physical-device verification.
 
+## Verified status update — 2026-11-07 (PR #6)
+
+### Avatar generation gap — not implemented yet
+
+The current Avatar Studio only creates a text description (including random attribute combinations) and saves profile metadata in SharedPreferences. It does not call an image-generation model, create a portrait bitmap, generate a GLB/VRM, or attach a generated asset to the active call screen. The main Juanita portrait card still imports an existing image selected by the user. A profile with an empty assetPath is not a generated avatar.
+
+Required next implementation:
+- Add a real image-generation provider behind an explicit interface, with a free-tier/local-first feasibility gate and visible quota/error handling. Do not enable billing, Firebase Blaze or paid APIs.
+- Description and random modes must both produce an actual previewable portrait image, then allow accept/regenerate/edit and save it as Juanita's persistent portrait.
+- Preserve the currently saved portrait until the user explicitly accepts a replacement.
+- Keep photo-reference mode separate and require clear consent before any external upload.
+- Treat rigged 3D/GLB/VRM generation as a separate later milestone; a generated 2D portrait must not be described as a rigged, animated avatar.
+- Acceptance: from both a text description and random mode, the app generates and displays a new image, persists it across app restarts, and uses that exact image in the call screen.
+
+### Voice recognition gap — partially implemented
+
+Gemini Live uses SDK-managed microphone audio and enables inputAudioTranscription and outputAudioTranscription. User speech is therefore transcribed into text events for the conversation/memory pipeline. The configured language and dialect are included in the persona/system instruction, but the Live session does not expose a verified speaker-identification or voice-biometric system.
+
+Not implemented:
+- Recognizing who is speaking by their voice (Riccardo vs another person).
+- Speaker diarization for multiple people in the same conversation.
+- Enrolled voice profiles/voiceprints.
+- An independent on-device speech-recognition provider; SpeechRecognitionProvider is only an interface contract.
+- A validated accuracy test suite across Italian, Spanish/Canarian, Czech and English on the target Samsung devices.
+
+Next steps:
+- Clarify language detection vs speaker identity; do not confuse transcription with identifying a person.
+- Keep multilingual transcription through Gemini Live as the default. Test language switching and mixed-language turns on device.
+- If the user later wants speaker identity, design an opt-in, privacy-preserving local speaker-recognition feature; never infer or identify a person from a voice without explicit enrollment and consent.
+
 ## Functional requirements
 
 ### A. Automatic memory, learning and digital biography — highest priority
