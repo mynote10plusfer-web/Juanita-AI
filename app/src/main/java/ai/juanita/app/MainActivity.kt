@@ -35,6 +35,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -68,6 +70,9 @@ import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import java.util.Locale
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private data class VoiceLanguage(val label: String, val tag: String) {
@@ -147,9 +152,14 @@ class MainActivity : ComponentActivity() {
                 onRefreshMemories = { memoryStore.listMemories() },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
+                onDeleteMemories = { memoryStore.deleteMemories(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
+                onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
+                onListConversationTurns = { memoryStore.listConversationTurns(it) },
+                onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
+                onRefreshArchive = { memoryStore.listArchivedConversations() },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
                 onSaveAvatarProfile = { avatarStore.save(it) },
@@ -225,9 +235,14 @@ private fun JuanitaApp(
     onRefreshMemories: () -> List<MemoryItem>,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
+    onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
+    onDeleteArchiveRange: (Long, Long) -> Unit,
+    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onDeleteConversationRange: (String, Long, Long) -> Unit,
+    onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onSaveAvatarProfile: (AvatarProfile) -> AvatarProfile,
@@ -274,6 +289,9 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var selectedSection by remember { mutableStateOf("HOME") }
+    var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
+    LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
     val context = LocalContext.current
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
@@ -362,6 +380,8 @@ private fun JuanitaApp(
                 try {
                     val instruction = buildString {
                         append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                        val sessionNow = ZonedDateTime.now()
+                        append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
                         if (locationContext.isNotBlank()) {
                             append("\n\n")
                             append(locationContext)
@@ -406,15 +426,22 @@ private fun JuanitaApp(
         )
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = background) {
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 28.dp),
+            Column(modifier = Modifier.fillMaxSize()) {
+              val mainScrollState = rememberScrollState()
+              Column(
+                modifier = Modifier.weight(1f).verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(text = assistantName.uppercase(), color = gold, fontSize = 29.sp,
-                    fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
+                if (selectedSection == "HOME") {
+                    JuanitaAvatarCard()
+                }
+                Text(text = assistantName.uppercase(), color = gold, fontSize = 25.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
                 Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
-                JuanitaAvatarCard()
+                Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = gold, fontSize = 12.sp)
+                Text("Usa il menu in basso per passare da una sezione all'altra.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
+                if (selectedSection == "AVATAR") {
                 AvatarStudioSection(
                     panel = panel,
                     gold = gold,
@@ -425,6 +452,9 @@ private fun JuanitaApp(
                     onDeleteProfile = onDeleteAvatarProfile
                 )
 
+                }
+
+                if (selectedSection == "SETTINGS") {
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     OutlinedTextField(
                         value = assistantName,
@@ -566,6 +596,9 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
+                }
+
+                if (selectedSection == "HOME") {
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                     Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
@@ -602,9 +635,9 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
-                // The call screen owns the camera while visible. Dispose the other
-                // CameraX preview first so two UI surfaces never fight for the camera.
-                if (!callScreenVisible) {
+                }
+
+                if (selectedSection == "AVATAR" && !callScreenVisible) {
                     CameraVisionSection(
                         panel = panel,
                         gold = gold,
@@ -614,6 +647,7 @@ private fun JuanitaApp(
                     )
                 }
 
+                if (selectedSection == "MEMORY") {
                 MemoryPrivacySection(
                     panel = panel,
                     gold = gold,
@@ -632,13 +666,21 @@ private fun JuanitaApp(
                     },
                     onSaveMemory = { text -> onSaveMemory(text) },
                     onDeleteMemory = onDeleteMemory,
+                    onDeleteMemories = onDeleteMemories,
                     onUpdateMemory = onUpdateMemory,
                     onClearMemories = onClearMemories,
                     onDeleteConversation = onDeleteConversation,
+                    onDeleteArchiveRange = onDeleteArchiveRange,
+                    onListConversationTurns = onListConversationTurns,
+                    onDeleteConversationRange = onDeleteConversationRange,
+                    onRefreshArchive = onRefreshArchive,
                     onClearArchive = onClearArchive,
                     onRetentionChanged = onRetentionChanged
                 )
 
+                }
+
+                if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
@@ -648,6 +690,7 @@ private fun JuanitaApp(
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
 
                 if (callScreenVisible) {
                     val activeAvatarName = initialAvatarProfiles
@@ -657,6 +700,8 @@ private fun JuanitaApp(
                         avatarName = activeAvatarName,
                         portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
                         connectionStatus = liveState,
+                        voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
+                        onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) },
                         onDismiss = {
                             // Leaving the call UI also ends audio: never leave a hidden hot mic.
                             JuanitaVoiceService.stop(context)
@@ -668,6 +713,17 @@ private fun JuanitaApp(
                         }
                     )
                 }
+              }
+              NavigationBar(containerColor = panel, contentColor = gold) {
+                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Impostazioni", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
+                      NavigationBarItem(
+                          selected = selectedSection == key,
+                          onClick = { selectedSection = key },
+                          icon = { Text(when (key) { "HOME" -> "🏠"; "AVATAR" -> "👩🏻"; "SETTINGS" -> "⚙️"; "MEMORY" -> "🧠"; else -> "⋯" }, fontSize = 16.sp) },
+                          label = { Text(label, fontSize = 10.sp) }
+                      )
+                  }
+              }
             }
         }
     }
