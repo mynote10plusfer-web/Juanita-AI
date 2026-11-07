@@ -449,7 +449,7 @@ class EncryptedMemoryStore(context: Context) {
         if (terms.isEmpty()) return ""
         val relevantMemories = listMemories().mapNotNull { memory ->
             val body = normalizeSearchText(memory.text)
-            val hits = terms.count(body::contains)
+            val hits = terms.count { term -> body.contains(term) }
             if (hits == 0) null else memory to hits
         }.sortedWith(compareByDescending<Pair<MemoryItem, Int>> { it.second }
             .thenByDescending { it.first.confidence }).take(6)
@@ -462,14 +462,14 @@ class EncryptedMemoryStore(context: Context) {
                 appendLine("RELATED LONG-TERM MEMORIES:")
                 relevantMemories.forEach { (memory, _) ->
                     val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date(memory.createdAtMillis))
-                    appendLine("- [\${memory.category}; recorded $date] \${memory.text}")
+                    appendLine("- [${memory.category}; recorded $date] ${memory.text}")
                 }
             }
             if (episodes.isNotEmpty()) {
                 appendLine("RELATED PAST CONVERSATION EXCERPTS (chronological order):")
                 episodes.sortedBy { it.turn.timestampMillis }.forEach { hit ->
                     val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.ROOT).format(java.util.Date(hit.turn.timestampMillis))
-                    appendLine("- [$date; \${hit.turn.role}] \${hit.turn.text.take(650)}")
+                    appendLine("- [$date; ${hit.turn.role}] ${hit.turn.text.take(650)}")
                 }
             }
         }.take(maxCharacters.coerceIn(500, 6000))
