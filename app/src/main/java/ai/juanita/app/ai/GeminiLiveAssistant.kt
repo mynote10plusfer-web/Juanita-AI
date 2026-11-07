@@ -93,7 +93,7 @@ class GeminiLiveAssistant {
             functionCallHandler = { functionCall ->
                 if (functionCall.name == "getCurrentDateTime") {
                     val now = ZonedDateTime.now()
-                    val value = "Current local date/time: ${now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; zone: ${now.zone.id}; localized: ${now.format(DateTimeFormatter.ofPattern(\"EEEE d MMMM yyyy, HH:mm:ss zzzz\", Locale.getDefault()))}"
+                    val value = "Current local date/time: ${now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; zone: ${now.zone.id}; localized: ${now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss zzzz", Locale.getDefault()))}"
                     FunctionResponsePart(functionCall.name, JsonObject(mapOf("current_datetime" to JsonPrimitive(value))), functionCall.id)
                 } else if (functionCall.name == "searchPastConversations") {
                     val query = functionCall.args["query"]?.jsonPrimitive?.content.orEmpty()
