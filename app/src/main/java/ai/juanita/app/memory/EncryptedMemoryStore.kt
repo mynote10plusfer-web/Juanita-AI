@@ -368,7 +368,6 @@ class EncryptedMemoryStore(context: Context) {
         val timestampMillis: Long
     )
 
-    @Synchronized
     /** Deletes only this session's turns in [startInclusive, endExclusive). */
     @Synchronized
     fun deleteConversationRange(sessionId: String, startInclusive: Long, endExclusive: Long) {
