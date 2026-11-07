@@ -282,6 +282,12 @@ Next steps:
 - Sensitive or intimate data requires explicit confirmation before long-term retention.
 - Test app restart, force-stop, device reboot, retention expiry, corrupt archive files, memory correction and deletion.
 
+**Open issues reported during real-phone testing — 2026-11-06/07; not yet verified as fixed**
+- Video-call view: user reported a black local-camera preview and a static Juanita portrait. Re-test front-camera preview, camera switching, video frame delivery and avatar animation separately; the portrait is currently static by design/code, so do not mark animation complete.
+- Memory: user reported that conversations opened from the archive were not displayed. Re-test archive persistence, date/day navigation, transcript retrieval, and automatic-memory recall after app restart.
+- Session lifecycle: user reported that closing/leaving the app could leave the microphone conversation active. Re-test stop behavior for close, back navigation, process lifecycle and explicit terminate; no hidden/hot microphone is acceptable.
+- These are user-observed defects requiring reproducible tests on Note10+ Android 12 and S22 Ultra. A successful CI build alone does not close them.
+
 ### C. Knowledge research and learning
 
 - Focused research on the Internet when Juanita lacks reliable knowledge or the user asks for current information.
