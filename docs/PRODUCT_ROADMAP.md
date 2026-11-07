@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-06 — call lifecycle, CameraX ownership and Live transcription corrections added on reliability branch; CI/device verification pending
+Last updated: 2026-11-07 — PR #3 reliability work merged; encrypted retryable memory queue and transcript diagnostics proposed in PR #4; physical-device verification still required
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -83,7 +83,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Memory retrieval into each new Live session already reads saved personal memories; retrieval quality, contradiction handling, semantic consolidation, biography generation and source-linked Internet knowledge library remain future work.
 - Existing photorealistic Juanita portrait is static; animated face/lip sync not implemented.
 - Avatar Studio stores profile metadata; it does not yet generate rigged models.
-- PR #3 call screen is a partial preview and remains unmerged/build validation pending.
+- PR #3 call screen and reliability fixes are merged to main (commit dc05adbe065d0955352dce91a0c95cb751dfe8db). The signed 0.9.5 release workflow completed successfully on 2026-11-07 and verified the APK signature; camera hardware and end-to-end memory behavior still require physical-device verification.
 
 ## Functional requirements
 
@@ -126,13 +126,14 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Stop the voice session when the user dismisses the call UI or removes the app task from Recents. Screen-off/background continuation remains available while the app task/session is intentionally active.
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Scope CameraX cleanup to the preview/analysis use cases owned by each screen; remove global `unbindAll()` calls from the call and vision previews. Hide the separate vision preview while the call screen owns the camera, use PreviewView COMPATIBLE mode, and surface camera errors instead of silently showing a black tile.
 - [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Add subtle idle portrait movement only. This is not facial expression animation or true lip sync; a rigged renderer and verified audio/viseme bridge remain separate required milestones.
-- [IMPLEMENTED ON RELIABILITY BRANCH — CI/DEVICE VERIFICATION PENDING] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
+- [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
+- [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
 ## Delivery plan
 
-1. Memory engine: first automatic extraction pipeline, local encrypted persistence, duplicate suppression, sensitive-content guard, pause control, memory list refresh and hard storage caps implemented on PR branch; next validate build/device behavior, add robust provenance/conflict resolution and improve retrieval.
+1. Memory engine: initial automatic extraction, encrypted local memories, duplicate suppression, sensitive-content guard, pause control, memory list refresh and storage caps are in main. PR #4 adds a durable encrypted pending-turn queue and explicit diagnostics; next verify CI and real-device transcript-to-recall behavior, then add provenance/conflict resolution and contextual retrieval.
 2. Biography and self-model: build an inspectable evolving biography with chronology, learned topics, projects, milestones and clear separation between user facts and Juanita's software history.
-3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions.
+3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Not implemented yet. Research must use a free-tier-supported model/tool configuration and hard quota limits; do not enable billing. Grounded responses must display Google's required Search suggestions and source links.
 4. Reliability and privacy: test long sessions, background service, memory pause/disable, export/restore, deletion and offline behavior.
 5. Avatar/video call: finish and verify PR #3, then integrate a licensed rigged renderer, real avatar assets, motion, lip sync and device adaptation.
 6. Daily assistant capabilities: reminders, calendar, travel, notifications and other integrations with explicit permissions.
