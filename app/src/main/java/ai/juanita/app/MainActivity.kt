@@ -764,6 +764,7 @@ private fun JuanitaApp(
                   FirstMeetingOnboarding(
                       onComplete = { entries ->
                           onCompleteOnboarding(entries)
+                          memories = onRefreshMemories()
                           showFirstMeeting = false
                       },
                       onSkip = {
