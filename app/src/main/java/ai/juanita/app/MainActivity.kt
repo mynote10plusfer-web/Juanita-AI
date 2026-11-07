@@ -319,7 +319,6 @@ private fun JuanitaApp(
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
-    val memorySectionRequester = remember { BringIntoViewRequester() }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -647,7 +646,6 @@ private fun JuanitaApp(
 
                 if (selectedSection == "MEMORY") {
                 MemoryPrivacySection(
-                    modifier = Modifier.bringIntoViewRequester(memorySectionRequester),
                     panel = panel,
                     gold = gold,
                     initialArchiveEnabled = archiveEnabled,
