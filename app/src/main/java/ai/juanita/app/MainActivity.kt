@@ -154,6 +154,8 @@ class MainActivity : ComponentActivity() {
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
+                onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
+                onRefreshArchive = { memoryStore.listArchivedConversations() },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
                 onSaveAvatarProfile = { avatarStore.save(it) },
@@ -233,6 +235,8 @@ private fun JuanitaApp(
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
+    onDeleteArchiveRange: (Long, Long) -> Unit,
+    onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onSaveAvatarProfile: (AvatarProfile) -> AvatarProfile,
@@ -654,6 +658,8 @@ private fun JuanitaApp(
                     onUpdateMemory = onUpdateMemory,
                     onClearMemories = onClearMemories,
                     onDeleteConversation = onDeleteConversation,
+                    onDeleteArchiveRange = onDeleteArchiveRange,
+                    onRefreshArchive = onRefreshArchive,
                     onClearArchive = onClearArchive,
                     onRetentionChanged = onRetentionChanged
                 )
