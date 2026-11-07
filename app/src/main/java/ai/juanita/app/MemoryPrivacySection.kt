@@ -214,11 +214,17 @@ private fun ConversationArchiveCalendar(
     var turns by remember { mutableStateOf(emptyList<EncryptedMemoryStore.ArchivedTurn>()) }
     var fromText by remember { mutableStateOf("") }
     var toText by remember { mutableStateOf("") }
-    var confirmDay by remember { mutableStateOf(false) }\n    var retentionExpanded by remember { mutableStateOf(false) }
+    var confirmDay by remember { mutableStateOf(false) }
+    var retentionExpanded by remember { mutableStateOf(false) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
     val byDay = remember(conversations) {
-        conversations.flatMap { session ->\n            val first = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDate()\n            val last = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDate()\n            generateSequence(first) { current -> if (current < last) current.plusDays(1) else null }\n                .map { it to session }.toList()\n        }.groupBy({ it.first }, { it.second }).mapValues { it.value.distinctBy { session -> session.sessionId } }
+        conversations.flatMap { session ->
+            val first = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDate()
+            val last = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDate()
+            generateSequence(first) { current -> if (current < last) current.plusDays(1) else null }
+                .map { it to session }.toList()
+        }.groupBy({ it.first }, { it.second }).mapValues { it.value.distinctBy { session -> session.sessionId } }
     }
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = panel), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -231,7 +237,14 @@ private fun ConversationArchiveCalendar(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Conservazione: " + retentionLabel, color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                Box {\n                    TextButton(onClick = { retentionExpanded = true }) { Text("Modifica", color = gold) }\n                    DropdownMenu(expanded = retentionExpanded, onDismissRequest = { retentionExpanded = false }) {\n                        listOf(0 to "Mai (manuale)", 7 to "7 giorni", 30 to "30 giorni", 90 to "90 giorni").forEach { option ->\n                            DropdownMenuItem(text = { Text(option.second) }, onClick = { onRetentionChanged(option.first); retentionExpanded = false })\n                        }\n                    }\n                }
+                Box {
+                    TextButton(onClick = { retentionExpanded = true }) { Text("Modifica", color = gold) }
+                    DropdownMenu(expanded = retentionExpanded, onDismissRequest = { retentionExpanded = false }) {
+                        listOf(0 to "Mai (manuale)", 7 to "7 giorni", 30 to "30 giorni", 90 to "90 giorni").forEach { option ->
+                            DropdownMenuItem(text = { Text(option.second) }, onClick = { onRetentionChanged(option.first); retentionExpanded = false })
+                        }
+                    }
+                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { month = month.minusMonths(1) }) { Text("‹", color = gold, fontSize = 22.sp) }
@@ -310,8 +323,7 @@ private fun ConversationArchiveCalendar(
                     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).verticalScroll(rememberScrollState())) {
                         turns.forEach { turn ->
                             Text(java.time.Instant.ofEpochMilli(turn.timestampMillis).atZone(zone).format(DateTimeFormatter.ofPattern("dd/MM HH:mm")) +
-                                " · " + turn.role + "
-" + turn.text, color = Color.White, fontSize = 11.sp)
+                                " · " + turn.role + "\n" + turn.text, color = Color.White, fontSize = 11.sp)
                             Divider(color = Color(0xFF3B4049))
                         }
                     }
