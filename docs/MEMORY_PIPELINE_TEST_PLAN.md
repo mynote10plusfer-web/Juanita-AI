@@ -1,12 +1,17 @@
 # Memory pipeline verification — PR #6
 
 ## Automated checks
+- [ ] Latest PR head Android debug CI passes after introducing persistent bottom navigation.
 - [x] Android debug APK workflow passed for the memory implementation head 1cccce87d928feec4712173b41f9aa0739f087b8 (run 42360447654; artifact 13569287248).
 - [ ] Re-run Android debug CI after roadmap, architecture and signed-release workflow corrections.
 - [ ] After merge to main, build the signed release and verify the permanent certificate fingerprint and application update metadata.
 - [ ] Install only a correctly signed release over the existing installation; never uninstall or clear app data to work around signing.
 
 ## Physical-device checks — Galaxy Note10+ (Android 12) and Galaxy S22 Ultra
+- [ ] Confirm the persistent bottom menu remains visible while section content scrolls.
+- [ ] Confirm Home contains the Live voice session, Avatar contains Avatar Studio and camera preview, Impostazioni contains identity/language/voice/personality controls, Memoria contains personal-memory and conversation-archive controls, and Altro contains project status/debug tools.
+- [ ] Open Memoria from the bottom menu and verify the personal-memory list, edit/delete, multi-select, clear-all, conversation deletion, date-range deletion and archive clear controls are visible and functional.
+- [ ] Switch repeatedly between tabs and confirm no settings, selected avatar, archive state or active Live session is lost.
 - [ ] Confirm archive setting defaults to enabled on a fresh install and can be paused independently of curated automatic memory.
 - [ ] Start a Live voice session; speak three separate durable, non-sensitive facts and confirm user transcript events are captured.
 - [ ] Confirm automatic memory status reports transcript receipt and then extraction/save outcome; inspect the curated memory list.
