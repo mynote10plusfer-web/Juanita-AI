@@ -17,17 +17,44 @@ import org.json.JSONArray
 class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     private val mutex = Mutex()
 
-    suspend fun acceptTurn(role: String, text: String): Int = mutex.withLock {
+    /**
+     * Persist a recognized user turn quickly. This method performs no network request,
+     * so transcript collection is never blocked by Gemini memory extraction.
+     *
+     * Returns the number of pending turns, 0 when disabled/ignored, or -2 when the
+     * bounded encrypted queue is full. A full queue is preserved rather than silently
+     * overwriting older unprocessed turns.
+     */
+    suspend fun queueTurn(role: String, text: String): Int = mutex.withLock {
         if (!store.isAutomaticMemoryEnabled || text.isBlank()) return@withLock 0
         if (role.uppercase() != "USER") return@withLock 0
 
         val version = store.memoryClearVersion
         val pending = store.readPendingAutomaticMemoryTurns(version).toMutableList()
-        pending += "USER: ${text.take(MAX_TURN_CHARS)}"
-        val bounded = pending.takeLast(MAX_BATCH_TURNS)
-        store.savePendingAutomaticMemoryTurns(bounded, version)
+        if (pending.size >= MAX_PENDING_TURNS) return@withLock -2
 
-        if (bounded.size >= BATCH_TURNS) extractPendingLocked(version) else 0
+        pending += "USER: ${text.take(MAX_TURN_CHARS)}"
+        store.savePendingAutomaticMemoryTurns(pending, version)
+        pending.size
+    }
+
+    /** Process a complete batch away from the Live transcript callback worker. */
+    suspend fun processReadyBatch(): Int = mutex.withLock {
+        if (!store.isAutomaticMemoryEnabled) return@withLock 0
+        val version = store.memoryClearVersion
+        val pending = store.readPendingAutomaticMemoryTurns(version)
+        if (pending.size < BATCH_TURNS) return@withLock 0
+        extractPendingLocked(version)
+    }
+
+    /** Compatibility helper for callers that want to queue and process immediately. */
+    suspend fun acceptTurn(role: String, text: String): Int {
+        val pendingCount = queueTurn(role, text)
+        return when {
+            pendingCount < 0 -> pendingCount
+            pendingCount >= BATCH_TURNS -> processReadyBatch()
+            else -> 0
+        }
     }
 
     suspend fun flush(): Int = mutex.withLock {
@@ -123,7 +150,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     companion object {
         private const val MODEL_NAME = "gemini-3.8-flash"
         private const val BATCH_TURNS = 3
-        private const val MAX_BATCH_TURNS = 8
+        private const val MAX_PENDING_TURNS = 8
         private const val MAX_TURN_CHARS = 1800
         private const val MIN_MEMORY_CHARS = 8
         private const val MAX_MEMORY_CHARS = 500
