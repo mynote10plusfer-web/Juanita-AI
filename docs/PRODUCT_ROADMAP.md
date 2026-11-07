@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. CI and signed-release verification are pending; physical-device verification remains required.
+Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Exact candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Signed-release verification and physical-device verification remain pending.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -157,6 +157,28 @@ Extend the familiar-person memory beyond voice to an optional visual profile, wh
 - Local storage is encrypted; tests cover consent state, access boundaries, deletion and profile isolation.
 - Physical-device testing covers camera permission, privacy indication, performance and thermal impact on Note10+ Android 12 and S22 Ultra.
 - A profile photo alone must never be described as face recognition; CI passing alone does not establish recognition accuracy.
+
+
+### Mode-aware familiar-person recognition — USER-APPROVED DESIGN; NOT IMPLEMENTED
+
+Use one person record with separately optional recognition modalities. The active conversation mode determines which modality may be considered; it must never silently activate a sensor or enrollment.
+
+- **Audio-only conversation:** use voice activity detection, speaker diarization and (only for explicitly enrolled people) local voice identification. Do not activate or consult a camera for identity. An unknown or low-confidence speaker remains unknown.
+- **Audio + video conversation:** continue voice recognition and, only when that person separately opted in to visual matching, evaluate the actual available video image stream locally. A photo saved in a profile is not itself permission to run live face matching.
+- **One shared person record:** confirmed preferred name, person ID, user-approved ordinary memories, optional voice template, optional photo/appearance profile and optional face template. Each modality has independent consent, status, review, revocation and deletion.
+- **Identity fusion:** voice and visual matches are independent evidence. If both are available and agree above their separately calibrated thresholds, confidence may be increased only after validation. If they disagree, one is unknown, the frame/audio is poor, or the source cannot be tied to the active interlocutor, do not force a name; ask for confirmation.
+- **Video-source awareness:** distinguish the phone's local CameraX preview from a remote participant's incoming video track. Process only the stream that actually depicts the interlocutor. The existing CameraX-to-Gemini frame forwarding is not a local face-recognition implementation and must not be repurposed as one without a separate privacy review.
+- **No background recognition:** recognition is available only during an active user-started conversation and only while the relevant modality is enabled and consent remains valid. No identification of bystanders or people who have not enrolled.
+- **Legal/privacy gate:** because voiceprints or face templates used to uniquely identify a person can constitute special-category biometric data under GDPR, complete a documented EU/Spain data-protection and lawful-basis review before enabling biometric matching for users. Explicit opt-in in the UI is a product safeguard, not a substitute for the legal review.
+
+**Implementation order**
+1. Implement and test local voice-only recognition without changing the existing Gemini Live audio path.
+2. Build the shared person/profile registry and its consent, revoke, inspect and delete controls.
+3. Add ordinary photo/appearance profile memory without face matching.
+4. Research and, only after legal and technical approval, prototype local face matching in video mode.
+5. Add conservative voice/visual evidence fusion and unknown/conflict handling.
+
+**Acceptance:** an audio-only session never invokes visual matching; a video session uses visual matching only for explicitly enrolled profiles; disabling or revoking either modality immediately stops that modality; conflicting voice/visual evidence never produces a confident identity; all records remain attributable to the correct person across sessions and app restarts.
 
 ### Avatar generation gap — not implemented yet
 
