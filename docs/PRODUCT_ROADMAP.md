@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Exact candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Signed-release verification and physical-device verification remain pending.
+Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Subsequent roadmap/architecture and capability-catalogue commits were added after that run; the latest branch head therefore still needs a fresh CI run. Signed-release verification and physical-device verification remain pending.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -129,6 +129,12 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 - Declining enrollment leaves no voice template; revoking/deleting removes the template and association.
 - Automated tests cover storage encryption, deletion, threshold behavior and profile isolation; physical-device tests cover both target Samsung devices.
 - CI passing alone must not be described as proof of recognition accuracy.
+
+
+
+**Verified microphone integration constraint (2026-11-07)**
+
+The current `GeminiLiveAssistant` calls Firebase AI Logic `LiveSession.startAudioConversation()` and receives text transcription callbacks; the app does not currently expose PCM microphone frames to the speaker-recognition layer. Do not add a second `AudioRecord`/microphone reader beside the SDK-managed capture. Firebase's official Live API guide documents that Android apps may instead create their own recorder and handle the stream. The next technical spike is therefore to prototype one app-owned capture pipeline that feeds the same PCM frames to Gemini Live and the local speaker engine, while preserving the existing Live session, output audio, VAD/turn behavior and stop lifecycle. Revert immediately if this regresses the current working voice path. Reference: https://firebase.google.com/docs/ai-logic/live-api (Kotlin section; last updated 2026-11-05 UTC).
 
 ### Familiar-person visual profiles and optional camera matching — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
 
