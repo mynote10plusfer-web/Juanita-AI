@@ -157,6 +157,20 @@ class JuanitaVoiceService : Service() {
                                         _memoryState.value = "Archivio conversazione non riuscito: ${archiveFailure.localizedMessage ?: archiveFailure.javaClass.simpleName}"
                                     }
                                     if (role.equals("USER", ignoreCase = true)) {
+                                        // Retrieve related experiences from previous sessions and
+                                        // inject them into the active Live context. The current
+                                        // session is excluded because the model already has it.
+                                        try {
+                                            val recallContext = withContext(Dispatchers.IO) {
+                                                memoryStore.buildRelevantRecallContext(
+                                                    combinedText,
+                                                    excludeSessionId = conversationId
+                                                )
+                                            }
+                                            if (recallContext.isNotBlank()) assistant.sendMemoryRecall(recallContext)
+                                        } catch (recallFailure: Exception) {
+                                            _memoryState.value = "Ricerca ricordi non riuscita: ${recallFailure.localizedMessage ?: recallFailure.javaClass.simpleName}"
+                                        }
                                         userTranscriptCount++
                                         _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
                                         try {
