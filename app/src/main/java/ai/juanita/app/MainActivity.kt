@@ -723,7 +723,7 @@ OROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.
                       NavigationBarItem(
                           selected = selectedSection == key,
                           onClick = { selectedSection = key },
-                          icon = {},
+                          icon = { Text(when (key) { "HOME" -> "🏠"; "AVATAR" -> "👩🏻"; "SETTINGS" -> "⚙️"; "MEMORY" -> "🧠"; else -> "⋯" }, fontSize = 16.sp) },
                           label = { Text(label, fontSize = 10.sp) }
                       )
                   }
