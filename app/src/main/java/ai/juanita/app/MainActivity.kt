@@ -657,6 +657,8 @@ private fun JuanitaApp(
                         avatarName = activeAvatarName,
                         portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
                         connectionStatus = liveState,
+                        voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
+                        onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) },
                         onDismiss = {
                             // Leaving the call UI also ends audio: never leave a hidden hot mic.
                             JuanitaVoiceService.stop(context)
