@@ -53,6 +53,31 @@ Compose screens, state holders, accessibility, settings, chat transcript.
 - Future adapters: sherpa-onnx local models, Android system speech fallback, optional remote providers.
 - VAD and keyword spotting are separate services; wake-word listening must run only after explicit opt-in.
 
+### Speaker identity and diarization (planned; not implemented)
+
+Keep three separate concepts:
+- **ASR/transcription:** what was said.
+- **Diarization:** which anonymous voice segment spoke when (Speaker 1, Speaker 2).
+- **Speaker identification:** whether a segment matches a person who explicitly enrolled and confirmed their profile.
+
+Proposed local pipeline:
+1. Tap a bounded audio stream from the existing microphone capture path. Do not open a second competing microphone session; first validate whether the Gemini Live SDK exposes a safe audio tap. If it does not, refactor to one controlled capture pipeline only after preserving the working Live audio path.
+2. Run voice activity detection and local speaker segmentation/embedding extraction with a replaceable provider. Evaluate sherpa-onnx Android/Kotlin APIs as the first candidate; model and dataset licenses must be audited separately from the Apache-2.0 code license.
+3. Compare the segment embedding only against explicitly enrolled local profiles using calibrated thresholds and an “unknown” outcome. Do not force a nearest-neighbor identity.
+4. Ask the user/person to confirm name and enrollment; store a minimal encrypted template and confirmed display name in a dedicated speaker registry, not in transcript text or ordinary profile facts alone.
+5. Link a confirmed speaker ID to the person's existing memory profile. Keep speaker identity, user-authored facts and uncertain observations separately attributable.
+6. Expose opt-in, revoke, re-enroll, rename, inspect and delete controls. Delete the associated template when enrollment is revoked.
+
+Privacy constraints:
+- Enrollment is explicit and per person; an introduction by the device owner is not consent from the introduced person.
+- Voice samples and embeddings remain on-device and are never sent to cloud models by default.
+- Do not persist raw enrollment audio; discard transient buffers after template creation/matching.
+- Treat templates as sensitive biometric data: encrypt at rest, minimize retention, restrict access and never use as authentication.
+- Unknown, short, noisy, distant or overlapping speech must remain unknown/uncertain.
+- Do not merge utterances into a person's memory until identity is confirmed with sufficient confidence.
+
+Validation must include false-accept/false-reject rates, threshold calibration, Italian/Spanish/Czech/English coverage, microphone contention with Gemini Live, battery/thermal/RAM impact and real-device tests on Note10+ Android 12 and S22 Ultra. A successful build does not establish recognition quality.
+
 ### Conversation
 - `ConversationProvider`: local or remote conversational engine.
 - Every request should include the selected persona/system instruction, language and regional dialect.
