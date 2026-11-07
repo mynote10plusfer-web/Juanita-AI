@@ -334,7 +334,9 @@ class EncryptedMemoryStore(context: Context) {
         }
 
     @Synchronized
-    fun listArchivedConversations(): List<ArchivedConversation> = allArchivedTurns()
+    fun listArchivedConversations(): List<ArchivedConversation> {
+        purgeExpiredArchive()
+        return allArchivedTurns()
         .groupBy { it.first }
         .map { (sessionId, entries) ->
             val ordered = entries.map { it.second }.sortedBy { it.timestampMillis }
@@ -346,7 +348,7 @@ class EncryptedMemoryStore(context: Context) {
                 preview = ordered.firstOrNull { it.role == "USER" }?.text.orEmpty().take(120)
             )
         }.sortedByDescending { it.updatedAtMillis }
-
+    }
 
     @Synchronized
     fun listConversationTurns(sessionId: String): List<ArchivedTurn> {
