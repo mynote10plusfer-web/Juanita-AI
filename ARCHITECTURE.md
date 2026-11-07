@@ -94,6 +94,18 @@ Design constraints:
 
 Validate camera permission/lifecycle, privacy indicator, thermal/RAM impact and profile isolation on Note10+ Android 12 and S22 Ultra. No feature is implemented merely because its data model or roadmap exists.
 
+
+### Mode-aware recognition policy (planned; not implemented)
+
+- In audio-only sessions, the system may run only the local voice pipeline for opted-in enrolled speakers. It must not activate or consult the camera for identity.
+- In audio+video sessions, voice matching remains available; local visual matching is an additional, separately opted-in modality, not an automatic consequence of having a saved photo.
+- Use one stable person ID with independently consented voice template, ordinary photo/appearance profile and (only if separately approved) face template. Keep each modality independently inspectable, revocable and deletable.
+- Treat voice and face matches as separate evidence. Agreement may strengthen a match only after calibration; conflict, poor quality, missing consent or uncertain source means unknown and a confirmation question.
+- Distinguish local CameraX preview from an incoming remote-participant video track. Existing CameraX frame forwarding to Gemini Live is not face recognition and must not be treated as a face-matching pipeline.
+- Run only during an active user-started session; never identify bystanders or unenrolled people.
+- Before biometric matching is enabled, complete documented EU/Spain GDPR review: templates used to uniquely identify a person may be special-category biometric data. UI opt-in alone does not replace the legal review.
+
+
 ### Conversation
 - `ConversationProvider`: local or remote conversational engine.
 - Every request should include the selected persona/system instruction, language and regional dialect.
