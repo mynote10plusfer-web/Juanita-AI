@@ -1,6 +1,5 @@
 package ai.juanita.app
 
-import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -38,7 +37,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.juanita.app.memory.ImprovementReport
 import java.text.DateFormat
-import java.time.ZoneId
 import java.util.Date
 
 private data class CapabilityRow(
