@@ -86,7 +86,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Avatar Studio stores profile metadata; it does not yet generate rigged models.
 - PR #3 call screen and reliability fixes are merged to main (commit dc05adbe065d0955352dce91a0c95cb751dfe8db). The signed 0.9.5 release workflow completed successfully on 2026-11-07 and verified the APK signature; camera hardware and end-to-end memory behavior still require physical-device verification.
 
-## Verified status update — 2026-11-07 (PR #6, memory retrieval extension)
+## Verified status update — 2026-11-07 (PR #6, memory retrieval extension and memory controls UX follow-up)
 
 ### Avatar generation gap — not implemented yet
 
@@ -122,10 +122,12 @@ Next steps:
 
 ### A.1 User-controlled memory management — high priority
 
+- [IN PROGRESS — PR #6 FOLLOW-UP; CI/DEVICE VERIFICATION PENDING] Add a prominent home-screen shortcut that scrolls directly to the Memory & Privacy controls; the section was previously buried near the bottom of the long scrolling screen.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Show each curated memory with its category and exact local creation date/time; keep the underlying timestamp as epoch milliseconds.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Support selecting one memory or multiple memories and deleting the selected group after a confirmation that states the number of records to be removed.
-- [FUTURE] Add filters by category and date range, plus group actions such as deleting all memories from a selected day/category.
-- [FUTURE] Add individual transcript-turn browsing and deletion, alongside the existing whole-conversation deletion and date-range archive deletion. Keep transcript deletion separate from curated-memory deletion.
+- [FUTURE] Add filters by category and date range for curated personal memories, plus group actions such as deleting all memories from a selected day/category.
+- [IN PROGRESS — PR #6 FOLLOW-UP; CI/DEVICE VERIFICATION PENDING] Expose conversation-archive deletion by inclusive local date range in the Memory & Privacy screen, in addition to deleting one conversation or the entire archive.
+- [FUTURE] Add individual transcript-turn browsing and deletion within a conversation. Keep transcript deletion separate from curated-memory deletion.
 - Every deletion must invalidate pending automatic-memory extraction so a deleted fact cannot be reintroduced by an older queued batch. Verify that historical retrieval no longer returns deleted content.
 
 ### A.2 Live date and time context — high priority
