@@ -34,6 +34,13 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // Debug builds must never share the production package identity.
+            // This prevents a locally installed debug APK from blocking signed release updates.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+
         getByName("release") {
             isMinifyEnabled = false
             if (!signingStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
