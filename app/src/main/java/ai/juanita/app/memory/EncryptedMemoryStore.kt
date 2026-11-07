@@ -778,7 +778,6 @@ class EncryptedMemoryStore(context: Context) {
     )
 
     companion object {
-        private const val MILLIS_PER_DAY = 86_400_000L
         private val BIOGRAPHY_CATEGORIES = setOf("project", "goal", "important_event", "experience", "person", "relationship", "milestone", "interest")
         private val SEARCH_STOP_WORDS = setOf(
             "che", "chi", "con", "per", "una", "uno", "gli", "delle", "della", "dello",
