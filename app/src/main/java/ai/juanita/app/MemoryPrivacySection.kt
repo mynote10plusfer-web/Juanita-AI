@@ -1,10 +1,14 @@
 package ai.juanita.app
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column\nimport androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth\nimport androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding\nimport androidx.compose.foundation.rememberScrollState\nimport androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -13,7 +17,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem\nimport androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,15 +31,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight\nimport androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import java.text.DateFormat
-import java.time.LocalDate\nimport java.time.YearMonth\nimport java.time.LocalDateTime\nimport java.time.format.DateTimeFormatter
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.time.ZoneId
-import java.util.Date\nimport java.util.Locale
+import java.util.Date
+import java.util.Locale
 
 @Composable
 internal fun MemoryPrivacySection(
@@ -54,7 +64,9 @@ internal fun MemoryPrivacySection(
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
-    onDeleteArchiveRange: (Long, Long) -> Unit,\n    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,\n    onDeleteConversationRange: (String, Long, Long) -> Unit,
+    onDeleteArchiveRange: (Long, Long) -> Unit,
+    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
@@ -298,7 +310,8 @@ private fun ConversationArchiveCalendar(
                     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 250.dp).verticalScroll(rememberScrollState())) {
                         turns.forEach { turn ->
                             Text(java.time.Instant.ofEpochMilli(turn.timestampMillis).atZone(zone).format(DateTimeFormatter.ofPattern("dd/MM HH:mm")) +
-                                " · " + turn.role + "\n" + turn.text, color = Color.White, fontSize = 11.sp)
+                                " · " + turn.role + "
+" + turn.text, color = Color.White, fontSize = 11.sp)
                             Divider(color = Color(0xFF3B4049))
                         }
                     }
