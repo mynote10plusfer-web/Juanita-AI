@@ -4,7 +4,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 
 ## Current branch version: 0.10.2 (versionCode 31)
 
-The 0.10.2 release compiles successfully. Signed publication is pending correction and re-verification of the pinned certificate; do not install a debug APK as an update.
+The 0.10.2 release compiles successfully. PR #8 corrects the pinned certificate to the SHA-256 independently verified against the previous successful 0.9.5 APK; the signed Release must be rerun after merge. Do not install a debug APK as an update.
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
@@ -21,6 +21,7 @@ The 0.10.2 release compiles successfully. Signed publication is pending correcti
 - Home-screen shortcut opens the Memory & Privacy manager directly; the manager supports editing/deleting individual or selected personal memories, clearing all personal memories, deleting individual archived conversations, clearing the archive and deleting archived turns by inclusive local date range.
 - Android Keystore-backed AES-256-GCM memory. Full text transcripts from both sides of every Gemini Live conversation are archived automatically by default, locally, in encrypted per-session files; archive survives app/process restarts and is independent of curated personal facts. Raw microphone audio is never archived. Archive can be paused, assigned manual/7/30/90-day retention, and individual conversations can be deleted; manual retention is the default. The app restores the latest 60 archived turns plus curated facts and a grounded autobiographical continuity profile into a new Live session (bounded by the model context budget). A Gemini Live function tool can search older archived sessions on demand and return a small relevant excerpt before answering. Automatic curated personal-memory extraction is enabled by default, separately, and uses a retryable encrypted queue; it now captures meaningful non-sensitive experiences, milestones, relevant people/context and project decisions as well as stable facts. Extraction still requires successful Gemini transcription and a successful model response; inspect the in-app memory status and memory list to verify each step. A local lexical archive-search tool now lets Gemini retrieve relevant older conversations before answering; it ranks phrase/token matches and recency. Vector/embedding-based multilingual semantic search and a dedicated editable biography screen remain future work.
 - CameraX front/rear camera preview and optional 1 FPS image frames to the active Gemini Live session are implemented in 0.9.0; physical-device testing is pending.
+- The Altro tab includes a local capability catalogue and Improvement Lab. User-authored engineering reports are encrypted on-device, can be previewed, exported as ordinary UTF-8 .txt files and deleted. Automatic gap detection is a later phase.
 - GitHub Actions builds a debug APK and a permanently signed release APK.
 
 ## AI provider and cost constraints
