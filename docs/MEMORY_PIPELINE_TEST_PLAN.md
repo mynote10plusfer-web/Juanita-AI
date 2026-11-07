@@ -32,6 +32,7 @@
 - [ ] Confirm no raw audio is stored and no full archive is uploaded to cloud services.
 
 ## Improvement Lab acceptance checks — Phase 1
+- [x] Android debug CI passed for the Improvement Lab implementation (run 42394260616; artifact 13582442394).
 - [ ] Altro shows the capability catalogue and clearly distinguishes integrated-but-unverified, planned, under-research and unimplemented functions.
 - [ ] Create each report type and verify required fields, timestamp and IANA time-zone ID are saved.
 - [ ] Force-stop/relaunch and verify reports remain available after restart.
