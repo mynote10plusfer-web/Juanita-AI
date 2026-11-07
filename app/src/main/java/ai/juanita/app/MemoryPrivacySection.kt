@@ -198,6 +198,82 @@ internal fun MemoryPrivacySection(
     }
 
 
+    confirmAction?.let { action ->
+        val isMemory = action.startsWith("memory:")
+        val isConversation = action.startsWith("conversation:")
+        val title = when (action) {
+            "archive_range" -> "Eliminare le conversazioni nel periodo?"
+            "clear_memories" -> "Eliminare tutti i ricordi?"
+            "clear_archive" -> "Svuotare l'archivio?"
+            "selected_memories" -> "Eliminare i ricordi selezionati?"
+            else -> if (isMemory) "Eliminare questo ricordo?" else "Eliminare questa conversazione?"
+        }
+        val message = when (action) {
+            "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
+            "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
+            "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
+            "archive_range" -> "Saranno eliminati tutti i messaggi archiviati dal ${rangeStartDate} al ${rangeEndDate}, estremi inclusi. I ricordi personali non verranno modificati. L'operazione è definitiva."
+            else -> "Questa operazione è definitiva e non può essere annullata."
+        }
+        AlertDialog(
+            onDismissRequest = { confirmAction = null },
+            title = { Text(title) }, text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = {
+                    when {
+                        action == "archive_range" -> {
+                            val start = rangeStartDate
+                            val end = rangeEndDate
+                            if (start != null && end != null && !end.isBefore(start)) {
+                                val zone = ZoneId.systemDefault()
+                                val startMillis = start.atStartOfDay(zone).toInstant().toEpochMilli()
+                                val endMillis = end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                                onDeleteArchiveRange(startMillis, endMillis)
+                                conversations = onRefreshArchive()
+                            }
+                        }
+                        action == "clear_memories" -> { onClearMemories(); memories = emptyList() }
+                        action == "clear_archive" -> { onClearArchive(); conversations = emptyList() }
+                        action == "selected_memories" -> { onDeleteMemories(selectedMemoryIds); memories = memories.filterNot { it.id in selectedMemoryIds }; selectedMemoryIds = emptySet() }
+                        isMemory -> {
+                            val id = action.removePrefix("memory:")
+                            onDeleteMemory(id)
+                            memories = memories.filterNot { it.id == id }
+                        }
+                        isConversation -> {
+                            val id = action.removePrefix("conversation:")
+                            onDeleteConversation(id)
+                            conversations = conversations.filterNot { it.sessionId == id }
+                        }
+                    }
+                    confirmAction = null
+                }) { Text("Elimina", color = Color(0xFFB94A48)) }
+            },
+            dismissButton = { TextButton(onClick = { confirmAction = null }) { Text("Annulla") } }
+        )
+    }
+
+    editingMemory?.let { item ->
+        AlertDialog(
+            onDismissRequest = { editingMemory = null },
+            title = { Text("Modifica ricordo") },
+            text = {
+                OutlinedTextField(value = editText, onValueChange = { editText = it },
+                    modifier = Modifier.fillMaxWidth(), label = { Text("Testo del ricordo") })
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (editText.isNotBlank() && onUpdateMemory(item.id, editText)) {
+                        memories = memories.map { if (it.id == item.id) it.copy(text = editText.trim()) else it }
+                    }
+                    editingMemory = null
+                }) { Text("Salva", color = gold) }
+            },
+            dismissButton = { TextButton(onClick = { editingMemory = null }) { Text("Annulla") } }
+        )
+    }
+}
+
 @Composable
 private fun ConversationArchiveCalendar(
     panel: Color, gold: Color,
@@ -354,81 +430,5 @@ private fun ConversationArchiveCalendar(
                 }
             }) { Text("Elimina intervallo", color = Color(0xFFB94A48)) } },
             dismissButton = { TextButton(onClick = { opened = null }) { Text("Chiudi", color = gold) } })
-    }
-}
-
-    confirmAction?.let { action ->
-        val isMemory = action.startsWith("memory:")
-        val isConversation = action.startsWith("conversation:")
-        val title = when (action) {
-            "archive_range" -> "Eliminare le conversazioni nel periodo?"
-            "clear_memories" -> "Eliminare tutti i ricordi?"
-            "clear_archive" -> "Svuotare l'archivio?"
-            "selected_memories" -> "Eliminare i ricordi selezionati?"
-            else -> if (isMemory) "Eliminare questo ricordo?" else "Eliminare questa conversazione?"
-        }
-        val message = when (action) {
-            "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
-            "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
-            "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
-            "archive_range" -> "Saranno eliminati tutti i messaggi archiviati dal ${rangeStartDate} al ${rangeEndDate}, estremi inclusi. I ricordi personali non verranno modificati. L'operazione è definitiva."
-            else -> "Questa operazione è definitiva e non può essere annullata."
-        }
-        AlertDialog(
-            onDismissRequest = { confirmAction = null },
-            title = { Text(title) }, text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = {
-                    when {
-                        action == "archive_range" -> {
-                            val start = rangeStartDate
-                            val end = rangeEndDate
-                            if (start != null && end != null && !end.isBefore(start)) {
-                                val zone = ZoneId.systemDefault()
-                                val startMillis = start.atStartOfDay(zone).toInstant().toEpochMilli()
-                                val endMillis = end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-                                onDeleteArchiveRange(startMillis, endMillis)
-                                conversations = onRefreshArchive()
-                            }
-                        }
-                        action == "clear_memories" -> { onClearMemories(); memories = emptyList() }
-                        action == "clear_archive" -> { onClearArchive(); conversations = emptyList() }
-                        action == "selected_memories" -> { onDeleteMemories(selectedMemoryIds); memories = memories.filterNot { it.id in selectedMemoryIds }; selectedMemoryIds = emptySet() }
-                        isMemory -> {
-                            val id = action.removePrefix("memory:")
-                            onDeleteMemory(id)
-                            memories = memories.filterNot { it.id == id }
-                        }
-                        isConversation -> {
-                            val id = action.removePrefix("conversation:")
-                            onDeleteConversation(id)
-                            conversations = conversations.filterNot { it.sessionId == id }
-                        }
-                    }
-                    confirmAction = null
-                }) { Text("Elimina", color = Color(0xFFB94A48)) }
-            },
-            dismissButton = { TextButton(onClick = { confirmAction = null }) { Text("Annulla") } }
-        )
-    }
-
-    editingMemory?.let { item ->
-        AlertDialog(
-            onDismissRequest = { editingMemory = null },
-            title = { Text("Modifica ricordo") },
-            text = {
-                OutlinedTextField(value = editText, onValueChange = { editText = it },
-                    modifier = Modifier.fillMaxWidth(), label = { Text("Testo del ricordo") })
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    if (editText.isNotBlank() && onUpdateMemory(item.id, editText)) {
-                        memories = memories.map { if (it.id == item.id) it.copy(text = editText.trim()) else it }
-                    }
-                    editingMemory = null
-                }) { Text("Salva", color = gold) }
-            },
-            dismissButton = { TextButton(onClick = { editingMemory = null }) { Text("Annulla") } }
-        )
     }
 }
