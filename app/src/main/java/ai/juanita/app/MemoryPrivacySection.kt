@@ -172,7 +172,7 @@ internal fun MemoryPrivacySection(
                 })
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Consenti archiviazione", color = Color.White, fontSize = 13.sp)
-                    Text(if (archiveEnabled) "Consenso attivo" else "Disattivato per impostazione predefinita",
+                    Text(if (archiveEnabled) "Attivo: le trascrizioni testuali vengono salvate in forma cifrata sul dispositivo." else "In pausa: nessuna nuova trascrizione verrà archiviata.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
             }
@@ -220,7 +220,6 @@ internal fun MemoryPrivacySection(
     confirmAction?.let { action ->
         val isMemory = action.startsWith("memory:")
         val isConversation = action.startsWith("conversation:")
-        val isArchiveRange = action == "archive_range"
         val title = when (action) {
             "archive_range" -> "Eliminare le conversazioni nel periodo?"
             "clear_memories" -> "Eliminare tutti i ricordi?"
