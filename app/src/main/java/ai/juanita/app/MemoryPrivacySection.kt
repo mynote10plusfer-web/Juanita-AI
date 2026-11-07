@@ -207,11 +207,13 @@ internal fun MemoryPrivacySection(
         val title = when (action) {
             "clear_memories" -> "Eliminare tutti i ricordi?"
             "clear_archive" -> "Svuotare l'archivio?"
+            "selected_memories" -> "Eliminare i ricordi selezionati?"
             else -> if (isMemory) "Eliminare questo ricordo?" else "Eliminare questa conversazione?"
         }
         val message = when (action) {
             "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
             "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
+            "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
             else -> "Questa operazione è definitiva e non può essere annullata."
         }
         AlertDialog(
