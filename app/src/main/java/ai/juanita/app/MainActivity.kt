@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.Bundle
+import android.view.WindowManager
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
@@ -136,6 +137,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             JuanitaApp(
                 initialLanguageTag = preferences.languageTag,
+                initialOnboardingCompleted = preferences.hasCompletedOnboarding,
+                onCompleteOnboarding = { entries ->
+                    entries.filter { it.isNotBlank() }.forEach { entry ->
+                        memoryStore.addMemory(entry, category = "profile", source = "onboarding", confidence = 1f, confirmedByUser = true)
+                    }
+                    preferences.hasCompletedOnboarding = true
+                },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
                 initialLiveVoiceName = preferences.liveVoiceName,
@@ -225,6 +233,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun JuanitaApp(
     initialLanguageTag: String,
+    initialOnboardingCompleted: Boolean,
+    onCompleteOnboarding: (List<String>) -> Unit,
     initialDialectId: String,
     initialName: String,
     initialLiveVoiceName: String,
@@ -305,6 +315,13 @@ private fun JuanitaApp(
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
     val context = LocalContext.current
+    val hostActivity = context as? Activity
+    DisposableEffect(hostActivity, callScreenVisible) {
+        val window = hostActivity?.window
+        if (callScreenVisible) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
         object : ServiceConnection {
@@ -331,6 +348,7 @@ private fun JuanitaApp(
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
+    var showFirstMeeting by remember { mutableStateOf(!initialOnboardingCompleted) }
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
@@ -741,6 +759,18 @@ private fun JuanitaApp(
                         }
                     )
                 }
+              }
+              if (showFirstMeeting) {
+                  FirstMeetingOnboarding(
+                      onComplete = { entries ->
+                          onCompleteOnboarding(entries)
+                          showFirstMeeting = false
+                      },
+                      onSkip = {
+                          onCompleteOnboarding(emptyList())
+                          showFirstMeeting = false
+                      }
+                  )
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Impostazioni", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
