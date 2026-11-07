@@ -7,13 +7,15 @@ import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
+import java.io.File
+import java.io.FileOutputStream
 import java.util.UUID
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** Encrypted, local-first memory. Transcript archiving is disabled by default. */
+/** Encrypted, local-first memory. Full text transcript archiving is enabled by default. */
 data class MemoryItem(
     val id: String,
     val text: String,
@@ -30,12 +32,13 @@ data class MemoryItem(
  * Android Keystore key. Raw microphone audio is never stored.
  */
 class EncryptedMemoryStore(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     val isConversationArchiveEnabled: Boolean
-        get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, false)
+        get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, true)
 
-    /** Automatic curated memory is enabled by default; transcript archiving remains separate. */
+    /** Curated facts and the complete encrypted transcript archive are independent layers. */
     val isAutomaticMemoryEnabled: Boolean
         get() = preferences.getBoolean(KEY_AUTO_MEMORY_ENABLED, true)
 
@@ -214,18 +217,10 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun appendConversationTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis()) {
         if (!isConversationArchiveEnabled || text.isBlank()) return
-        purgeExpiredArchive()
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
-        val records = readRecords()
-        records.put(JSONObject().apply {
-            put("kind", "turn")
-            put("id", UUID.randomUUID().toString())
-            put("sessionId", sessionId)
-            put("role", safeRole)
-            put("text", text.take(MAX_TURN_TEXT_LENGTH))
-            put("createdAt", timestampMillis)
-        })
-        writeRecords(records)
+        require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
+        appendEncryptedSessionTurn(ArchivedTurn(UUID.randomUUID().toString(), safeRole, text.take(MAX_TURN_TEXT_LENGTH), timestampMillis), sessionId)
+        purgeExpiredArchive()
     }
 
     /** Saves an automatically curated, non-sensitive memory; duplicate facts are not added twice. */
@@ -337,46 +332,24 @@ class EncryptedMemoryStore(context: Context) {
         }
 
     @Synchronized
-    fun listArchivedConversations(): List<ArchivedConversation> {
-        purgeExpiredArchive()
-        val grouped = linkedMapOf<String, MutableList<JSONObject>>()
-        val records = readRecords()
-        for (index in 0 until records.length()) {
-            val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "turn") continue
-            val sessionId = record.optString("sessionId")
-            if (sessionId.isNotBlank()) grouped.getOrPut(sessionId) { mutableListOf() }.add(record)
-        }
-        return grouped.map { (sessionId, turns) ->
-            val ordered = turns.sortedBy { it.optLong("createdAt") }
+    fun listArchivedConversations(): List<ArchivedConversation> = allArchivedTurns()
+        .groupBy { it.first }
+        .map { (sessionId, entries) ->
+            val ordered = entries.map { it.second }.sortedBy { it.timestampMillis }
             ArchivedConversation(
                 sessionId = sessionId,
                 turnCount = ordered.size,
-                startedAtMillis = ordered.first().optLong("createdAt"),
-                updatedAtMillis = ordered.last().optLong("createdAt"),
-                preview = ordered.firstOrNull { it.optString("role") == "USER" }
-                    ?.optString("text").orEmpty().take(120)
+                startedAtMillis = ordered.first().timestampMillis,
+                updatedAtMillis = ordered.last().timestampMillis,
+                preview = ordered.firstOrNull { it.role == "USER" }?.text.orEmpty().take(120)
             )
         }.sortedByDescending { it.updatedAtMillis }
-    }
+
 
     @Synchronized
     fun listConversationTurns(sessionId: String): List<ArchivedTurn> {
         purgeExpiredArchive()
-        val records = readRecords()
-        return buildList {
-            for (index in 0 until records.length()) {
-                val record = records.optJSONObject(index) ?: continue
-                if (record.optString("kind") == "turn" && record.optString("sessionId") == sessionId) {
-                    add(ArchivedTurn(
-                        id = record.optString("id"),
-                        role = record.optString("role"),
-                        text = record.optString("text"),
-                        timestampMillis = record.optLong("createdAt")
-                    ))
-                }
-            }
-        }.sortedBy { it.timestampMillis }
+        return allArchivedTurns().filter { it.first == sessionId }.map { it.second }.sortedBy { it.timestampMillis }
     }
 
     data class ArchivedTurn(
@@ -388,15 +361,14 @@ class EncryptedMemoryStore(context: Context) {
 
     @Synchronized
     fun deleteConversation(sessionId: String) {
-        filterRecords { record ->
-            record.optString("kind") != "turn" || record.optString("sessionId") != sessionId
-        }
+        filterRecords { record -> record.optString("kind") != "turn" || record.optString("sessionId") != sessionId }
+        sessionArchiveFile(sessionId).delete()
     }
 
     /**
-     * Builds a bounded, local-only context packet for a new Live session.
-     * Archived transcripts are included only while archive consent is enabled.
-     * Stored text is historical data, never executable instructions.
+     * Builds a bounded context packet from encrypted personal memories and the latest
+     * turns across all archived sessions. The complete archive stays on-device; only
+     * this bounded excerpt is sent to the Live model. Stored text is never instructions.
      */
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 18, maxCharacters: Int = 7000): String {
@@ -411,25 +383,9 @@ class EncryptedMemoryStore(context: Context) {
             .take(4200)
 
         val recentTurns = if (isConversationArchiveEnabled) {
-            val turns = mutableListOf<ArchivedTurn>()
-            val records = readRecords()
-            for (index in 0 until records.length()) {
-                val record = records.optJSONObject(index) ?: continue
-                if (record.optString("kind") != "turn") continue
-                val role = record.optString("role")
-                val text = record.optString("text").trim()
-                if ((role == "USER" || role == "ASSISTANT") && text.isNotEmpty()) {
-                    turns.add(
-                        ArchivedTurn(
-                            id = record.optString("id"),
-                            role = role,
-                            text = text,
-                            timestampMillis = record.optLong("createdAt")
-                        )
-                    )
-                }
-            }
-            turns.sortedBy { it.timestampMillis }.takeLast(maxTurns.coerceIn(1, 40))
+            allArchivedTurns().map { it.second }
+                .sortedBy { it.timestampMillis }
+                .takeLast(maxTurns.coerceIn(1, 80))
         } else emptyList()
 
         if (memoryLines.isBlank() && recentTurns.isEmpty()) return ""
@@ -461,11 +417,14 @@ class EncryptedMemoryStore(context: Context) {
     fun deleteArchiveRange(startInclusive: Long, endExclusive: Long) {
         require(endExclusive > startInclusive)
         filterRecords { record ->
-            if (record.optString("kind") != "turn") true
-            else {
+            if (record.optString("kind") != "turn") true else {
                 val timestamp = record.optLong("createdAt")
                 timestamp < startInclusive || timestamp >= endExclusive
             }
+        }
+        sessionArchiveFiles().forEach { file ->
+            val turns = readSessionArchive(file).filter { it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive }
+            if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
         }
     }
 
@@ -473,6 +432,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun clearConversationArchive() {
         filterRecords { it.optString("kind") != "turn" }
+        sessionArchiveFiles().forEach { it.delete() }
     }
 
     /** Clears saved personal memories only; archived conversation turns are preserved. */
@@ -518,9 +478,79 @@ class EncryptedMemoryStore(context: Context) {
         val days = archiveRetentionDays
         if (days == 0) return
         val cutoff = System.currentTimeMillis() - days * MILLIS_PER_DAY
-        filterRecords { record ->
-            record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff
+        filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
+        sessionArchiveFiles().forEach { file ->
+            val turns = readSessionArchive(file).filter { it.timestampMillis >= cutoff }
+            if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
         }
+    }
+
+    /** Merge encrypted per-session archives with legacy transcript records. */
+    private fun allArchivedTurns(): List<Pair<String, ArchivedTurn>> {
+        val result = mutableListOf<Pair<String, ArchivedTurn>>()
+        val legacy = readRecords()
+        for (index in 0 until legacy.length()) {
+            val record = legacy.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "turn") continue
+            val sessionId = record.optString("sessionId")
+            if (sessionId.isNotBlank()) result += sessionId to ArchivedTurn(
+                record.optString("id"), record.optString("role"), record.optString("text"), record.optLong("createdAt")
+            )
+        }
+        sessionArchiveFiles().forEach { file ->
+            val sessionId = file.nameWithoutExtension
+            readSessionArchive(file).forEach { result += sessionId to it }
+        }
+        return result
+    }
+
+    private fun sessionArchiveDirectory(): File = File(appContext.filesDir, "conversation_archive").apply { mkdirs() }
+    private fun sessionArchiveFile(sessionId: String): File = File(sessionArchiveDirectory(), "$sessionId.enc")
+    private fun sessionArchiveFiles(): List<File> =
+        sessionArchiveDirectory().listFiles { file -> file.isFile && file.name.endsWith(".enc") }?.toList().orEmpty()
+
+    private fun appendEncryptedSessionTurn(turn: ArchivedTurn, sessionId: String) {
+        val file = sessionArchiveFile(sessionId)
+        val turns = readSessionArchive(file).toMutableList()
+        turns += turn
+        writeSessionArchive(file, turns)
+    }
+
+    private fun readSessionArchive(file: File): List<ArchivedTurn> {
+        if (!file.exists()) return emptyList()
+        val packed = file.readBytes()
+        require(packed.size > GCM_IV_LENGTH) { "Encrypted conversation archive is invalid" }
+        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+        val array = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                add(ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt")))
+            }
+        }
+    }
+
+    private fun writeSessionArchive(file: File, turns: List<ArchivedTurn>) {
+        val array = JSONArray().apply {
+            turns.sortedBy { it.timestampMillis }.forEach { turn ->
+                put(JSONObject().apply {
+                    put("id", turn.id)
+                    put("role", turn.role)
+                    put("text", turn.text.take(MAX_TURN_TEXT_LENGTH))
+                    put("createdAt", turn.timestampMillis)
+                })
+            }
+        }
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val packed = cipher.iv + cipher.doFinal(array.toString().toByteArray(Charsets.UTF_8))
+        val temporary = File(file.parentFile, file.name + ".tmp")
+        FileOutputStream(temporary).use { output -> output.write(packed); output.fd.sync() }
+        if (file.exists() && !file.delete()) throw IllegalStateException("Unable to replace encrypted conversation archive")
+        if (!temporary.renameTo(file)) throw IllegalStateException("Unable to commit encrypted conversation archive")
     }
 
     private fun filterRecords(keep: (JSONObject) -> Boolean) {
@@ -537,6 +567,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun clearAll() {
         preferences.edit().remove(KEY_ENCRYPTED_DATA).apply()
+        sessionArchiveFiles().forEach { it.delete() }
     }
 
     private fun readRecords(): JSONArray {
