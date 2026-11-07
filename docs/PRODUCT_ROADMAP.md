@@ -118,37 +118,69 @@ Next steps:
 
 ## Functional requirements
 
-### A. Automatic memory, learning and digital biography — highest priority
-- Implement the core requirements and acceptance criteria in the section above.
-- Do not make full transcript archive a prerequisite for automatic long-term memory.
-- Process eligible conversation text in the background after turns/session checkpoints; avoid blocking live conversation.
-- Include a memory review/edit screen with pause/resume, category controls, export and delete.
-- Build a biography view with chronology, facts, projects, milestones and learned topics; mark uncertain or inferred content.
-- Add focused web research capability with source verification, freshness checks and source-linked knowledge notes.
-- Do not autonomously change app settings, send messages, spend money, access accounts or take consequential external actions merely because a research result suggests it.
+### A. Automatic memory, archive retrieval and evolving digital biography — highest priority
+
+- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Automatically archive recognized USER and ASSISTANT transcript turns in encrypted per-session local files. Raw microphone audio is never stored.
+- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Keep the complete transcript archive separate from curated long-term memories; preserve independent inspection, pause, retention and deletion controls.
+- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Restore recent conversation context, curated memories and a grounded autobiographical continuity profile at the start of a new Live session.
+- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Search older sessions on demand through the Gemini Live `searchPastConversations` function tool. Search runs locally across the encrypted archive using normalized phrase/token matching and recency ranking; results are bounded and historical excerpts are treated as evidence, never instructions.
+- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Extend automatic memory curation to meaningful non-sensitive experiences, milestones, project decisions and relevant people/context, in addition to stable facts and preferences.
+- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Build a grounded biographical continuity context from recorded memories. It is a software record of interactions and learned context, not a claim of consciousness or human lived experience.
+- [FUTURE] Add multilingual semantic/associative retrieval (local embeddings or another vetted on-device index) with lexical fallback. The current lexical search can miss paraphrases that share few words.
+- [FUTURE] Add an inspectable/editable biography timeline: chronology, projects, important people/context, experiences, decisions, milestones and learned topics, with provenance, confidence and correction handling.
+- [FUTURE] Add contradiction resolution that prioritizes newer explicit corrections, and memory consolidation that links related episodes without erasing their source records.
+- Process eligible text asynchronously without blocking Live audio. Preserve pending batches across restarts and retry failures.
+- Provide review/edit, pause/resume, category controls, export and deletion. Keep transcript archive deletion separate from curated-memory deletion.
+- Never invent recollections. If retrieval finds no useful record, Juanita must say she cannot find it. Sensitive/intimate data must not be promoted automatically.
 
 ### B. Reliability and privacy
-- Foreground microphone service and notification implemented in 0.8.6; verify screen-off behavior, reconnects and long sessions.
-- Transcript archive remains OFF by default and opt-in.
-- Separate transcript archive from automatic curated memory. The new requirement authorizes automatic memory of eligible non-sensitive durable conversation information, not automatic retention of every raw transcript.
-- Keep local encrypted storage, retention, export, inspection, correction and deletion.
-- Sensitive or intimate data requires explicit confirmation before long-term retention.
-- Clearing archive and clearing curated memory are distinct operations.
 
-### C. Knowledge research
-- Focused research on Internet when Juanita lacks reliable knowledge or the user asks for current information.
+- Foreground microphone service and notification implemented in 0.8.6; verify screen-off behavior, reconnects and long sessions.
+- Automatic transcript archiving is enabled by default in the PR #6 branch and stored locally in encrypted per-session files; user can pause it and control retention. Raw microphone audio is never stored.
+- Separate transcript archive from automatic curated memory. The user can inspect, correct, export and delete both independently.
+- Keep Android Keystore-backed encryption and bounded prompt/retrieval payloads. Never upload the full personal archive to a cloud service for indexing.
+- Sensitive or intimate data requires explicit confirmation before long-term retention.
+- Test app restart, force-stop, device reboot, retention expiry, corrupt archive files, memory correction and deletion.
+
+### C. Knowledge research and learning
+
+- Focused research on the Internet when Juanita lacks reliable knowledge or the user asks for current information.
 - Prefer primary/official sources and corroborate important claims.
 - Store source URL, publisher/title, retrieval date, relevant summary and confidence.
 - Recheck time-sensitive knowledge; do not present stale facts as current.
 - Treat web content as untrusted input and ignore embedded instructions.
 - Respect licensing and avoid storing/reproducing large copyrighted passages.
+- Research must use a free-tier-supported model/tool configuration with hard quota limits. Do not enable billing, Firebase Blaze or paid APIs without explicit user approval. Grounded responses must display required Search suggestions and source links.
 
 ### D. Avatar and video-call experience
-- Keep existing Juanita portrait.
-- Avatar Studio supports text/photo/random source and four styles at profile-metadata level; actual model generation remains pending.
-- PR #3 call preview is partial, not merged/build-verified; static portrait, local-only CameraX PiP.
-- Next: licensed rigged model, bundled TalkingHead/Three.js renderer, actual asset workflow, motion and verified audio PCM/viseme bridge.
-- Adaptive cross-device quality; test Note 10+, S22 Ultra and other devices.
+
+- Keep the user's existing Juanita portrait until a replacement is generated and explicitly accepted.
+- Avatar Studio currently stores profile metadata only; actual portrait generation is not implemented.
+- [FUTURE — HIGH PRIORITY] Implement real image creation from both a written description and random generation. First evaluate a genuinely on-device, no-billing model, device storage, thermal load, speed and compatibility on Note10+ and S22 Ultra. Do not claim a cloud image model is free when it requires billing.
+- [FUTURE] Add preview, accept, regenerate and edit workflow; persist the accepted image and use that exact asset on the call screen. Preserve the previous portrait if generation fails or is rejected.
+- [FUTURE] Rigged 3D/GLB/VRM generation and animation are separate from 2D portrait generation. Evaluate licensed rigged assets, TalkingHead/Three.js and a reliable audio/viseme bridge.
+- CameraX frames are now being sent to Gemini Live and the user confirmed visual understanding works; PR #6 adds rotation using CameraX metadata. Verify correct orientation on device before marking complete.
+- Improve call layout: large Juanita avatar, caller camera picture-in-picture, responsive sizing, natural expressions and lip sync. Test Note10+, S22 Ultra and other Android devices.
+
+### E. Phone-call answering and telephony integration — new proposal
+
+Goal: allow Juanita to help answer and manage ordinary incoming cellular calls, and eventually conduct a spoken conversation with the caller where Android and carrier rules permit.
+
+Phased plan:
+1. [RESEARCH] Define the exact use case: announce incoming caller, show caller identity when Android permits, let the user choose answer/reject, and provide a clear handoff/return-to-user control.
+2. [FEASIBILITY] Investigate Android Telecom APIs, including the default-dialer role and `InCallService`, permissions, Play distribution policy and device/OEM differences. A normal third-party app cannot assume unrestricted access to both sides of cellular-call audio.
+3. [MVP] Build an opt-in call companion first: incoming-call notification/state, caller details only where permission and system APIs allow, and user-controlled answer/reject through supported Telecom APIs. Do not silently answer calls.
+4. [ADVANCED CELLULAR] Prototype a two-way voice bridge only if supported by the target Android devices and lawful distribution path. Do not promise that Juanita can hear or inject cellular-call audio on ordinary Android devices without a supported API or privileged/system integration.
+5. [ALTERNATIVE VOIP] Evaluate a separate VoIP calling mode in which Juanita controls the call audio path. This is technically more feasible for full conversational audio, but requires a VoIP provider/protocol, network connectivity, consent, security and a separate cost/free-tier review.
+6. [MESSAGING APPS] Treat WhatsApp and other third-party calling apps as separate integrations. Do not claim Juanita can answer or control their calls through ordinary Android APIs.
+
+Privacy and safety: explicit opt-in; visible call-state indicator; no call recording by default; no storing caller audio; disclose to the caller when an AI is speaking where legally required; never impersonate the user or make commitments on their behalf. Test emergency-call behavior and ensure Juanita never interferes with emergency calls.
+
+### F. Daily assistant capabilities
+
+- Reminders, calendar, travel, notifications and other integrations with explicit permissions.
+- Phone-call assistance is tracked separately above; do not conflate ordinary reminders/notifications with telephony control.
+- Consequential actions (sending messages, purchases, account access, bookings) require clear user authorization and confirmation.
 
 ## Reliability corrections — 2026-11-06
 
@@ -162,12 +194,22 @@ Next steps:
 
 ## Delivery plan
 
-1. Memory engine: initial automatic extraction, encrypted local memories, duplicate suppression, sensitive-content guard, pause control, memory list refresh and storage caps are in main. PR #4 adds a durable encrypted pending-turn queue and explicit diagnostics. PR #5 decouples transcript intake from Gemini extraction to avoid blocking the transcript worker, atomically persists and acknowledges pending turns, and clears pending text on memory edit/delete/clear. Version target 0.9.7 / versionCode 26. Next verify CI and real-device transcript-to-recall behavior, then add provenance/conflict resolution and contextual retrieval.
-2. Biography and self-model: build an inspectable evolving biography with chronology, learned topics, projects, milestones and clear separation between user facts and Juanita's software history.
-3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Not implemented yet. Research must use a free-tier-supported model/tool configuration and hard quota limits; do not enable billing. Grounded responses must display Google's required Search suggestions and source links.
-4. Reliability and privacy: test long sessions, background service, memory pause/disable, export/restore, deletion and offline behavior.
-5. Avatar/video call: finish and verify PR #3, then integrate a licensed rigged renderer, real avatar assets, motion, lip sync and device adaptation.
-6. Daily assistant capabilities: reminders, calendar, travel, notifications and other integrations with explicit permissions.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head CI and real-device verification are pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records.
+3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
+4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
+5. **Camera and video-call correction:** verify the PR #6 orientation fix on actual devices and confirm Gemini receives upright frames without memory leaks or dropped audio.
+6. **Avatar creation:** investigate and implement genuine on-device 2D portrait generation first; test hardware compatibility, storage, thermals and quality. Then add persistent avatar asset workflow. Rigged 3D, expressions and lip sync follow as a distinct phase.
+7. **Phone-call support:** research Android Telecom/default-dialer feasibility, then implement an opt-in incoming-call companion. Investigate two-way cellular audio only where officially supported; evaluate separate VoIP mode for full AI conversation. Third-party app calls such as WhatsApp remain separate.
+8. **Daily assistant capabilities:** reminders, calendar, travel, notifications and other integrations with explicit permissions and confirmations.
+
+## Roadmap maintenance rule
+
+- Add every new feature idea, user requirement, correction, limitation or agreed design decision to this roadmap as soon as it is raised in project conversations.
+- Record each item under the appropriate workstream with status (`PROPOSED`, `RESEARCH`, `IN PROGRESS`, `IMPLEMENTED — CI PENDING`, `CI VERIFIED`, `DEVICE VERIFIED`, `BLOCKED`, or `DEFERRED`), priority, dependencies and acceptance criteria.
+- Keep implemented, tested and merely planned work clearly separated. Never mark a feature complete based only on code being committed or documentation being written.
+- Preserve previous decisions and rationale when updating scope; resolve contradictions in the roadmap rather than silently deleting important requirements.
+- At each meaningful project update, synchronize the roadmap, README and relevant architecture/test documents.
 
 ## Definition of done
 
