@@ -89,6 +89,50 @@ class EncryptedMemoryStore(context: Context) {
         writeRecords(kept)
     }
 
+    /**
+     * Acknowledge only the batch that was actually processed. New turns can be appended
+     * while Gemini is working; they must survive the completion of the older request.
+     */
+    @Synchronized
+    fun removeProcessedAutomaticMemoryTurns(
+        processedTurns: List<String>,
+        expectedClearVersion: Long = memoryClearVersion
+    ) {
+        if (processedTurns.isEmpty() || memoryClearVersion != expectedClearVersion) return
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch" ||
+                record.optLong("clearVersion", -1L) != expectedClearVersion
+            ) {
+                kept.put(record)
+                continue
+            }
+
+            val stored = record.optJSONArray("turns") ?: JSONArray()
+            val current = buildList {
+                for (turnIndex in 0 until stored.length()) {
+                    stored.optString(turnIndex).takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+            if (current.size < processedTurns.size ||
+                current.take(processedTurns.size) != processedTurns
+            ) {
+                // Unexpected queue mutation: retain it intact rather than risk data loss.
+                kept.put(record)
+                continue
+            }
+            val remaining = current.drop(processedTurns.size)
+            if (remaining.isNotEmpty()) {
+                record.put("turns", JSONArray(remaining))
+                record.put("updatedAt", System.currentTimeMillis())
+                kept.put(record)
+            }
+        }
+        writeRecords(kept)
+    }
+
     @Synchronized
     fun clearPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion) {
         if (memoryClearVersion != expectedClearVersion) return
