@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #6 is merged to main (a6836e3676b937cc0ce4499cca7f715a6cf54b90). Persistent bottom navigation and archive/calendar changes compile in Android debug CI (run 42393573784, success); physical-device verification is pending. Signed Release build compiles, but publication is blocked by an incorrect pinned certificate digest; the successful 0.9.5 artifact and current build both verify as 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1. A corrective PR is in preparation.
+Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Subsequent roadmap/architecture and capability-catalogue commits were added after that run; the latest branch head therefore still needs a fresh CI run. Signed-release verification and physical-device verification remain pending.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -40,6 +40,12 @@ Juanita must behave like a continuous personal assistant with an accumulating, u
 - Saved external knowledge includes provenance and freshness metadata and can be updated or invalidated.
 - Juanita never claims to have searched, learned, stored or remembered something unless the corresponding operation actually succeeded.
 - No claim of genuine consciousness or subjective experience; the evolving biography is an inspectable software self-model.
+
+### Video-call screen behavior and first-meeting profile
+
+- [IN PROGRESS — CANDIDATE 0.10.3; CI VERIFICATION PENDING] While the in-app video-call screen is open, set Android `FLAG_KEEP_SCREEN_ON` for the host activity window. Clear it immediately when the call screen closes or the composable is disposed. Audio-only sessions must not hold the display awake; they continue through the foreground microphone service and may run with the display off.
+- [IN PROGRESS — CANDIDATE 0.10.3; CI/DEVICE VERIFICATION PENDING] On first launch, offer a guided first-meeting profile with optional fields for preferred name, location, languages, interests, lifestyle/priorities, goals and desired assistance. Every field is optional; users can skip. Only explicitly submitted answers are stored as user-confirmed profile memories in the encrypted local memory store. The onboarding completion flag is stored locally. No passwords or sensitive personal data are requested.
+- Acceptance: verify the screen stays awake throughout a video call, including when the user's camera is disabled; verify it returns to normal immediately after ending/closing the call; verify an audio-only session does not keep the screen awake. Verify onboarding can be skipped, saved, and shown only once, and submitted profile memories appear in the memory manager and are available to later sessions.
 
 ## Product vision
 
@@ -87,6 +93,98 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - PR #3 call screen and reliability fixes are merged to main (commit dc05adbe065d0955352dce91a0c95cb751dfe8db). The signed 0.9.5 release workflow completed successfully on 2026-11-07 and verified the APK signature; camera hardware and end-to-end memory behavior still require physical-device verification.
 
 ## Verified status update — 2026-11-07 (PR #6, memory retrieval extension and memory controls UX follow-up)
+
+### Speaker identity and familiar-person memory — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
+
+Juanita must learn the identity of people the user explicitly introduces, associate each person's confirmed name with an enrolled voice profile, and remember that association across sessions. This is distinct from speech-to-text and from speaker diarization.
+
+**Expected interaction**
+- The user can say: “Juanita, ti presento Marco.” Juanita asks Marco to confirm how he wants to be called and explains that optional voice enrollment creates a local voice template.
+- Enrollment requires the person's explicit, informed opt-in; no voice profile is created merely because a person speaks or is named by someone else.
+- After enrollment, Juanita may match a new speech segment to Marco's profile only above a validated confidence threshold. Otherwise she says she is unsure and asks who is speaking; never guess.
+- If multiple people speak, diarization first separates anonymous speaker segments (Speaker 1, Speaker 2); identity matching is a separate step. The user can confirm or correct each association.
+- Profiles persist across app restarts and conversations, and can be renamed, reviewed, re-enrolled or deleted individually. Deletion removes the encrypted voice template and its name association.
+- A person can decline or revoke enrollment at any time. Guest conversation remains available without a profile.
+
+**Privacy and security**
+- Opt-in only, with a clear explanation before capture. Do not enroll friends silently or infer consent from the user's introduction.
+- Process audio locally on the device. Do not send voice samples or voice embeddings to Gemini, Firebase, ChatGPT or any cloud service.
+- Store only the minimum encrypted voice embedding/template required for matching; do not retain enrollment recordings after successful template creation. Raw audio remains transient and is not archived.
+- Keep voice templates separate from ordinary text memories and transcript archives. Provide explicit view/delete controls and a global pause switch.
+- Never use the feature for covert surveillance, attendance tracking, law-enforcement identification or identity decisions. A voice match is a convenience hint, not authentication or proof of identity.
+- Unknown/low-confidence, noisy, overlapping, short or distant speech must produce “unknown/uncertain”, not a forced match.
+
+**Technical research and staged implementation**
+1. Evaluate sherpa-onnx Android speaker-identification (embedding extraction/matching) and speaker-diarization APIs as a local-first candidate. Its documentation lists Android/Kotlin support and separate speaker identification and diarization examples; the license of each selected model/dataset must be checked independently. Do not assume that one model supports all of Riccardo's languages or performs well on either Samsung phone.
+2. Prototype capture from the same microphone path without breaking Gemini Live. Confirm whether SDK-managed audio can be safely mirrored to a local recognizer; if not, design a single audio-capture pipeline rather than opening competing microphone streams.
+3. Benchmark latency, RAM, battery, thermal impact and false-accept/false-reject rates on Note10+ (Android 12) and S22 Ultra. Evaluate Italian, Spanish (including Canarian speech), Czech and English separately.
+4. Implement a local encrypted speaker registry, explicit enrollment/consent UI, matching thresholds, unknown fallback, correction, re-enrollment and deletion.
+5. Connect confirmed speaker identity to the existing person/profile memory so a later introduction can recall the person's name and user-approved facts, without merging one person's statements into another person's profile.
+
+**Acceptance criteria**
+- Introducing and enrolling a consenting friend creates a durable name-to-voice association that survives app restart.
+- A later sample from the same person is matched only when the calibrated threshold is met; a different or unenrolled speaker remains unknown.
+- Two or more speakers are segmented and can be assigned names only after explicit confirmation/enrollment.
+- Low-quality audio and overlapping speech do not trigger confident false identification.
+- Declining enrollment leaves no voice template; revoking/deleting removes the template and association.
+- Automated tests cover storage encryption, deletion, threshold behavior and profile isolation; physical-device tests cover both target Samsung devices.
+- CI passing alone must not be described as proof of recognition accuracy.
+
+
+
+**Verified microphone integration constraint (2026-11-07)**
+
+The current `GeminiLiveAssistant` calls Firebase AI Logic `LiveSession.startAudioConversation()` and receives text transcription callbacks; the app does not currently expose PCM microphone frames to the speaker-recognition layer. Do not add a second `AudioRecord`/microphone reader beside the SDK-managed capture. Firebase's official Live API guide documents that Android apps may instead create their own recorder and handle the stream. The next technical spike is therefore to prototype one app-owned capture pipeline that feeds the same PCM frames to Gemini Live and the local speaker engine, while preserving the existing Live session, output audio, VAD/turn behavior and stop lifecycle. Revert immediately if this regresses the current working voice path. Reference: https://firebase.google.com/docs/ai-logic/live-api (Kotlin section; last updated 2026-11-05 UTC).
+
+### Familiar-person visual profiles and optional camera matching — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
+
+Extend the familiar-person memory beyond voice to an optional visual profile, while keeping ordinary photo memory separate from biometric face recognition.
+
+**Visual profile (first stage)**
+- During a user-led introduction, Juanita may offer to create a person profile containing their confirmed preferred name, optional user/person-provided photo, and a concise description of visible, non-sensitive appearance features.
+- The person must know the photo is being added and explicitly agree. Prefer selecting a photo or capturing one in a clearly indicated enrollment flow; never silently save camera frames.
+- Link the visual profile to the same person record as the separately enrolled voice profile and user-approved facts, while keeping each modality independently optional and removable.
+- A stored photo is a reference for conversational context; displaying or recalling it is not proof that the person currently in front of the camera is that person.
+- Do not infer or store sensitive traits such as race/ethnicity, health, religion, sexuality, political views or other sensitive attributes from appearance.
+
+**Optional visual recognition (later stage; separate consent)**
+- Real-time face matching against enrolled profiles is a distinct biometric capability and must not be implied by merely having a photo.
+- Only research or implement it if a suitable on-device approach is available, with explicit, informed opt-in from each enrolled person, clear camera-use indication, local processing, encrypted templates, calibrated thresholds and an unknown/uncertain fallback.
+- No face images, face embeddings or biometric templates may be sent to Gemini, Firebase, ChatGPT or another cloud service by default.
+- Do not identify bystanders, passers-by or unenrolled people. Do not perform covert, continuous or background identification.
+- Never use a face match as authentication, access control or proof of identity. If uncertain, ask the user/person rather than guessing.
+- Provide separate inspect, pause, revoke and delete controls for the photo, appearance description and any biometric template. Deletion must remove the corresponding local data.
+
+**Acceptance criteria**
+- A consenting person can create a named visual profile from a chosen/captured photo, and it persists across sessions.
+- The user can see which photo/description belongs to which person and can replace or delete it independently of voice enrollment.
+- No biometric matching occurs unless separately enabled with explicit consent.
+- Unenrolled people and uncertain matches remain unidentified.
+- Local storage is encrypted; tests cover consent state, access boundaries, deletion and profile isolation.
+- Physical-device testing covers camera permission, privacy indication, performance and thermal impact on Note10+ Android 12 and S22 Ultra.
+- A profile photo alone must never be described as face recognition; CI passing alone does not establish recognition accuracy.
+
+
+### Mode-aware familiar-person recognition — USER-APPROVED DESIGN; NOT IMPLEMENTED
+
+Use one person record with separately optional recognition modalities. The active conversation mode determines which modality may be considered; it must never silently activate a sensor or enrollment.
+
+- **Audio-only conversation:** use voice activity detection, speaker diarization and (only for explicitly enrolled people) local voice identification. Do not activate or consult a camera for identity. An unknown or low-confidence speaker remains unknown.
+- **Audio + video conversation:** continue voice recognition and, only when that person separately opted in to visual matching, evaluate the actual available video image stream locally. A photo saved in a profile is not itself permission to run live face matching.
+- **One shared person record:** confirmed preferred name, person ID, user-approved ordinary memories, optional voice template, optional photo/appearance profile and optional face template. Each modality has independent consent, status, review, revocation and deletion.
+- **Identity fusion:** voice and visual matches are independent evidence. If both are available and agree above their separately calibrated thresholds, confidence may be increased only after validation. If they disagree, one is unknown, the frame/audio is poor, or the source cannot be tied to the active interlocutor, do not force a name; ask for confirmation.
+- **Video-source awareness:** distinguish the phone's local CameraX preview from a remote participant's incoming video track. Process only the stream that actually depicts the interlocutor. The existing CameraX-to-Gemini frame forwarding is not a local face-recognition implementation and must not be repurposed as one without a separate privacy review.
+- **No background recognition:** recognition is available only during an active user-started conversation and only while the relevant modality is enabled and consent remains valid. No identification of bystanders or people who have not enrolled.
+- **Legal/privacy gate:** because voiceprints or face templates used to uniquely identify a person can constitute special-category biometric data under GDPR, complete a documented EU/Spain data-protection and lawful-basis review before enabling biometric matching for users. Explicit opt-in in the UI is a product safeguard, not a substitute for the legal review.
+
+**Implementation order**
+1. Implement and test local voice-only recognition without changing the existing Gemini Live audio path.
+2. Build the shared person/profile registry and its consent, revoke, inspect and delete controls.
+3. Add ordinary photo/appearance profile memory without face matching.
+4. Research and, only after legal and technical approval, prototype local face matching in video mode.
+5. Add conservative voice/visual evidence fusion and unknown/conflict handling.
+
+**Acceptance:** an audio-only session never invokes visual matching; a video session uses visual matching only for explicitly enrolled profiles; disabling or revoking either modality immediately stops that modality; conflicting voice/visual evidence never produces a confident identity; all records remain attributable to the correct person across sessions and app restarts.
 
 ### Avatar generation gap — not implemented yet
 
@@ -243,8 +341,14 @@ Acceptance criteria:
 - [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
 - [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
-## Self-assessment, study requests and plain-text improvement reports — PROPOSED, high priority
+## Self-assessment, study requests and plain-text improvement reports — PHASE 1 IN PROGRESS
 
+
+### Delivery status — Phase 1
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Add an Altro-tab capability catalogue that labels each capability as integrated-but-unverified, not implemented, planned or under research, and explains known limits without presenting plans as working features.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Add a local Improvement Lab for manually authored BUG, INEFFICIENCY, CAPABILITY_GAP, KNOWLEDGE_GAP, RESEARCH_REQUEST and IMPROVEMENT_IDEA reports.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Store reports inside the existing Android Keystore AES-GCM encrypted local record store, separately from transcripts and personal memories; support preview, multi-select export to ordinary UTF-8 .txt and deletion.
+- [FUTURE] Automatically detect meaningful capability gaps from observable task outcomes and create privacy-minimized draft reports asynchronously. Phase 1 does not yet perform automatic gap detection or self-modify code.
 
 ### Required cognitive layer: capability self-model and runtime gap reasoning
 
@@ -356,8 +460,8 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Delivery plan
 
-1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head Android debug CI passed (run 42360447654, artifact 13569287248); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
-2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records. The Phase 1 Improvement Lab is separate: it records software capability state and engineering reports, not personal biography.
 3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
 4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
 5. **Camera and video-call correction:** verify the PR #6 orientation fix on actual devices and confirm Gemini receives upright frames without memory leaks or dropped audio.

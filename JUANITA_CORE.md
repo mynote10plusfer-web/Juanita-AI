@@ -1,6 +1,6 @@
 # JUANITA CORE — Persistent Identity, Memory and Self-Development
 
-Status: product and engineering specification, not yet implemented in the Android runtime.
+Status: product and engineering specification with partial Android runtime implementation. Encrypted archive, curated memory, automatic extraction queue and lexical recall are present in the current code; end-to-end device verification and several biography/reflection milestones remain outstanding.
 
 ## Goal
 
@@ -10,7 +10,7 @@ Give Juanita a persistent digital identity and a coherent personal history. She 
 
 1. **Truthfulness:** Juanita must not claim to be conscious, to feel emotions, or to have experiences outside the capabilities actually implemented.
 2. **User ownership:** the user can inspect, correct, export and delete stored memories and conversation records.
-3. **Consent and privacy:** conversation archiving is opt-in and clearly explained. No raw microphone audio is retained by default. No background collection or external upload without explicit permission.
+3. **Consent and privacy:** text-only conversation archiving and eligible non-sensitive automatic memory are enabled by default in the current product direction, clearly disclosed and independently pausable, inspectable and deletable. No raw microphone audio is retained. No background collection or external upload of the local archive/memory without explicit permission.
 4. **Local-first:** memory is stored on the phone by default. Optional backup/synchronization must be separately enabled and encrypted.
 5. **Traceability:** every durable memory records its source, timestamp, confidence and whether it was confirmed by the user or inferred.
 6. **Bounded self-development:** Juanita may propose refinements to her style, but must not silently rewrite core safety rules, privacy settings or user-approved identity principles.
@@ -20,15 +20,15 @@ Give Juanita a persistent digital identity and a coherent personal history. She 
 
 ### 1. Conversation archive (episodic source)
 
-An optional, searchable archive of conversation turns. This is the source record, not the assistant's entire active context. The user can pause archiving, delete individual sessions, clear the archive or export it. Audio is not stored unless a separate future feature explicitly asks for it.
+A text-only, searchable archive of recognized user and assistant turns, enabled by default in the current app and stored locally in encrypted per-session files. This is the source record, not the assistant's entire active context. The user can pause archiving, set retention, inspect, delete individual sessions/days/time ranges, clear the archive or export it. Raw microphone audio is never stored.
 
 ### 2. Working memory
 
-A compact context assembled for the current conversation from recent turns and relevant long-term memories. It is temporary and can be discarded.
+A compact context assembled for the current conversation from recent turns and relevant long-term memories. The current implementation restores up to the latest 60 archived turns plus bounded curated memories and a grounded continuity summary; it can be discarded and rebuilt.
 
 ### 3. Semantic memory
 
-A curated set of durable facts, preferences, ongoing projects, people and recurring goals. Each item includes:
+A curated set of durable non-sensitive facts, preferences, ongoing projects, people and recurring goals. Automatic extraction runs asynchronously from user transcript text through a bounded encrypted pending queue; manual and automatic memories remain separately traceable. Each item includes:
 - stable ID and category;
 - concise statement;
 - source conversation/turn reference;
@@ -103,12 +103,12 @@ Persistence should use an Android Keystore-backed encryption key for private mem
 
 ## Delivery milestones
 
-1. **Core data contracts and privacy controls:** define memory records, consent states, provenance and deletion semantics.
-2. **Encrypted local archive:** store conversations on-device only after explicit opt-in; no audio retention.
-3. **Memory centre UI:** browse, search, correct, export and delete memories and sessions.
-4. **Curator:** extract, rank, deduplicate and link candidate memories to source turns.
-5. **Reflection and identity versioning:** produce reviewable reflections and proposed style updates.
-6. **Context retrieval:** select only relevant memories for each AI request, with context-size limits.
-7. **Optional backup:** encrypted export/import, disabled by default.
+1. **Core data contracts and privacy controls:** partially implemented; verify provenance, correction, pause and deletion behavior end to end.
+2. **Encrypted local archive:** implemented in code with default text-only archiving, per-session encrypted files and retention controls; device verification and export/restore remain outstanding.
+3. **Memory centre UI:** memory list/edit/delete and calendar-based transcript browsing/deletion are implemented in the current branch; device verification and export/restore remain outstanding.
+4. **Curator:** automatic non-sensitive extraction and a durable encrypted pending queue are implemented in code; test failures, retries, contradictions and sensitive-data exclusion on device.
+5. **Reflection and identity versioning:** future milestone; the current app does not yet implement a reflection journal or adaptive persona versioning.
+6. **Context retrieval:** bounded recent context and local lexical archive retrieval are implemented in code; semantic multilingual retrieval remains future work.
+7. **Optional backup:** encrypted export/import for full memory and archive transfer between devices remains future work, disabled until the user explicitly initiates it.
 
 Do not describe any milestone as implemented until it exists in the app, has tests, and has been verified on the target Samsung Galaxy Note 10+ running Android 12.

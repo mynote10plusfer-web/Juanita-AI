@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.Bundle
+import android.view.WindowManager
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
@@ -69,6 +70,7 @@ import ai.juanita.app.avatar.AvatarCallScreen
 import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
+import ai.juanita.app.memory.ImprovementReport
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -135,6 +137,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             JuanitaApp(
                 initialLanguageTag = preferences.languageTag,
+                initialOnboardingCompleted = preferences.hasCompletedOnboarding,
+                onCompleteOnboarding = { entries ->
+                    entries.filter { it.isNotBlank() }.forEach { entry ->
+                        memoryStore.addMemory(entry, category = "profile", source = "onboarding", confidence = 1f, confirmedByUser = true)
+                    }
+                    preferences.hasCompletedOnboarding = true
+                },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
                 initialLiveVoiceName = preferences.liveVoiceName,
@@ -144,6 +153,12 @@ class MainActivity : ComponentActivity() {
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
                 initialArchivedConversations = memoryStore.listArchivedConversations(),
+                initialImprovementReports = memoryStore.listImprovementReports(),
+                onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
+                    memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
+                },
+                onRefreshImprovementReports = { memoryStore.listImprovementReports() },
+                onDeleteImprovementReports = { memoryStore.deleteImprovementReports(it) },
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
@@ -218,6 +233,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun JuanitaApp(
     initialLanguageTag: String,
+    initialOnboardingCompleted: Boolean,
+    onCompleteOnboarding: (List<String>) -> Unit,
     initialDialectId: String,
     initialName: String,
     initialLiveVoiceName: String,
@@ -227,6 +244,10 @@ private fun JuanitaApp(
     initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialImprovementReports: List<ImprovementReport>,
+    onSaveImprovementReport: (String, String, String, String, String, String, String) -> ImprovementReport,
+    onRefreshImprovementReports: () -> List<ImprovementReport>,
+    onDeleteImprovementReports: (Set<String>) -> Unit,
     initialAvatarProfiles: List<AvatarProfile>,
     initialActiveAvatarProfileId: String?,
     initialRetentionDays: Int,
@@ -289,6 +310,7 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     var selectedSection by remember { mutableStateOf("HOME") }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
@@ -319,6 +341,14 @@ private fun JuanitaApp(
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
+    val hostActivity = context as? Activity
+    DisposableEffect(hostActivity, callScreenVisible) {
+        val window = hostActivity?.window
+        if (callScreenVisible) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
+    var showFirstMeeting by remember { mutableStateOf(!initialOnboardingCompleted) }
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
@@ -683,6 +713,22 @@ private fun JuanitaApp(
                 if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
+                ImprovementLabSection(
+                    panel = panel,
+                    gold = gold,
+                    initialReports = improvementReports,
+                    onRefresh = { onRefreshImprovementReports().also { improvementReports = it } },
+                    onSave = { title, type, area, observed, evidence, expected, acceptance ->
+                        onSaveImprovementReport(title, type, area, observed, evidence, expected, acceptance).also {
+                            improvementReports = listOf(it) + improvementReports
+                        }
+                    },
+                    onDelete = { ids ->
+                        onDeleteImprovementReports(ids)
+                        improvementReports = improvementReports.filterNot { it.id in ids }
+                    }
+                )
+
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
                     Text("Gemini Live è integrato per le prove vocali. La memoria automatica è attiva quando abilitata nelle impostazioni; la wake word e le voci regionali native sono ancora in sviluppo.",
@@ -713,6 +759,19 @@ private fun JuanitaApp(
                         }
                     )
                 }
+              }
+              if (showFirstMeeting) {
+                  FirstMeetingOnboarding(
+                      onComplete = { entries ->
+                          onCompleteOnboarding(entries)
+                          memories = onRefreshMemories()
+                          showFirstMeeting = false
+                      },
+                      onSkip = {
+                          onCompleteOnboarding(emptyList())
+                          showFirstMeeting = false
+                      }
+                  )
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Impostazioni", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->

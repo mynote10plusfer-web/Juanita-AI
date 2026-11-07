@@ -18,8 +18,8 @@ android {
         applicationId = "ai.juanita.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 31
-        versionName = "0.10.2"
+        versionCode = 32
+        versionName = "0.10.3"
     }
 
     signingConfigs {
@@ -34,6 +34,12 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // Keep debug installs isolated from the permanently signed production package.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
+
         getByName("release") {
             isMinifyEnabled = false
             if (!signingStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")

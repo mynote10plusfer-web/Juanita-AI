@@ -36,6 +36,18 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Verify debug APK package identity
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
+          BADGING="$("$AAPT" dump badging "$APK")"
+          grep -F "package: name='ai.juanita.app.debug'" <<< "$BADGING" >/dev/null || {
+            echo "::error::Debug APK must use application ID ai.juanita.app.debug."
+            exit 1
+          }
+          echo "Debug package identity verified: ai.juanita.app.debug"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

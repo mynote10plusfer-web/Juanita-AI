@@ -1,0 +1,28 @@
+{
+  "project_info": {
+    "project_number": "225075706848",
+    "project_id": "juanita-ai",
+    "storage_bucket": "juanita-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:225075706848:android:f0b36702b5d4049f404985",
+        "android_client_info": {
+          "package_name": "ai.juanita.app.debug"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "AIzaSyAdeE3Bkz8WCf_WCWt9zajiWsEQZPxQq4g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
