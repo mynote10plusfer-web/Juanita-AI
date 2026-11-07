@@ -4,7 +4,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 
 ## Current branch version: 0.10.2 (versionCode 31)
 
-The 0.10.2 release compiles successfully. Signed publication is pending correction and re-verification of the pinned certificate; do not install a debug APK as an update.
+The 0.10.2 release compiles successfully. PR #8 corrects the pinned certificate to the SHA-256 independently verified against the previous successful 0.9.5 APK; the signed Release must be rerun after merge. Do not install a debug APK as an update.
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
