@@ -94,6 +94,42 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ## Verified status update — 2026-11-07 (PR #6, memory retrieval extension and memory controls UX follow-up)
 
+### Speaker identity and familiar-person memory — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
+
+Juanita must learn the identity of people the user explicitly introduces, associate each person's confirmed name with an enrolled voice profile, and remember that association across sessions. This is distinct from speech-to-text and from speaker diarization.
+
+**Expected interaction**
+- The user can say: “Juanita, ti presento Marco.” Juanita asks Marco to confirm how he wants to be called and explains that optional voice enrollment creates a local voice template.
+- Enrollment requires the person's explicit, informed opt-in; no voice profile is created merely because a person speaks or is named by someone else.
+- After enrollment, Juanita may match a new speech segment to Marco's profile only above a validated confidence threshold. Otherwise she says she is unsure and asks who is speaking; never guess.
+- If multiple people speak, diarization first separates anonymous speaker segments (Speaker 1, Speaker 2); identity matching is a separate step. The user can confirm or correct each association.
+- Profiles persist across app restarts and conversations, and can be renamed, reviewed, re-enrolled or deleted individually. Deletion removes the encrypted voice template and its name association.
+- A person can decline or revoke enrollment at any time. Guest conversation remains available without a profile.
+
+**Privacy and security**
+- Opt-in only, with a clear explanation before capture. Do not enroll friends silently or infer consent from the user's introduction.
+- Process audio locally on the device. Do not send voice samples or voice embeddings to Gemini, Firebase, ChatGPT or any cloud service.
+- Store only the minimum encrypted voice embedding/template required for matching; do not retain enrollment recordings after successful template creation. Raw audio remains transient and is not archived.
+- Keep voice templates separate from ordinary text memories and transcript archives. Provide explicit view/delete controls and a global pause switch.
+- Never use the feature for covert surveillance, attendance tracking, law-enforcement identification or identity decisions. A voice match is a convenience hint, not authentication or proof of identity.
+- Unknown/low-confidence, noisy, overlapping, short or distant speech must produce “unknown/uncertain”, not a forced match.
+
+**Technical research and staged implementation**
+1. Evaluate sherpa-onnx Android speaker-identification (embedding extraction/matching) and speaker-diarization APIs as a local-first candidate. Its documentation lists Android/Kotlin support and separate speaker identification and diarization examples; the license of each selected model/dataset must be checked independently. Do not assume that one model supports all of Riccardo's languages or performs well on either Samsung phone.
+2. Prototype capture from the same microphone path without breaking Gemini Live. Confirm whether SDK-managed audio can be safely mirrored to a local recognizer; if not, design a single audio-capture pipeline rather than opening competing microphone streams.
+3. Benchmark latency, RAM, battery, thermal impact and false-accept/false-reject rates on Note10+ (Android 12) and S22 Ultra. Evaluate Italian, Spanish (including Canarian speech), Czech and English separately.
+4. Implement a local encrypted speaker registry, explicit enrollment/consent UI, matching thresholds, unknown fallback, correction, re-enrollment and deletion.
+5. Connect confirmed speaker identity to the existing person/profile memory so a later introduction can recall the person's name and user-approved facts, without merging one person's statements into another person's profile.
+
+**Acceptance criteria**
+- Introducing and enrolling a consenting friend creates a durable name-to-voice association that survives app restart.
+- A later sample from the same person is matched only when the calibrated threshold is met; a different or unenrolled speaker remains unknown.
+- Two or more speakers are segmented and can be assigned names only after explicit confirmation/enrollment.
+- Low-quality audio and overlapping speech do not trigger confident false identification.
+- Declining enrollment leaves no voice template; revoking/deleting removes the template and association.
+- Automated tests cover storage encryption, deletion, threshold behavior and profile isolation; physical-device tests cover both target Samsung devices.
+- CI passing alone must not be described as proof of recognition accuracy.
+
 ### Avatar generation gap — not implemented yet
 
 The current Avatar Studio only creates a text description (including random attribute combinations) and saves profile metadata in SharedPreferences. It does not call an image-generation model, create a portrait bitmap, generate a GLB/VRM, or attach a generated asset to the active call screen. The main Juanita portrait card still imports an existing image selected by the user. A profile with an empty assetPath is not a generated avatar.
