@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Subsequent roadmap/architecture and capability-catalogue commits were added after that run; the latest branch head therefore still needs a fresh CI run. Signed-release verification and physical-device verification remain pending.
+Last updated: 2026-11-07 — PR #11 merged as production candidate 0.10.3 (versionCode 32), with permanent release signing verified. PR #12 adds the opt-in Android notification reader and prepares candidate 0.10.4 (versionCode 33); its debug CI, signed-release CI and physical-device verification are pending.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
