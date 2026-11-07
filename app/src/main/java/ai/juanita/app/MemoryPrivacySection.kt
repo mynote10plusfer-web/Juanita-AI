@@ -178,7 +178,7 @@ internal fun MemoryPrivacySection(
                 panel = panel, gold = gold, conversations = conversations,
                 archiveEnabled = archiveEnabled, retentionLabel = retentionLabel,
                 onArchiveEnabledChanged = { archiveEnabled = it; onArchiveEnabledChanged(it) },
-                onRetentionMenu = { retentionMenu = true },
+                onRetentionChanged = { retentionDays = it; onRetentionChanged(it) },
                 onRefresh = { conversations = onRefreshArchive() },
                 onDeleteConversation = { confirmAction = "conversation:" + it },
                 onDeleteDay = { day ->
@@ -202,7 +202,7 @@ private fun ConversationArchiveCalendar(
     panel: Color, gold: Color,
     conversations: List<EncryptedMemoryStore.ArchivedConversation>,
     archiveEnabled: Boolean, retentionLabel: String,
-    onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionMenu: () -> Unit,
+    onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionChanged: (Int) -> Unit,
     onRefresh: () -> Unit, onDeleteConversation: (String) -> Unit,
     onDeleteDay: (LocalDate) -> Unit,
     onListTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
@@ -214,11 +214,11 @@ private fun ConversationArchiveCalendar(
     var turns by remember { mutableStateOf(emptyList<EncryptedMemoryStore.ArchivedTurn>()) }
     var fromText by remember { mutableStateOf("") }
     var toText by remember { mutableStateOf("") }
-    var confirmDay by remember { mutableStateOf(false) }
+    var confirmDay by remember { mutableStateOf(false) }\n    var retentionExpanded by remember { mutableStateOf(false) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
     val byDay = remember(conversations) {
-        conversations.groupBy { java.time.Instant.ofEpochMilli(it.startedAtMillis).atZone(zone).toLocalDate() }
+        conversations.flatMap { session ->\n            val first = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDate()\n            val last = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDate()\n            generateSequence(first) { current -> if (current < last) current.plusDays(1) else null }\n                .map { it to session }.toList()\n        }.groupBy({ it.first }, { it.second }).mapValues { it.value.distinctBy { session -> session.sessionId } }
     }
     Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = panel), shape = RoundedCornerShape(20.dp)) {
         Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -231,7 +231,7 @@ private fun ConversationArchiveCalendar(
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Conservazione: " + retentionLabel, color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                TextButton(onClick = onRetentionMenu) { Text("Modifica", color = gold) }
+                Box {\n                    TextButton(onClick = { retentionExpanded = true }) { Text("Modifica", color = gold) }\n                    DropdownMenu(expanded = retentionExpanded, onDismissRequest = { retentionExpanded = false }) {\n                        listOf(0 to "Mai (manuale)", 7 to "7 giorni", 30 to "30 giorni", 90 to "90 giorni").forEach { option ->\n                            DropdownMenuItem(text = { Text(option.second) }, onClick = { onRetentionChanged(option.first); retentionExpanded = false })\n                        }\n                    }\n                }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { month = month.minusMonths(1) }) { Text("‹", color = gold, fontSize = 22.sp) }
