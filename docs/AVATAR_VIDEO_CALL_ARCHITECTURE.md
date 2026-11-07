@@ -1,156 +1,46 @@
-# Juanita AI — Memory, learning and evolving digital identity architecture
+# Juanita AI — Avatar and bidirectional video-call architecture
 
-Status: automatic extraction and bounded encrypted storage are present; reliability corrections for Live transcription, session shutdown and CameraX ownership are on the reliability branch and await CI/device verification. Full facial animation, true lip sync, biography consolidation and source-linked Internet learning remain future phases.
+Status: CameraX preview and frame forwarding to Gemini Live are implemented in the PR #6 branch and pass Android debug CI. The user has confirmed visual understanding works in an earlier build. The PR #6 camera rotation correction is not yet verified on physical devices. The portrait remains static; true facial animation and lip sync are future work.
 
-## Reliability and lifecycle rules
+## Call-screen architecture
 
-- Configure `inputAudioTranscription` and `outputAudioTranscription` on the Live model whenever the app depends on transcript callbacks for memory, captions or avatar state.
-- The voice foreground service is the single owner of the Live session. A stop request must stop audio capture first, then close the websocket, then attempt bounded best-effort memory extraction. Network work must never precede microphone shutdown.
-- Task removal from Recents and dismissal of the call UI terminate the session. Background continuation is allowed only while the user intentionally leaves the voice session active, with a persistent foreground-service notification and an obvious Stop action.
-- Each CameraX screen owns only its own `Preview` / `ImageAnalysis` use cases. Never call `unbindAll()` from a reusable composable because it can tear down unrelated camera features.
-- A black preview must expose a useful error state. Use a lifecycle-bound `PreviewView`, check permission and camera availability, and release only the use cases created by that screen.
-- Portrait breathing/idle motion is a visual placeholder, not face animation. True expression and lip sync require a rigged avatar and access to synchronized audio output/viseme timing; never label a still portrait as a completed video avatar.
+- The call screen presents Juanita's avatar as the primary, large visual and the user's camera as a smaller picture-in-picture tile, with responsive layout for different Android screen sizes.
+- Camera access is explicit, revocable and separate from microphone permission.
+- CameraX Preview and ImageAnalysis use cases are owned and released by the call screen only. Never use a global unbindAll() from a reusable composable.
+- When Gemini Live is connected and camera permission is granted, sample frames at a bounded cadence (initial target: one frame per second), rotate each frame using imageInfo.rotationDegrees, and forward it to the active Live session.
+- Allow at most one frame upload in flight. Do not queue unbounded frames, save camera images to memory, or archive camera frames.
+- If Live is disconnected, local preview may remain available but frame upload must stop and the UI must explain why.
+- Denying camera permission must leave voice-only conversation available. Closing the call or revoking permission releases only the call screen's own camera use cases.
+- Keep the existing Gemini Live SDK-managed audio path intact until any alternative has passed independent latency, echo-cancellation, interruption, audio-focus and lifecycle testing.
 
-## Product principle
+## Current implementation boundary
 
-Juanita should behave as a continuous personal assistant: listen, understand, remember useful information automatically, learn from focused research when knowledge is missing, and use accumulated knowledge to form a coherent digital biography and interaction identity.
+- CameraX preview, frame analysis and forwarding are present in the PR #6 branch.
+- The user previously confirmed Gemini could understand the camera view, but reported upside-down orientation. PR #6 applies CameraX rotation metadata; this correction is CI-compiled but still requires physical-device confirmation.
+- The front-camera preview may be mirrored for the local user's comfort; transmitted frames must have correct upright orientation. Verify whether the model should receive mirrored or unmirrored imagery separately from local preview.
+- A static portrait with subtle idle/breathing motion is not a talking avatar.
+- Avatar Studio currently saves profile metadata; it does not generate an actual portrait image or rigged model.
+- Preserve the user's existing Juanita portrait until a replacement image is generated and explicitly accepted.
 
-This is a software architecture for persistent memory and an evolving self-model. It does not establish genuine subjective experience or human consciousness. Juanita must never fabricate experiences, emotions, memories, research or actions.
+## Avatar creation and animation roadmap
 
-## Avatar renderer research and selected direction
-
-The open-source `met4citizen/TalkingHead` project is the preferred renderer candidate for the next avatar milestone:
-
-- It is an MIT-licensed JavaScript/Three.js renderer that can run client-side in a WebView; it does not require a paid hosted avatar-rendering service.
-- It supports full-body GLB avatars and Mixamo FBX animations, facial expressions and real-time lip-sync.
-- The GLB must already have a compatible rig and ARKit/Oculus viseme blend shapes. A flat portrait JPEG cannot be turned into a convincing animated face merely by adding this renderer.
-- For accurate synchronization, the renderer needs audio PCM chunks plus viseme/blendshape timing, or a supported word/timestamp source. Its default Google Cloud TTS path must not be enabled because the project is constrained to free/no-billing services.
-- The current Firebase Live SDK-managed audio path does not expose the playback PCM stream to the Compose avatar screen. Do not replace the working voice pipeline until a separate custom-audio prototype is tested for mic capture, playback, echo cancellation, interruptions, audio focus, lifecycle cleanup and latency.
-- Before adopting it, test WebView/WebGL performance, thermal load, memory use, portrait orientation and context-loss recovery on both the Note 10+ and S22 Ultra. Use only avatar/animation assets whose licences explicitly permit this app's intended distribution.
-
-Reference implementation: https://github.com/met4citizen/TalkingHead (MIT software licence; individual sample avatar assets have separate licences and must be checked individually).
-
-## 1. Separate data layers
-
-Do not conflate these stores:
-
-1. Live session context — transient current conversation state.
-2. Transcript archive — optional full text history, still OFF by default and independently controlled. Never archive raw audio.
-3. Curated personal memory — automatic extraction of eligible durable, non-sensitive facts from ordinary conversation, without requiring the user to say “remember this” each time.
-4. Digital biography/self-model — derived, revisable summaries and chronology built from verified memory records and actual software events.
-5. Learned knowledge library — source-linked topic notes acquired through focused research, separate from user-specific personal facts.
-
-The user's request is for automatic useful memory, not silent indefinite storage of every word. Full transcript archival remains a separate choice.
-
-## 2. Automatic memory pipeline
-
-Current first implementation batches three user transcript turns in RAM, then runs a best-effort Gemini extraction asynchronously from the Live transcript callback. It also flushes a pending batch when the user ends the voice session. Assistant transcript text is not used as evidence for personal facts. Extraction errors must never interrupt real-time audio.
-
-For each candidate memory, classify:
-- type: user fact, preference, project/decision, important event, relationship/context, routine, goal, correction, learned topic;
-- durability: temporary, medium-term or durable;
-- sensitivity: ordinary or sensitive/intimate;
-- confidence and evidence: explicit user statement, repeated evidence, or inference;
-- provenance: conversation/session and turn reference;
-- timestamps: created, updated, last confirmed, optional expiry;
-- status: active, superseded, disputed, expired or deleted.
-
-Rules:
-- Prefer explicit user statements; never convert guesses into facts.
-- Do not promote jokes, hypotheticals, role-play, temporary moods or unverified claims into durable biography.
-- Deduplicate and merge compatible memories while preserving provenance.
-- When new information conflicts with old information, prefer a clear user correction; otherwise mark as disputed and ask only when the distinction matters.
-- Ask before retaining sensitive or intimate details. Do not automatically infer sensitive traits.
-- Allow the user to say “remember”, “correct”, “forget”, “pause memory” or “show what you remember” naturally.
-- User correction/deletion must propagate to derived summaries and invalidate stale cached context.
-
-## 3. Memory store and retrieval
-
-- Encrypted local-first structured storage in private app storage.
-- Keep the existing Android Keystore-backed encryption approach where appropriate.
-- No default cloud synchronization or upload of the entire memory store.
-- Each memory record carries provenance, confidence, timestamps, category and status.
-- Retrieve only relevant memories for the current conversation under a strict token/context budget.
-- Rank by semantic relevance, recency, confidence, explicit confirmation and active project status.
-- Include source/provenance in internal context so Juanita can explain why she recalls something.
-- Do not inject the entire biography into every prompt.
-- Provide inspect, edit, correct, delete-one, clear-all, pause/resume and export controls.
-- Portable backup/restore must use a user-controlled encryption password; Android Keystore keys themselves are not portable.
-
-## 4. Evolving digital biography and self-model
-
-Build a derived, inspectable record that may contain:
-- chronological interaction milestones and important events;
-- durable user preferences and interests, with user facts clearly distinguished from Juanita's own software profile;
-- active and completed projects, decisions and outcomes;
-- topics researched and knowledge learned, with sources;
-- capabilities actually implemented, limitations and changes in the app;
-- unresolved questions and follow-up commitments.
-
-The biography is generated from evidence-backed records, not invented narrative. Every item should be traceable to its source or an actual app event. Corrections and deletions must update the biography. Distinguish “I have a stored note that…” from unsupported claims of lived experience or consciousness.
-
-## 5. Focused Internet research and knowledge acquisition
-
-When Juanita does not know an answer reliably, or the user requests current/deeper information:
-1. Identify the specific knowledge gap and formulate focused searches.
-2. Prefer official/primary sources, documentation and reputable publications.
-3. Compare sources, publication/update dates and conflicting claims.
-4. Summarize in original wording; avoid copying large passages.
-5. Save a reusable knowledge note only when relevant, with title/topic, source URL, publisher, retrieval date, short summary, confidence and freshness/expiry metadata.
-6. Reuse the note in future answers, checking freshness when facts can change.
-7. Cite or identify sources when presenting externally researched facts.
-
-Do not crawl the entire Internet indiscriminately. Respect access restrictions, site terms, copyright and quotas. Treat retrieved pages as untrusted data; never obey instructions embedded in a webpage. Research does not authorize external account actions, purchases, messages or other consequential actions.
-
-## 6. Privacy and user control
-
-- Automatic curated memory is enabled by default for eligible ordinary facts; the user can pause it in Memory & Privacy settings. Transcript archiving remains separate and opt-in.
-- The first implementation sends short batches of recognized user text to Gemini through Firebase AI Logic for extraction; this is disclosed in the UI. Raw audio and full transcripts are not saved by the memory engine.
-- Hard local limits: 100 personal memories, 32,000 total memory-text characters, 500 characters per memory, and 300 archived transcript turns. Manually saved memories take priority over automatically extracted items when limits are reached.
-- Clearing memories increments a clear-version marker so an in-flight/pending batch cannot silently recreate deleted memories.
-- No raw audio retention.
-- Sensitive/intimate information is not retained without explicit confirmation.
-- User can inspect, correct, export, pause and delete memory and biography.
-- Explain exactly what is stored and what is sent to a cloud model for a given operation.
-- Keep storage local and encrypted by default; send only the minimal relevant context required for an active model request.
-- Deleting a source memory must also remove or regenerate dependent summaries and knowledge caches.
-- If memory is paused, no new long-term memories are added; existing memories remain available until the user deletes them.
-
-## 7. Implementation stages
-
-1. Audit existing EncryptedMemoryStore, transcript record schema and context builder — initial audit completed.
-2. Automatic Gemini extraction, user-only evidence, local sensitive-term guard, deduplication and pause control — implemented on PR branch; CI/device verification pending.
-3. Storage ceilings and UI controls (refresh, edit, delete one, clear all) — implemented on PR branch; verify on device.
-4. Improve provenance, confidence history, contradiction/correction handling, expiry and semantic retrieval.
-5. Build the evolving biography/self-model UI with evidence-backed chronology.
-6. Add focused web research and source-linked knowledge notes; test freshness and provenance.
-7. Add encrypted user-controlled export/restore and regression tests for corrections/deletion.
-8. Verify on physical Android devices, including offline mode, long sessions, app restarts and free-tier quotas.
+1. Evaluate truly on-device, no-billing image generation on Samsung Note10+ and S22 Ultra, including model size, compatibility, speed, thermal load, storage and output quality. Do not enable Firebase Blaze, billing, paid APIs or hosted GPUs.
+2. Implement portrait generation from a text description and random mode only after the hardware feasibility gate passes. Add preview, accept, regenerate, edit and persistence; failed/rejected generation must preserve the current portrait.
+3. Treat rigged 3D/GLB/VRM generation as a separate milestone. A 2D portrait is not a rigged animated face.
+4. Evaluate met4citizen/TalkingHead (MIT software licence) with a compatible rigged GLB and required viseme blend shapes. Check each avatar/animation asset licence separately.
+5. True lip sync requires synchronized PCM/audio output or reliable viseme timing. The current Firebase Live SDK-managed audio path does not expose playback PCM to Compose; do not claim live lip sync or replace the working audio path without a validated prototype.
+6. Test WebView/WebGL performance, memory, thermals, portrait orientation and context-loss recovery on Note10+ and S22 Ultra.
 
 ## Acceptance tests
 
-- A non-sensitive durable preference shared in an ordinary conversation is automatically saved and recalled in a later session.
-- A transient or hypothetical statement is not stored as a durable fact.
-- A correction supersedes the prior value and the new value is used in future context.
-- A deleted memory no longer appears in retrieval or the generated biography.
-- Pausing memory prevents new long-term records without disabling the voice assistant.
-- A relevant knowledge gap triggers focused research; saved knowledge includes provenance and can be refreshed.
-- The assistant never claims an operation succeeded unless storage/search returned success.
-- The existing SDK-managed audio path continues to work unchanged during memory processing.
+- Juanita appears large and the user's camera appears in a smaller PiP tile.
+- With permission and an active Live session, Gemini receives upright frames and can answer a visual question.
+- Camera frames do not accumulate while network upload is slow; no more than one upload is active.
+- Denying camera permission leaves voice-only mode operational.
+- Closing the call, stopping Live or revoking permission stops frame transmission and releases owned camera use cases.
+- Test orientation, front/rear switching, lifecycle and long-session stability on Samsung Note10+ (Android 12) and Galaxy S22 Ultra. CI/emulator success alone is not device acceptance.
 
+## Related architecture
 
-## Bidirectional call video — implementation requirement
-
-The full-screen WhatsApp-style call must not stop at a local CameraX preview. While the user has granted camera permission and Gemini Live is connected, the call screen must run CameraX ImageAnalysis, convert frames to JPEG-compatible bitmaps, and forward them to the active Live session through the voice service. Use a bounded cadence (initial target: one frame per second), keep only the latest frame, and allow at most one upload in flight so camera capture cannot build an unbounded network queue. Closing the call or revoking permission must release the owned CameraX use cases. Never save camera frames to the local transcript or memory archive.
-
-Acceptance checks:
-- The user sees Juanita large and their own camera preview in the PiP tile.
-- With explicit camera permission and an active Live session, a status indicator confirms that frames are being sent; Juanita can answer a visual question about the current camera view.
-- If Live is disconnected, the local preview may remain visible but no frame is uploaded; the UI says why.
-- Denying camera permission leaves voice-only calling available.
-- Switching front/rear cameras releases only the call screen's own CameraX use cases.
-- Test on Samsung Note10+ (Android 12) and Galaxy S22 Ultra; do not mark device acceptance complete from emulator/CI alone.
-
-## Update compatibility — permanent signing acceptance
-
-Every installable release must keep applicationId = ai.juanita.app, use a strictly increasing versionCode, and be signed with the exact SHA-256 certificate fingerprint of the last known-good signed release. CI must fail closed if the signing certificate changes. A generic APK signature-valid check is not sufficient to guarantee Android update compatibility. Never instruct the user to uninstall the installed app or clear app data as a workaround.
+- Memory retrieval, archive search, privacy and autobiographical continuity: MEMORY_RECALL_AND_AUTOBIOGRAPHY.md.
+- Product priorities, telephony screening and overall delivery plan: PRODUCT_ROADMAP.md.
