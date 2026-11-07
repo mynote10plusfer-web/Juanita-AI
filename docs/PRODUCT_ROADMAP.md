@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #6 head a2469bd25eb95b395f6440e72a3898d09459d7b4 includes the memory-management navigation and archive date-range deletion follow-up; latest-head CI and physical-device verification are pending. Signed-release workflow version gate and device verification remain outstanding.
+Last updated: 2026-11-07 — PR #6 head b4690767c4c73c8b783e37450682e8572ba5c80c introduces persistent bottom navigation (Home, Avatar, Impostazioni, Memoria, Altro) to replace the single long screen; Android debug CI is running and physical-device verification is pending. Signed-release workflow version gate and device verification remain outstanding.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -122,7 +122,7 @@ Next steps:
 
 ### A.1 User-controlled memory management — high priority
 
-- [IN PROGRESS — PR #6 FOLLOW-UP; CI/DEVICE VERIFICATION PENDING] Add a prominent home-screen shortcut that scrolls directly to the Memory & Privacy controls; the section was previously buried near the bottom of the long scrolling screen.
+- [IN PROGRESS — PR #6 FOLLOW-UP; CI/DEVICE VERIFICATION PENDING] Replace the single long scrolling home screen with persistent bottom navigation: Home (voice session), Avatar (Avatar Studio and camera), Impostazioni (identity, language, voice and personality), Memoria (personal memories and conversation archive), Altro (project status and debug tools). Keep the navigation visible while each section's content scrolls independently.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Show each curated memory with its category and exact local creation date/time; keep the underlying timestamp as epoch milliseconds.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Support selecting one memory or multiple memories and deleting the selected group after a confirmation that states the number of records to be removed.
 - [FUTURE] Add filters by category and date range for curated personal memories, plus group actions such as deleting all memories from a selected day/category.
