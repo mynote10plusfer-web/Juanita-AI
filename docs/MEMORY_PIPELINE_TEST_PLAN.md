@@ -35,6 +35,9 @@
 - [ ] Verify Spanish/EU disclosure, consent, transcript retention and deletion requirements before release.
 
 ## Memory-management and clock acceptance tests
+- [ ] Tap the home-screen “GESTISCI RICORDI E CONVERSAZIONI” shortcut and verify it scrolls directly to the Memory & Privacy panel.
+- [ ] Enter an inclusive local date range and verify only archived transcript turns in that range are deleted, including partial conversations, while curated personal memories remain.
+- [ ] Refresh the archive list after range deletion and verify removed turns are no longer returned by historical search or future context.
 - [ ] Confirm every curated memory displays category plus local date and time.
 - [ ] Select and delete one memory; confirm it disappears from the list and historical recall.
 - [ ] Select several memories across categories and delete the group; verify only selected IDs are removed.
