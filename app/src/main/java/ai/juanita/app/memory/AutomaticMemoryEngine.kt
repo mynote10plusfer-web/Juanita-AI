@@ -18,14 +18,6 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     private val mutex = Mutex()
 
     /**
-     * Persist a recognized user turn quickly. This method performs no network request,
-     * so transcript collection is never blocked by Gemini memory extraction.
-     *
-     * Returns the number of pending turns, 0 when disabled/ignored, or -2 when the
-     * bounded encrypted queue is full. A full queue is preserved rather than silently
-     * overwriting older unprocessed turns.
-     */
-    /**
      * Persist a recognized user turn quickly. This method deliberately does not acquire
      * the extraction mutex: a slow Gemini request must never block transcript intake.
      * EncryptedMemoryStore serializes each read/write operation.
