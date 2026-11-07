@@ -68,6 +68,9 @@ import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import java.util.Locale
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 private data class VoiceLanguage(val label: String, val tag: String) {
@@ -147,6 +150,7 @@ class MainActivity : ComponentActivity() {
                 onRefreshMemories = { memoryStore.listMemories() },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
+                onDeleteMemories = { memoryStore.deleteMemories(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
@@ -225,6 +229,7 @@ private fun JuanitaApp(
     onRefreshMemories: () -> List<MemoryItem>,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
+    onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
@@ -274,6 +279,8 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
+    LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
     val context = LocalContext.current
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
@@ -362,6 +369,8 @@ private fun JuanitaApp(
                 try {
                     val instruction = buildString {
                         append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                         val sessionNow = ZonedDateTime.now()
+                         append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
                         if (locationContext.isNotBlank()) {
                             append("\n\n")
                             append(locationContext)
@@ -413,6 +422,7 @@ private fun JuanitaApp(
                 Text(text = assistantName.uppercase(), color = gold, fontSize = 29.sp,
                     fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                 Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
+                Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = gold, fontSize = 12.sp)
                 JuanitaAvatarCard()
 
                 AvatarStudioSection(
@@ -632,6 +642,7 @@ private fun JuanitaApp(
                     },
                     onSaveMemory = { text -> onSaveMemory(text) },
                     onDeleteMemory = onDeleteMemory,
+                    onDeleteMemories = onDeleteMemories,
                     onUpdateMemory = onUpdateMemory,
                     onClearMemories = onClearMemories,
                     onDeleteConversation = onDeleteConversation,
