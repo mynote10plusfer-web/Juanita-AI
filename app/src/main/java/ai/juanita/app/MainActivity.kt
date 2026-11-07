@@ -380,19 +380,13 @@ private fun JuanitaApp(
                 try {
                     val instruction = buildString {
                         append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
-                         val sessionNow = ZonedDateTime.now()
-                         append("
-
-OROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
+                        val sessionNow = ZonedDateTime.now()
+                        append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
                         if (locationContext.isNotBlank()) {
-                            append("
-
-")
+                            append("\n\n")
                             append(locationContext)
                         } else {
-                            append("
-
-")
+                            append("\n\n")
                             append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
                         }
                     }
