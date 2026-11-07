@@ -240,6 +240,8 @@ private fun JuanitaApp(
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
+    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
