@@ -34,6 +34,19 @@
 - [ ] Prototype post-answer audio access separately before attempting any caller conversation or transcript.
 - [ ] Verify Spanish/EU disclosure, consent, transcript retention and deletion requirements before release.
 
+## Memory-management and clock acceptance tests
+- [ ] Confirm every curated memory displays category plus local date and time.
+- [ ] Select and delete one memory; confirm it disappears from the list and historical recall.
+- [ ] Select several memories across categories and delete the group; verify only selected IDs are removed.
+- [ ] Confirm the group-delete dialog shows the exact selected count and requires explicit confirmation.
+- [ ] Clear all curated memories and verify the conversation archive remains intact.
+- [ ] Delete a whole archived conversation and verify curated memories remain intact.
+- [ ] Verify deletion invalidates pending automatic-memory batches and stale extraction cannot restore deleted facts.
+- [ ] Confirm the main screen clock updates each second and displays the device time-zone ID.
+- [ ] Compare displayed time and `getCurrentDateTime` tool output with Android system clock across a minute boundary and after time-zone/DST changes.
+- [ ] Ask Juanita for current date/time and for relative-time questions (today, tomorrow, yesterday, this evening); verify it uses fresh device time and local zone.
+- [ ] Ask about a dated historical conversation; verify the archive timestamp is clearly treated as past, not as current time.
+
 ## Known limitations
 - Archive search is local lexical phrase/token matching with recency ranking, not semantic vector retrieval; multilingual paraphrases may be missed.
 - The Live function tool has compiled but its real invocation/response cycle must be verified on the target devices and selected model.
