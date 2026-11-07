@@ -216,6 +216,9 @@ private fun ConversationArchiveCalendar(
     var toText by remember { mutableStateOf("") }
     var confirmDay by remember { mutableStateOf(false) }
     var retentionExpanded by remember { mutableStateOf(false) }
+    var selectingDays by remember { mutableStateOf(false) }
+    var selectedDays by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
+    var confirmSelectedDays by remember { mutableStateOf(false) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
     val byDay = remember(conversations) {
@@ -263,11 +266,11 @@ private fun ConversationArchiveCalendar(
                             if (date == null) Spacer(modifier = Modifier.padding(15.dp))
                             else {
                                 val count = byDay[date]?.size ?: 0
-                                Button(onClick = { day = date }, modifier = Modifier.fillMaxWidth(),
+                                Button(onClick = { if (selectingDays) selectedDays = if (date in selectedDays) selectedDays - date else selectedDays + date else day = date }, modifier = Modifier.fillMaxWidth(),
                                     contentPadding = androidx.compose.foundation.layout.PaddingValues(2.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (date == day) gold else Color(0xFF292D34),
-                                        contentColor = if (date == day) Color.Black else Color.White
+                                        containerColor = if (date in selectedDays) Color(0xFFB98D42) else if (date == day) gold else Color(0xFF292D34),
+                                        contentColor = if (date == day || date in selectedDays) Color.Black else Color.White
                                     ), shape = RoundedCornerShape(8.dp)) {
                                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                         Text(date.dayOfMonth.toString(), fontSize = 11.sp)
@@ -278,6 +281,14 @@ private fun ConversationArchiveCalendar(
                         }
                     }
                     repeat(7-week.size) { Spacer(modifier = Modifier.weight(1f)) }
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { selectingDays = !selectingDays; selectedDays = emptySet() }) {
+                    Text(if (selectingDays) "Annulla selezione giorni" else "Seleziona più giorni", color = gold, fontSize = 11.sp)
+                }
+                if (selectedDays.isNotEmpty()) TextButton(onClick = { confirmSelectedDays = true }) {
+                    Text("Elimina ${selectedDays.size} giorni", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
             }
             Text("Conversazioni del " + day.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ITALIAN)), color = gold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
@@ -305,6 +316,11 @@ private fun ConversationArchiveCalendar(
             if (conversations.isNotEmpty()) TextButton(onClick = onClearArchive) { Text("SVUOTA TUTTO L'ARCHIVIO", color = Color(0xFFE6A0A0)) }
         }
     }
+    if (confirmSelectedDays) AlertDialog(onDismissRequest = { confirmSelectedDays = false },
+        title = { Text("Eliminare i giorni selezionati?") },
+        text = { Text("Saranno cancellate tutte le trascrizioni di ${selectedDays.size} giornate selezionate. I giorni non selezionati e i ricordi personali resteranno intatti.") },
+        confirmButton = { TextButton(onClick = { selectedDays.sorted().forEach(onDeleteDay); selectedDays = emptySet(); selectingDays = false; confirmSelectedDays = false }) { Text("Elimina", color = Color(0xFFB94A48)) } },
+        dismissButton = { TextButton(onClick = { confirmSelectedDays = false }) { Text("Annulla") } })
     if (confirmDay) AlertDialog(onDismissRequest = { confirmDay = false },
         title = { Text("Eliminare l'intera giornata?") },
         text = { Text("Saranno cancellate le trascrizioni del giorno " + day + ". I ricordi personali resteranno intatti.") },
