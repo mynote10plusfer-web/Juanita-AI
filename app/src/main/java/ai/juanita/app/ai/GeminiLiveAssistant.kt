@@ -5,6 +5,7 @@ import com.google.firebase.ai.ai
 import android.graphics.Bitmap
 import com.google.firebase.ai.type.InlineData
 import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.AudioTranscriptionConfig
 import com.google.firebase.ai.type.LiveSession
 import com.google.firebase.ai.type.PublicPreviewAPI
 import com.google.firebase.ai.type.ResponseModality
@@ -12,23 +13,29 @@ import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** Stable Gemini Live wrapper; transcript text is exposed without storing audio. */
 @OptIn(PublicPreviewAPI::class)
 class GeminiLiveAssistant {
-    private var session: LiveSession? = null
+    private val lifecycleMutex = Mutex()
+    @Volatile private var session: LiveSession? = null
 
     suspend fun start(
         systemInstruction: String,
         voiceName: String = DEFAULT_VOICE,
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> }
-    ) {
-        stop()
+    ) = lifecycleMutex.withLock {
+        stopSessionLocked()
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
             systemInstruction = content { text(systemInstruction) },
             generationConfig = liveGenerationConfig {
                 responseModality = ResponseModality.AUDIO
+                inputAudioTranscription = AudioTranscriptionConfig()
+                outputAudioTranscription = AudioTranscriptionConfig()
                 speechConfig = SpeechConfig(voice = Voice(voiceName.ifBlank { DEFAULT_VOICE }))
             }
         )
@@ -52,12 +59,26 @@ class GeminiLiveAssistant {
         activeSession.sendVideoRealtime(InlineData(output.toByteArray(), "image/jpeg"))
     }
 
-    suspend fun stop() {
-        session?.let {
-            it.stopAudioConversation()
-            it.close()
+    /** Stop microphone capture synchronously before any slower cleanup begins. */
+    fun stopAudioCapture() {
+        session?.let { active ->
+            runCatching { active.stopAudioConversation() }
         }
+    }
+
+    suspend fun stop() = lifecycleMutex.withLock {
+        stopSessionLocked()
+    }
+
+    private suspend fun stopSessionLocked() {
+        val active = session ?: return
+        // Detach first so a repeated stop is harmless and cannot revive this session.
         session = null
+        runCatching { active.stopAudioConversation() }
+        // Closing the websocket is bounded; the microphone is already stopped above.
+        withTimeoutOrNull(4_000L) {
+            runCatching { active.close() }
+        }
     }
 
     companion object {

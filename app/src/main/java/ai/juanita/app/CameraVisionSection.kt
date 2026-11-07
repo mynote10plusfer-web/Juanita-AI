@@ -53,6 +53,7 @@ fun CameraVisionSection(
     var liveVision by remember { mutableStateOf(false) }
     var snapshotPending by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(false) }
+    var cameraError by remember { mutableStateOf<String?>(null) }
     var permissionGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED)
     }
@@ -76,6 +77,7 @@ fun CameraVisionSection(
             if (cameraEnabled && permissionGranted) {
                 JuanitaCameraPreview(
                     frontCamera = frontCamera,
+                    onCameraError = { cameraError = it },
                     onFrame = { frame ->
                         if (voiceConnected && liveVision) {
                             onVideoFrame(frame)
@@ -122,9 +124,8 @@ fun CameraVisionSection(
                 ) { Text("Attiva videocamera") }
             }
             Text(
-                if (!voiceConnected) "Per inviare immagini, avvia prima la conversazione vocale Gemini Live."
-                else visionStatus,
-                color = androidx.compose.ui.graphics.Color(0xFFB9BBC1)
+                cameraError ?: if (!voiceConnected) "Per inviare immagini, avvia prima la conversazione vocale Gemini Live." else visionStatus,
+                color = if (cameraError != null) androidx.compose.ui.graphics.Color(0xFFE6A0A0) else androidx.compose.ui.graphics.Color(0xFFB9BBC1)
             )
         }
     }
@@ -133,6 +134,7 @@ fun CameraVisionSection(
 @Composable
 private fun JuanitaCameraPreview(
     frontCamera: Boolean,
+    onCameraError: (String?) -> Unit,
     onFrame: (Bitmap) -> Unit
 ) {
     val context = LocalContext.current
@@ -141,6 +143,7 @@ private fun JuanitaCameraPreview(
     val previewView = remember {
         PreviewView(context).apply {
             scaleType = PreviewView.ScaleType.FILL_CENTER
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         }
     }
 
@@ -148,33 +151,52 @@ private fun JuanitaCameraPreview(
         val providerFuture = ProcessCameraProvider.getInstance(context)
         val executor = Executors.newSingleThreadExecutor()
         var cameraProvider: ProcessCameraProvider? = null
+        var previewUseCase: Preview? = null
+        var analysisUseCase: ImageAnalysis? = null
+        var disposed = false
         providerFuture.addListener({
-            runCatching {
-                cameraProvider = providerFuture.get()
-                val preview = Preview.Builder().build().also {
-                    it.setSurfaceProvider(previewView.surfaceProvider)
-                }
-                val analysis = ImageAnalysis.Builder()
-                    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                    .build()
-                var lastFrameAt = 0L
-                analysis.setAnalyzer(executor) { image: ImageProxy ->
-                    val now = System.currentTimeMillis()
-                    if (now - lastFrameAt >= 1000L) {
-                        lastFrameAt = now
-                        runCatching { currentOnFrame(image.toBitmap()) }
+            if (!disposed) {
+                try {
+                    val provider = providerFuture.get()
+                    cameraProvider = provider
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
                     }
-                    image.close()
+                    val analysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                    previewUseCase = preview
+                    analysisUseCase = analysis
+                    var lastFrameAt = 0L
+                    analysis.setAnalyzer(executor) { image: ImageProxy ->
+                        try {
+                            val now = System.currentTimeMillis()
+                            if (now - lastFrameAt >= 1000L) {
+                                lastFrameAt = now
+                                runCatching { currentOnFrame(image.toBitmap()) }
+                            }
+                        } finally {
+                            image.close()
+                        }
+                    }
+                    val selector = if (frontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                    // Unbind only the use cases owned by this preview.
+                    provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis)
+                    if (!disposed) onCameraError(null)
+                } catch (error: Exception) {
+                    if (!disposed) onCameraError(error.localizedMessage ?: "Impossibile avviare la fotocamera")
                 }
-                val selector = if (frontCamera) CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-                cameraProvider?.unbindAll()
-                cameraProvider?.bindToLifecycle(lifecycleOwner, selector, preview, analysis)
             }
         }, ContextCompat.getMainExecutor(context))
 
         onDispose {
-            runCatching { cameraProvider?.unbindAll() }
-            executor.shutdown()
+            disposed = true
+            runCatching {
+                val preview = previewUseCase
+                val analysis = analysisUseCase
+                if (preview != null && analysis != null) cameraProvider?.unbind(preview, analysis)
+            }
+            executor.shutdownNow()
         }
     }
 

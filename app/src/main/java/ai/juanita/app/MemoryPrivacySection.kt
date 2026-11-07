@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,19 +39,24 @@ internal fun MemoryPrivacySection(
     panel: Color,
     gold: Color,
     initialArchiveEnabled: Boolean,
+    initialAutoMemoryEnabled: Boolean,
+    memoryStatus: String,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialRetentionDays: Int,
     onArchiveEnabledChanged: (Boolean) -> Unit,
+    onAutoMemoryEnabledChanged: (Boolean) -> Unit,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onClearArchive: () -> Unit,
-    onRetentionChanged: (Int) -> Unit
+    onRetentionChanged: (Int) -> Unit,
+    onRefreshMemories: () -> List<MemoryItem>
 ) {
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
+    var autoMemoryEnabled by remember { mutableStateOf(initialAutoMemoryEnabled) }
     var memories by remember { mutableStateOf(initialMemories) }
     var conversations by remember { mutableStateOf(initialArchivedConversations) }
     var retentionDays by remember { mutableStateOf(initialRetentionDays) }
@@ -59,6 +65,9 @@ internal fun MemoryPrivacySection(
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var editingMemory by remember { mutableStateOf<MemoryItem?>(null) }
     var editText by remember { mutableStateOf("") }
+    LaunchedEffect(memoryStatus) {
+        memories = onRefreshMemories()
+    }
     val retentionLabel = when (retentionDays) {
         7 -> "7 giorni"
         30 -> "30 giorni"
@@ -75,7 +84,27 @@ internal fun MemoryPrivacySection(
             Text("MEMORIA E PRIVACY", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Text("I dati sono conservati in forma cifrata sul telefono. Puoi modificarli o cancellarli quando vuoi.",
                 color = Color(0xFF9A9DA4), fontSize = 12.sp)
+            Text("MEMORIA AUTOMATICA", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = autoMemoryEnabled, onCheckedChange = { enabled ->
+                    autoMemoryEnabled = enabled
+                    onAutoMemoryEnabledChanged(enabled)
+                })
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Ricorda automaticamente le informazioni importanti", color = Color.White, fontSize = 13.sp)
+                    Text(if (autoMemoryEnabled) "Attiva: analizza brevi blocchi di testo delle conversazioni per estrarre ricordi utili." else "In pausa: nessun nuovo ricordo automatico verrà creato.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                }
+            }
+            Text(if (autoMemoryEnabled) memoryStatus else "Memoria automatica in pausa.",
+                color = if (autoMemoryEnabled) gold else Color(0xFF9A9DA4), fontSize = 11.sp)
+            Text("Per selezionare i ricordi, brevi estratti testuali vengono inviati a Gemini. Nel livello gratuito Google può usare i contenuti inviati per migliorare i propri prodotti, secondo i suoi termini. Non viene salvato l’audio e non serve attivare l’archivio completo. Puoi disattivare questa funzione in qualsiasi momento.",
+                color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${memories.size}/100 ricordi · ${memories.sumOf { it.text.length }}/32.000 caratteri", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = { memories = onRefreshMemories() }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
+            }
             OutlinedTextField(
                 value = memoryDraft, onValueChange = { memoryDraft = it },
                 label = { Text("Nuovo ricordo") },
@@ -157,7 +186,7 @@ internal fun MemoryPrivacySection(
                     Text("SVUOTA TUTTO L'ARCHIVIO", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
             }
-            Text("Le trascrizioni testuali Gemini Live vengono archiviate solo se attivi esplicitamente il consenso qui sopra. L'audio non viene mai salvato. L'apprendimento automatico dei ricordi personali è ancora in sviluppo.",
+            Text("Le trascrizioni complete vengono archiviate solo con consenso esplicito. La memoria automatica conserva solo ricordi selezionati, con limiti di spazio: massimo 100 ricordi e 32.000 caratteri complessivi. Puoi cancellarli singolarmente o tutti insieme.",
                 color = gold, fontSize = 11.sp)
         }
     }

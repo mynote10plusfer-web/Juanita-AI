@@ -63,6 +63,7 @@ import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.avatar.AvatarProfile
 import ai.juanita.app.avatar.AvatarProfileStore
 import ai.juanita.app.avatar.AvatarStudioSection
+import ai.juanita.app.avatar.AvatarCallScreen
 import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
@@ -135,12 +136,15 @@ class MainActivity : ComponentActivity() {
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
+                initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
                 initialArchivedConversations = memoryStore.listArchivedConversations(),
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
+                onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
+                onRefreshMemories = { memoryStore.listMemories() },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
@@ -210,12 +214,15 @@ private fun JuanitaApp(
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
     initialArchiveEnabled: Boolean,
+    initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialAvatarProfiles: List<AvatarProfile>,
     initialActiveAvatarProfileId: String?,
     initialRetentionDays: Int,
     onArchiveEnabledChanged: (Boolean) -> Unit,
+    onAutoMemoryEnabledChanged: (Boolean) -> Unit,
+    onRefreshMemories: () -> List<MemoryItem>,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
@@ -291,7 +298,9 @@ private fun JuanitaApp(
     }
     val liveState by JuanitaVoiceService.state.collectAsState()
     val visionState by JuanitaVoiceService.visionState.collectAsState()
+    val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
+    var callScreenVisible by remember { mutableStateOf(false) }
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
@@ -578,22 +587,41 @@ private fun JuanitaApp(
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
                     ) { Text("Termina conversazione") }
+
+                    Button(
+                        onClick = { callScreenVisible = true },
+                        enabled = liveState.contains("in ascolto", ignoreCase = true),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                    ) { Text("Apri videochiamata") }
+                    Text(
+                        "La modalità chiamata mostra Juanita a schermo intero e la tua fotocamera in un riquadro. La videocamera resta spenta finché non la attivi.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp
+                    )
                     Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
-                CameraVisionSection(
-                    panel = panel,
-                    gold = gold,
-                    voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
-                    visionStatus = visionState,
-                    onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
-                )
+                // The call screen owns the camera while visible. Dispose the other
+                // CameraX preview first so two UI surfaces never fight for the camera.
+                if (!callScreenVisible) {
+                    CameraVisionSection(
+                        panel = panel,
+                        gold = gold,
+                        voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
+                        visionStatus = visionState,
+                        onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
+                    )
+                }
 
                 MemoryPrivacySection(
                     panel = panel,
                     gold = gold,
                     initialArchiveEnabled = archiveEnabled,
+                    initialAutoMemoryEnabled = initialAutoMemoryEnabled,
+                    memoryStatus = memoryState,
+                    onAutoMemoryEnabledChanged = onAutoMemoryEnabledChanged,
+                    onRefreshMemories = onRefreshMemories,
                     initialMemories = memories,
                     initialArchivedConversations = initialArchivedConversations,
                     initialRetentionDays = initialRetentionDays,
@@ -615,11 +643,31 @@ private fun JuanitaApp(
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                    Text("Gemini Live è integrato per le prove vocali. La wake word, la memoria automatica e le voci regionali native sono ancora in sviluppo.",
+                    Text("Gemini Live è integrato per le prove vocali. La memoria automatica è attiva quando abilitata nelle impostazioni; la wake word e le voci regionali native sono ancora in sviluppo.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+
+                if (callScreenVisible) {
+                    val activeAvatarName = initialAvatarProfiles
+                        .firstOrNull { it.id == initialActiveAvatarProfileId }
+                        ?.displayName ?: assistantName
+                    AvatarCallScreen(
+                        avatarName = activeAvatarName,
+                        portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
+                        connectionStatus = liveState,
+                        onDismiss = {
+                            // Leaving the call UI also ends audio: never leave a hidden hot mic.
+                            JuanitaVoiceService.stop(context)
+                            callScreenVisible = false
+                        },
+                        onEndCall = {
+                            JuanitaVoiceService.stop(context)
+                            callScreenVisible = false
+                        }
+                    )
+                }
             }
         }
     }

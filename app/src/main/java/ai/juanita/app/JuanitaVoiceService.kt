@@ -16,9 +16,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.memory.EncryptedMemoryStore
+import ai.juanita.app.memory.AutomaticMemoryEngine
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -27,13 +29,20 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.channels.Channel
 
 /** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val assistant = GeminiLiveAssistant()
     private lateinit var memoryStore: EncryptedMemoryStore
+    private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private var startRequested = false
+    private var sessionJob: Job? = null
+    private var stopJob: Job? = null
+    private var transcriptChannel: Channel<Pair<String, String>>? = null
+    private var transcriptWorker: Job? = null
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -49,20 +58,14 @@ class JuanitaVoiceService : Service() {
     override fun onCreate() {
         super.onCreate()
         memoryStore = EncryptedMemoryStore(applicationContext)
+        automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                serviceScope.launch {
-                    _state.value = "Chiusura della conversazione…"
-                    runCatching { assistant.stop() }
-                    startRequested = false
-                    stopForeground(STOP_FOREGROUND_REMOVE)
-                    _state.value = "Conversazione terminata"
-                    stopSelf(startId)
-                }
+                requestStop()
                 return START_NOT_STICKY
             }
             ACTION_START -> {
@@ -80,9 +83,13 @@ class JuanitaVoiceService : Service() {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
                 )
+                if (stopJob?.isActive == true) {
+                    _state.value = "Attendi la chiusura della conversazione precedente"
+                    return START_NOT_STICKY
+                }
                 if (!startRequested) {
                     startRequested = true
-                    serviceScope.launch {
+                    sessionJob = serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
                         try {
                             val conversationId = UUID.randomUUID().toString()
@@ -94,10 +101,58 @@ class JuanitaVoiceService : Service() {
                             val sessionInstruction = if (localContext.isBlank()) instruction else {
                                 "$instruction\n\n$localContext"
                             }
-                            assistant.start(sessionInstruction, voice) { role, text ->
-                                serviceScope.launch(Dispatchers.IO) {
-                                    memoryStore.appendConversationTurn(conversationId, role, text)
+                            // A single ordered worker prevents transcript callbacks racing
+                            // with one another or with the final memory flush.
+                            val transcriptQueue = Channel<Pair<String, String>>(Channel.UNLIMITED)
+                            transcriptChannel = transcriptQueue
+                            transcriptWorker = serviceScope.launch(Dispatchers.IO) {
+                                var bufferedEvent: Pair<String, String>? = null
+                                while (true) {
+                                    val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
+                                    bufferedEvent = null
+                                    val role = first.first
+                                    var combinedText = first.second.trim()
+
+                                    // Live transcriptions can arrive as incremental chunks. Merge
+                                    // same-role updates until a short quiet gap or the next role.
+                                    while (true) {
+                                        val next = withTimeoutOrNull(900L) {
+                                            transcriptQueue.receiveCatching().getOrNull()
+                                        } ?: break
+                                        if (next.first.equals(role, ignoreCase = true)) {
+                                            combinedText = mergeTranscriptChunks(combinedText, next.second)
+                                        } else {
+                                            bufferedEvent = next
+                                            break
+                                        }
+                                    }
+
+                                    if (combinedText.isBlank()) continue
+                                    // Archive errors must never block automatic memory.
+                                    runCatching { memoryStore.appendConversationTurn(conversationId, role, combinedText) }
+                                    if (role.equals("USER", ignoreCase = true)) {
+                                        try {
+                                            val saved = automaticMemoryEngine.acceptTurn(role, combinedText)
+                                            _memoryState.value = when {
+                                                saved > 0 -> "Memoria aggiornata: $saved ricordi salvati o confermati."
+                                                saved < 0 -> "Memoria in attesa di rete o quota: riproverò automaticamente."
+                                                else -> "Memoria attiva: raccolta informazioni utili in corso."
+                                            }
+                                        } catch (cancelled: CancellationException) {
+                                            throw cancelled
+                                        } catch (_: Exception) {
+                                            // Memory errors must not break the voice conversation.
+                                        }
+                                    }
                                 }
+                            }
+                            assistant.start(sessionInstruction, voice) { role, text ->
+                                transcriptQueue.trySend(role to text)
+                            }
+                            _memoryState.value = if (memoryStore.isAutomaticMemoryEnabled) {
+                                "Memoria automatica attiva · analisi ogni 3 interventi utente."
+                            } else {
+                                "Memoria automatica in pausa."
                             }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
@@ -107,6 +162,7 @@ class JuanitaVoiceService : Service() {
                             _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
                             updateNotification("Connessione non riuscita · apri Juanita per riprovare")
                             runCatching { assistant.stop() }
+                            withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                             startRequested = false
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf(startId)
@@ -120,6 +176,72 @@ class JuanitaVoiceService : Service() {
             }
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * Stop audio first. Memory extraction is best-effort cleanup and must never
+     * keep the microphone open while a network request is pending.
+     */
+    private fun requestStop() {
+        sessionJob?.cancel()
+        // Synchronously stop SDK audio capture before launching any asynchronous cleanup.
+        assistant.stopAudioCapture()
+        _state.value = "Microfono disattivato · chiusura sessione…"
+        if (stopJob?.isActive == true) return
+        stopJob = serviceScope.launch {
+            try {
+                withTimeoutOrNull(5_000L) { assistant.stop() }
+                _state.value = "Microfono disattivato · salvataggio dei ricordi…"
+                updateNotification("Microfono disattivato · salvataggio in corso")
+            } finally {
+                // Audio is stopped before draining callbacks or waiting on network work.
+                withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                val flushedCount = withTimeoutOrNull(5_000L) {
+                    withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
+                }
+                if (flushedCount != null && flushedCount > 0) {
+                    _memoryState.value = "Memoria aggiornata: $flushedCount ricordi salvati o confermati."
+                } else if (flushedCount == -1) {
+                    _memoryState.value = "Memoria in attesa: rete o quota non disponibili; riproverò al prossimo collegamento."
+                } else if (flushedCount != null) {
+                    _memoryState.value = "Controllo completato: nessun nuovo ricordo durevole da aggiungere."
+                } else {
+                    _memoryState.value = "Memoria in attesa: riprenderà al prossimo collegamento."
+                }
+                startRequested = false
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                _state.value = "Conversazione terminata"
+                stopSelf()
+            }
+        }
+    }
+
+    private fun mergeTranscriptChunks(existing: String, incoming: String): String {
+        val oldText = existing.trim()
+        val newText = incoming.trim()
+        if (newText.isBlank()) return oldText
+        if (oldText.isBlank()) return newText
+        return when {
+            newText.startsWith(oldText, ignoreCase = true) -> newText
+            oldText.startsWith(newText, ignoreCase = true) -> oldText
+            else -> "$oldText $newText"
+        }.take(3_600)
+    }
+
+    private suspend fun drainTranscriptQueue() {
+        val queue = transcriptChannel
+        queue?.close()
+        val worker = transcriptWorker
+        withTimeoutOrNull(3_000L) { worker?.join() }
+        if (worker?.isActive == true) worker.cancel()
+        transcriptChannel = null
+        transcriptWorker = null
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Swiping Juanita away from Recents is an explicit end-of-session action.
+        requestStop()
+        super.onTaskRemoved(rootIntent)
     }
 
     private fun createNotificationChannel() {
@@ -167,6 +289,14 @@ class JuanitaVoiceService : Service() {
     override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onDestroy() {
+        sessionJob?.cancel()
+        // Stop capture synchronously even if Android is tearing down the service.
+        assistant.stopAudioCapture()
+        transcriptChannel?.close()
+        transcriptWorker?.cancel()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { assistant.stop() }
+        }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -184,6 +314,9 @@ class JuanitaVoiceService : Service() {
 
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
+
+        private val _memoryState = MutableStateFlow("Memoria automatica pronta.")
+        val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
         fun start(context: Context, instruction: String, voiceName: String) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
