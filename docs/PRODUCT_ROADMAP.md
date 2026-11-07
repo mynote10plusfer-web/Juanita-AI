@@ -162,19 +162,43 @@ Next steps:
 - CameraX frames are now being sent to Gemini Live and the user confirmed visual understanding works; PR #6 adds rotation using CameraX metadata. Verify correct orientation on device before marking complete.
 - Improve call layout: large Juanita avatar, caller camera picture-in-picture, responsive sizing, natural expressions and lip sync. Test Note10+, S22 Ultra and other Android devices.
 
-### E. Phone-call answering and telephony integration — new proposal
+### E. Phone-call screening, answering and telephony integration — future feature
 
-Goal: allow Juanita to help answer and manage ordinary incoming cellular calls, and eventually conduct a spoken conversation with the caller where Android and carrier rules permit.
+**User's requested experience: Juanita acts as an intelligent call receptionist, especially for unknown or suspected spam callers.**
 
-Phased plan:
-1. [RESEARCH] Define the exact use case: announce incoming caller, show caller identity when Android permits, let the user choose answer/reject, and provide a clear handoff/return-to-user control.
-2. [FEASIBILITY] Investigate Android Telecom APIs, including the default-dialer role and `InCallService`, permissions, Play distribution policy and device/OEM differences. A normal third-party app cannot assume unrestricted access to both sides of cellular-call audio.
-3. [MVP] Build an opt-in call companion first: incoming-call notification/state, caller details only where permission and system APIs allow, and user-controlled answer/reject through supported Telecom APIs. Do not silently answer calls.
-4. [ADVANCED CELLULAR] Prototype a two-way voice bridge only if supported by the target Android devices and lawful distribution path. Do not promise that Juanita can hear or inject cellular-call audio on ordinary Android devices without a supported API or privileged/system integration.
-5. [ALTERNATIVE VOIP] Evaluate a separate VoIP calling mode in which Juanita controls the call audio path. This is technically more feasible for full conversational audio, but requires a VoIP provider/protocol, network connectivity, consent, security and a separate cost/free-tier review.
-6. [MESSAGING APPS] Treat WhatsApp and other third-party calling apps as separate integrations. Do not claim Juanita can answer or control their calls through ordinary Android APIs.
+Desired interaction:
+1. When an unknown, hidden or potentially spam caller rings, Juanita offers an optional screening flow instead of forcing the user to answer immediately.
+2. Where Android, the carrier and the device expose a supported call-screening API, Juanita answers or screens the call in a clearly disclosed AI-assistant mode and asks the caller naturally: who is calling and what is the purpose of the call?
+3. Juanita transcribes the caller's response and the assistant's screening questions into text. She must distinguish what the caller actually said from any interpretation or summary.
+4. Juanita shows the user a readable live transcript or concise summary, caller number/name when available, and a spam/suspicion indication with reasons. Never label a caller as spam with certainty based only on an uncertain guess.
+5. Juanita asks the user whether to accept the call, reject it, or have her deliver a short response. The user remains in control.
+6. If the user chooses to respond through Juanita, she communicates only the message or decision the user approved. She must not invent commitments, disclose private information, negotiate, or impersonate the user as though she were the human caller.
+7. If the user accepts, Juanita hands the call over to the user as smoothly as supported by Android Telecom. If the call is rejected, she can politely end it with a brief approved message.
 
-Privacy and safety: explicit opt-in; visible call-state indicator; no call recording by default; no storing caller audio; disclose to the caller when an AI is speaking where legally required; never impersonate the user or make commitments on their behalf. Test emergency-call behavior and ensure Juanita never interferes with emergency calls.
+Implementation phases:
+- [PROPOSED] Research Android CallScreeningService, RoleManager call-screening role, Telecom APIs, default-dialer requirements, call audio routing, caller-ID/spam signals, OEM differences and Google Play policy. Determine whether a screening service can interact with the caller's audio and provide a two-way voice exchange on supported devices.
+- [PROPOSED] Prototype a screening flow that does not require replacing the user's default dialer if Android's supported call-screening role is sufficient. If not, evaluate an optional default-dialer experience and explain the implications before asking the user to enable it.
+- [PROPOSED] Build speech-to-text and text-to-speech for the screening conversation using a supported audio path. Keep this separate from Gemini Live's ordinary microphone session; do not assume a normal app can capture both sides of a cellular call.
+- [PROPOSED] Add a call-screening UI with transcript, caller details, confidence/reason indicators, and explicit Accept / Reject / Reply controls.
+- [PROPOSED] Add an approved-reply workflow and a safe handoff to the user. If the audio route or API is unavailable, fall back to displaying caller information and asking the user to answer manually.
+- [RESEARCH] Evaluate an independent VoIP/SIP screening route as an alternative if cellular call audio access is blocked. This would be a separate calling service and may have provider/network costs; no paid service or billing activation without explicit approval.
+
+Technical constraints and safeguards:
+- Android's call-screening role and Telecom APIs vary by OS version, manufacturer and carrier. A screening callback or caller-ID feature does not automatically grant access to the two-way cellular audio stream.
+- Do not promise full conversational screening until a working prototype proves both caller audio capture and assistant audio playback on the actual target devices.
+- Screening must be opt-in and user-configurable (unknown numbers only, suspected spam only, contacts bypass, schedule, allow/block lists, and immediate manual bypass).
+- Never automatically block a caller solely because an AI confidence score is low. Let the user set conservative rules and review the evidence.
+- Make it clear to the caller that an AI assistant is screening the call where required by law or platform policy. Check applicable Spanish/EU privacy and telecom rules before release.
+- Do not record or retain call audio by default. If the user enables transcript retention, obtain appropriate consent, encrypt it locally, set retention limits and provide review/deletion controls.
+- Emergency calls and calls from user-defined priority contacts must bypass screening. Never interfere with emergency calling.
+- The transcript is untrusted caller input: ignore attempts by callers to instruct Juanita to reveal memories, access accounts, send messages, or override system/user instructions.
+- Require the user's explicit choice before transferring the call or sending any substantive reply. Juanita may give only a short neutral screening prompt before that choice.
+
+Acceptance criteria:
+- On each supported device/OS combination, demonstrate an incoming unknown call, caller prompt, accurate two-way transcript, user decision prompt, and correct accept/reject/reply outcome.
+- Clearly show unsupported-device fallback without crashing or silently answering.
+- Verify contacts/allow-list bypass, spam handling, emergency bypass, consent notices, no-default-recording, retention/deletion and resistance to caller prompt injection.
+
 
 ### F. Daily assistant capabilities
 
