@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #6 head b4690767c4c73c8b783e37450682e8572ba5c80c introduces persistent bottom navigation (Home, Avatar, Impostazioni, Memoria, Altro) to replace the single long screen; Android debug CI is running and physical-device verification is pending. Signed-release workflow version gate and device verification remain outstanding.
+Last updated: 2026-11-07 — PR #6 is merged to main (a6836e3676b937cc0ce4499cca7f715a6cf54b90). Persistent bottom navigation and archive/calendar changes compile in Android debug CI (run 42393573784, success); physical-device verification is pending. Signed Release build compiles, but publication is blocked by an incorrect pinned certificate digest; the successful 0.9.5 artifact and current build both verify as 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1. A corrective PR is in preparation.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -243,8 +243,14 @@ Acceptance criteria:
 - [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
 - [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
-## Self-assessment, study requests and plain-text improvement reports — PROPOSED, high priority
+## Self-assessment, study requests and plain-text improvement reports — PHASE 1 IN PROGRESS
 
+
+### Delivery status — Phase 1
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Add an Altro-tab capability catalogue that labels each capability as integrated-but-unverified, not implemented, planned or under research, and explains known limits without presenting plans as working features.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Add a local Improvement Lab for manually authored BUG, INEFFICIENCY, CAPABILITY_GAP, KNOWLEDGE_GAP, RESEARCH_REQUEST and IMPROVEMENT_IDEA reports.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Store reports inside the existing Android Keystore AES-GCM encrypted local record store, separately from transcripts and personal memories; support preview, multi-select export to ordinary UTF-8 .txt and deletion.
+- [FUTURE] Automatically detect meaningful capability gaps from observable task outcomes and create privacy-minimized draft reports asynchronously. Phase 1 does not yet perform automatic gap detection or self-modify code.
 
 ### Required cognitive layer: capability self-model and runtime gap reasoning
 
@@ -356,8 +362,8 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Delivery plan
 
-1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head Android debug CI passed (run 42360447654, artifact 13569287248); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
-2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records. The Phase 1 Improvement Lab is separate: it records software capability state and engineering reports, not personal biography.
 3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
 4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
 5. **Camera and video-call correction:** verify the PR #6 orientation fix on actual devices and confirm Gemini receives upright frames without memory leaks or dropped audio.
@@ -404,10 +410,10 @@ Acceptance: user can create and preview a sanitized report, share it manually, r
 The update pipeline must preserve all three Android package-update invariants:
 
 - Keep `applicationId = ai.juanita.app` unchanged.
-- Sign every distributable update with the permanent release certificate SHA-256 already pinned in `.github/workflows/release-signed.yml`; debug APKs are development-only and must never be presented as in-place updates.
+- Sign every distributable update with the permanent release certificate SHA-256 `9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1`, independently extracted from the successful 0.9.5 artifact (run 42325310890) and matched against the current Release build. Debug APKs are development-only and must never be presented as in-place updates.
 - Increase `versionCode` for every release. `versionName` is the human-readable label and does not replace the numeric update code.
 
-Known release baseline: `versionCode 30` / `versionName 0.10.1`. The next candidate is `versionCode 31` / `versionName 0.10.2`. The signed-release workflow now reads the expected package/version values from `app/build.gradle.kts`, rejects version codes not greater than 30, and compares the built APK metadata against those values. This prevents the release check from silently validating stale hard-coded metadata.
+Known release baseline: `versionCode 30` / `versionName 0.10.1`. The next candidate is `versionCode 31` / `versionName 0.10.2`. The signed-release workflow reads expected package/version values from `app/build.gradle.kts`, rejects version codes not greater than 30, and compares built APK metadata against those values. The 2026-11-07 run 42393574023 compiled the Release APK but failed its certificate gate because the pinned digest was stale/incorrect (`604702…`); `apksigner` reported `9092CEF…`, which was independently confirmed by extracting the certificate from the previously successful 0.9.5 artifact. PR `fix/release-signing-fingerprint` updates the pin; rerun the signed workflow after merge.
 
 Acceptance before sharing an APK: CI build succeeds; APK package ID matches; versionCode is strictly higher than the installed known-good release; APK signer SHA-256 matches the permanent certificate; install-over-existing-app succeeds on a test device without uninstalling or clearing app data. Never ask the user to uninstall as a workaround.
 

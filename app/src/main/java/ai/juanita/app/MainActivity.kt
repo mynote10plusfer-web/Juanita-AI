@@ -69,6 +69,7 @@ import ai.juanita.app.avatar.AvatarCallScreen
 import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
+import ai.juanita.app.memory.ImprovementReport
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -144,6 +145,12 @@ class MainActivity : ComponentActivity() {
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
                 initialArchivedConversations = memoryStore.listArchivedConversations(),
+                initialImprovementReports = memoryStore.listImprovementReports(),
+                onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
+                    memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
+                },
+                onRefreshImprovementReports = { memoryStore.listImprovementReports() },
+                onDeleteImprovementReports = { memoryStore.deleteImprovementReports(it) },
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
@@ -227,6 +234,10 @@ private fun JuanitaApp(
     initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialImprovementReports: List<ImprovementReport>,
+    onSaveImprovementReport: (String, String, String, String, String, String, String) -> ImprovementReport,
+    onRefreshImprovementReports: () -> List<ImprovementReport>,
+    onDeleteImprovementReports: (Set<String>) -> Unit,
     initialAvatarProfiles: List<AvatarProfile>,
     initialActiveAvatarProfileId: String?,
     initialRetentionDays: Int,
@@ -289,6 +300,7 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     var selectedSection by remember { mutableStateOf("HOME") }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
@@ -682,6 +694,22 @@ private fun JuanitaApp(
 
                 if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
+
+                ImprovementLabSection(
+                    panel = panel,
+                    gold = gold,
+                    initialReports = improvementReports,
+                    onRefresh = { onRefreshImprovementReports().also { improvementReports = it } },
+                    onSave = { title, type, area, observed, evidence, expected, acceptance ->
+                        onSaveImprovementReport(title, type, area, observed, evidence, expected, acceptance).also {
+                            improvementReports = listOf(it) + improvementReports
+                        }
+                    },
+                    onDelete = { ids ->
+                        onDeleteImprovementReports(ids)
+                        improvementReports = improvementReports.filterNot { it.id in ids }
+                    }
+                )
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)

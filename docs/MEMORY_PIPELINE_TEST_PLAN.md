@@ -1,10 +1,10 @@
 # Memory pipeline verification — PR #6
 
 ## Automated checks
-- [ ] Latest PR head Android debug CI passes after introducing persistent bottom navigation.
-- [x] Android debug APK workflow passed for the memory implementation head 1cccce87d928feec4712173b41f9aa0739f087b8 (run 42360447654; artifact 13569287248).
-- [ ] Re-run Android debug CI after roadmap, architecture and signed-release workflow corrections.
-- [ ] After merge to main, build the signed release and verify the permanent certificate fingerprint and application update metadata.
+- [x] Merged main head a6836e3676b937cc0ce4499cca7f715a6cf54b90 builds successfully in Android debug CI (run 42393573784).
+- [x] Signed Release compilation succeeded in run 42393574023; certificate verification correctly blocked publication because the workflow's pinned digest was incorrect.
+- [x] Extracted SHA-256 from the prior successful 0.9.5 APK (run 42325310890): 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1; it matches the signer reported by the new Release build.
+- [ ] Merge the corrective signing-pin PR, rerun Signed Release, and verify certificate plus application/version metadata before downloading an APK.
 - [ ] Install only a correctly signed release over the existing installation; never uninstall or clear app data to work around signing.
 
 ## Physical-device checks — Galaxy Note10+ (Android 12) and Galaxy S22 Ultra
@@ -30,6 +30,17 @@
 - [ ] Check retention settings (manual, 7, 30 and 90 days), expiry and deletion.
 - [ ] Verify app restart, process death and device reboot do not corrupt the encrypted archive or lose pending extraction batches.
 - [ ] Confirm no raw audio is stored and no full archive is uploaded to cloud services.
+
+## Improvement Lab acceptance checks — Phase 1
+- [x] Android debug CI passed for the Improvement Lab implementation (run 42394260616; artifact 13582442394).
+- [ ] Altro shows the capability catalogue and clearly distinguishes integrated-but-unverified, planned, under-research and unimplemented functions.
+- [ ] Create each report type and verify required fields, timestamp and IANA time-zone ID are saved.
+- [ ] Force-stop/relaunch and verify reports remain available after restart.
+- [ ] Preview a report and export it as UTF-8 .txt to a user-selected location.
+- [ ] Select multiple reports and verify the exported text contains each selected report exactly once.
+- [ ] Delete selected reports and verify personal memories and conversation archive remain unchanged.
+- [ ] Confirm reports are stored encrypted locally; no transcript, memory, audio or credentials are included automatically.
+- [ ] Verify the UI states that automatic gap detection is not yet implemented.
 
 ## Phone-screening research checks (future phase)
 - [ ] Confirm ROLE_CALL_SCREENING availability and user opt-in flow on Note10+ Android 12 and S22 Ultra OS version.
