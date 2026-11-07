@@ -48,6 +48,7 @@ internal fun MemoryPrivacySection(
     onAutoMemoryEnabledChanged: (Boolean) -> Unit,
     onSaveMemory: (String) -> MemoryItem,
     onDeleteMemory: (String) -> Unit,
+    onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
@@ -65,6 +66,7 @@ internal fun MemoryPrivacySection(
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var editingMemory by remember { mutableStateOf<MemoryItem?>(null) }
     var editText by remember { mutableStateOf("") }
+    var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(memoryStatus) {
         memories = onRefreshMemories()
     }
@@ -125,15 +127,23 @@ internal fun MemoryPrivacySection(
             if (memories.isEmpty()) {
                 Text("Non hai ancora salvato ricordi personali.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
             } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = { selectedMemoryIds = if (selectedMemoryIds.size == memories.size) emptySet() else memories.map { it.id }.toSet() }) {
+                        Text(if (selectedMemoryIds.size == memories.size) "Deseleziona tutti" else "Seleziona tutti", color = gold, fontSize = 12.sp)
+                    }
+                    TextButton(onClick = { confirmAction = "selected_memories" }, enabled = selectedMemoryIds.isNotEmpty()) {
+                        Text("Elimina selezionati (${selectedMemoryIds.size})", color = Color(0xFFE6A0A0), fontSize = 12.sp)
+                    }
+                }
                 memories.forEach { item ->
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(item.text, color = Color.White, fontSize = 13.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            TextButton(onClick = { editingMemory = item; editText = item.text }) {
-                                Text("Modifica", color = gold, fontSize = 12.sp)
-                            }
-                            TextButton(onClick = { confirmAction = "memory:${item.id}" }) {
-                                Text("Elimina", color = gold, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.Top) {
+                        Checkbox(checked = item.id in selectedMemoryIds, onCheckedChange = { checked -> selectedMemoryIds = if (checked) selectedMemoryIds + item.id else selectedMemoryIds - item.id })
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(item.text, color = Color.White, fontSize = 13.sp)
+                            Text("${item.category} · ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAtMillis))}", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                TextButton(onClick = { editingMemory = item; editText = item.text }) { Text("Modifica", color = gold, fontSize = 12.sp) }
+                                TextButton(onClick = { confirmAction = "memory:${item.id}" }) { Text("Elimina", color = gold, fontSize = 12.sp) }
                             }
                         }
                     }
@@ -212,6 +222,7 @@ internal fun MemoryPrivacySection(
                     when {
                         action == "clear_memories" -> { onClearMemories(); memories = emptyList() }
                         action == "clear_archive" -> { onClearArchive(); conversations = emptyList() }
+                        action == "selected_memories" -> { onDeleteMemories(selectedMemoryIds); memories = memories.filterNot { it.id in selectedMemoryIds }; selectedMemoryIds = emptySet() }
                         isMemory -> {
                             val id = action.removePrefix("memory:")
                             onDeleteMemory(id)
