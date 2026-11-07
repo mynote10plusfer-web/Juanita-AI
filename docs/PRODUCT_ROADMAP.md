@@ -120,6 +120,22 @@ Next steps:
 
 ### A. Automatic memory, archive retrieval and evolving digital biography — highest priority
 
+### A.1 User-controlled memory management — high priority
+
+- [IN PROGRESS — PR #6 FOLLOW-UP] Show each curated memory with its category and exact local creation date/time; keep the underlying timestamp as epoch milliseconds.
+- [IN PROGRESS — PR #6 FOLLOW-UP] Support selecting one memory or multiple memories and deleting the selected group after a confirmation that states the number of records to be removed.
+- [FUTURE] Add filters by category and date range, plus group actions such as deleting all memories from a selected day/category.
+- [FUTURE] Add individual transcript-turn browsing and deletion, alongside the existing whole-conversation deletion and date-range archive deletion. Keep transcript deletion separate from curated-memory deletion.
+- Every deletion must invalidate pending automatic-memory extraction so a deleted fact cannot be reintroduced by an older queued batch. Verify that historical retrieval no longer returns deleted content.
+
+### A.2 Live date and time context — high priority
+
+- [IN PROGRESS — PR #6 FOLLOW-UP] Show the Android device's live local date, clock and IANA time-zone ID in the main screen, refreshed every second.
+- [IN PROGRESS — PR #6 FOLLOW-UP] Include a timestamped local-time snapshot and zone ID in the system instruction at each Live session start.
+- [IN PROGRESS — PR #6 FOLLOW-UP] Add the `getCurrentDateTime` Live function tool so Juanita can fetch fresh device time for questions about now and time-sensitive answers; a session-start timestamp must never be treated as permanently current.
+- Use the device's time zone and current UTC offset (including daylight-saving changes); distinguish archived event timestamps from present time and never invent a time.
+
+
 - [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Automatically archive recognized USER and ASSISTANT transcript turns in encrypted per-session local files. Raw microphone audio is never stored.
 - [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Keep the complete transcript archive separate from curated long-term memories; preserve independent inspection, pause, retention and deletion controls.
 - [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Restore recent conversation context, curated memories and a grounded autobiographical continuity profile at the start of a new Live session.
