@@ -519,7 +519,7 @@ class EncryptedMemoryStore(context: Context) {
             }
         }
         sessionArchiveFiles().forEach { file ->
-            val turns = readSessionArchive(file).filter { it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive }
+            val turns = runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).filter { it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive }
             if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
         }
     }
@@ -576,7 +576,7 @@ class EncryptedMemoryStore(context: Context) {
         val cutoff = System.currentTimeMillis() - days * MILLIS_PER_DAY
         filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
         sessionArchiveFiles().forEach { file ->
-            val turns = readSessionArchive(file).filter { it.timestampMillis >= cutoff }
+            val turns = runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).filter { it.timestampMillis >= cutoff }
             if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
         }
     }
@@ -595,7 +595,7 @@ class EncryptedMemoryStore(context: Context) {
         }
         sessionArchiveFiles().forEach { file ->
             val sessionId = file.nameWithoutExtension
-            readSessionArchive(file).forEach { result += sessionId to it }
+            runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).forEach { result += sessionId to it }
         }
         return result
     }
