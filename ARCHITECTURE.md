@@ -11,23 +11,19 @@
 - Preserve package identity `ai.juanita.app`; increment `versionCode` for every installable build.
 - Never rotate the permanent release signing key.
 
-## Current baseline (0.6.0)
+## Current baseline (0.10.2 / versionCode 31)
 
-- Kotlin + Jetpack Compose.
-- Persistent assistant name and editable wake phrase.
-- Nine persistent personality traits: irony, sweetness, sensuality, seriousness, friendliness, curiosity/intelligence, expressiveness, formality, empathy.
-- `PersonaProfile` builds a system instruction for a future AI provider; no live conversation provider is connected yet.
-- Persistent selected speech language and regional profile.
-- Experimental Sicilian (Palermo area), Canarian Spanish, and Colombian Paisa phrase profiles.
-- Android speech-recognition intent as a temporary recognition adapter.
-- Android TextToSpeech with explicit language availability/error checks.
-- Provider-neutral interfaces for ASR, TTS, and conversation engines.
-- GitHub Actions debug build and permanently signed release build; v0.5.1 signed artifact was built and signature-verified.
-- Firebase project configuration, Google Services plugin, Firebase AI Logic SDK, and microphone/network permissions integrated in v0.6.0.
-
-## Selected first cloud conversation provider (pending integration)
-
-The user approved a no-billing trial using Firebase AI Logic with the Gemini Developer API and Gemini Live model `gemini-3.1-flash-live-preview`. Firebase project/app registration and SDK/config integration are now committed. Use Firebase Spark/free setup only; do not enable billing or choose Agent Platform/Vertex AI without explicit renewed approval. The selected Live model is listed by Google as available on the Gemini Developer API free tier, but Firebase AI Logic Live integration is Preview and may change. Pending App Check initialization/registration, runtime microphone permission handling, Live session lifecycle/audio streaming UI, and physical-device tests. No provider is currently connected in the app.
+- Kotlin + Jetpack Compose; package/application ID `ai.juanita.app`; multi-device Android target (minimum SDK 26).
+- Firebase AI Logic with Gemini Developer API Live model `gemini-3.1-flash-live-preview`; voice session runs in a microphone foreground service with explicit start/stop and Android notification.
+- Configurable assistant name, wake phrase setting (stored but not yet connected to a wake-word engine), nine persistent personality traits, language, regional profile and Gemini Live voice.
+- Language profiles include Italian, Spanish (Spain), Czech, English and Spanish (Colombia); experimental Sicilian, Canarian and Paisa regional instructions are separate from voice synthesis.
+- Android Keystore-backed AES-256-GCM local store for curated memories and engineering reports; encrypted per-session transcript archive is separate from curated memories. Raw microphone audio is never stored.
+- Automatic memory extraction uses a bounded, durable encrypted pending queue and a Gemini curator for non-sensitive user transcript text. The pipeline and archive recall still require end-to-end physical-device verification.
+- New Live sessions restore bounded recent transcript context and curated memories. A local lexical search tool can retrieve relevant historical excerpts before answering; multilingual semantic/vector retrieval is future work.
+- Persistent bottom navigation: Home, Avatar, Impostazioni, Memoria and Altro. Altro contains project status, debug-only App Check tools and the local Improvement Lab (Phase 1 reports are manually authored).
+- CameraX preview and optional one-frame-per-second image forwarding to the active Live session are implemented; orientation, lifecycle and long-session behavior still require device verification.
+- Avatar Studio currently stores profile metadata only. Portrait generation, facial expression animation and true audio lip sync are not implemented.
+- GitHub Actions builds debug APKs and permanently signed release APKs. The release certificate is pinned to the independently verified SHA-256 in `.github/workflows/release-signed.yml`; preserve the keystore and never distribute a debug APK as an in-place update.
 
 ## Assistant identity and personality
 
@@ -121,10 +117,10 @@ A single user-owned keystore must be created, backed up securely, and used for e
 
 ## Next milestones
 
-1. Connect a real conversation provider and multi-turn chat, passing the saved persona and dialect in every request.
-2. Add model download/verification and sherpa-onnx native Android runtime.
-3. Implement local microphone capture, VAD, ASR and offline TTS adapters.
-4. Implement wake phrase detection with explicit foreground-service opt-in and Android notification.
-5. Add user-controlled conversational memory.
-6. Add LIFE integrations one by one, behind user-granted permissions.
-7. Verify permanent release signing, then device tests and battery/privacy review.
+1. Verify the signed release certificate and update metadata, then test in-place update without uninstalling or clearing local data.
+2. Verify archive, automatic-memory extraction, historical recall, calendar navigation and deletion on Note10+ (Android 12) and S22 Ultra.
+3. Add a user-editable biography/timeline, provenance and contradiction handling; then evaluate local multilingual semantic retrieval.
+4. Extend the Improvement Lab from manual reports to asynchronous capability-gap detection based on observable task outcomes, without uploading transcripts or personal memories.
+5. Evaluate genuine on-device portrait generation; later investigate rigged avatar animation and a validated audio/viseme bridge.
+6. Research Android Telecom screening limits and prototype only supported, opt-in call-screening behavior.
+7. Evaluate sherpa-onnx offline ASR/TTS and wake-word detection on target devices; add LIFE integrations one by one behind user-granted permissions.
