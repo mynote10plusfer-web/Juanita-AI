@@ -243,6 +243,45 @@ Acceptance criteria:
 
 ## Self-assessment, study requests and plain-text improvement reports — PROPOSED, high priority
 
+
+### Required cognitive layer: capability self-model and runtime gap reasoning
+
+This requirement clarifies the product intent: Juanita is not merely a conversational interface with a diagnostic logger. She needs a bounded reasoning layer that evaluates whether she can fulfil the user's actual goal, recognizes when a task is only partially completed, and identifies what capability or knowledge would be needed to do better.
+
+- **Capability registry:** maintain a versioned, inspectable catalogue of capabilities and sub-capabilities (for example: create a reminder, schedule recurring reminders, monitor an external condition, send a notification, search the web, read a local file, understand an image, manage memories). For each, record implementation status, required permissions, dependencies, supported devices/API levels, online/offline requirements, cost tier, known limits and the last verified test result.
+- **Task decomposition and outcome assessment:** during a conversation, translate the user's request into intended outcomes and required steps. After attempting the task, compare the actual result with the intended result. Distinguish complete, partially complete, failed, unavailable and not attempted. Do not infer success from a model response alone; use tool/API confirmations and observable app state where possible.
+- **Gap classification:** identify whether the obstacle is (a) missing software capability, (b) missing or stale knowledge, (c) permission/role not granted, (d) device or Android API limitation, (e) network/provider/quota issue, (f) temporary runtime error, or (g) ambiguous user intent. These causes require different user messages and different report types.
+- **Conversation-time detection:** a gap may emerge naturally while Juanita and the user are talking. She should notice it at that moment, explain the immediate limitation briefly and continue the conversation. If useful, create a report in the background without interrupting Gemini Live audio. Do not create noisy reports for every harmless uncertainty or ordinary conversational question.
+- **Self-model and reasoning:** compare the requested outcome with the capability registry, prior task outcomes, known platform constraints and verified documentation already available. Generate a candidate explanation and improvement direction, with confidence and evidence. A model-generated inference remains a hypothesis until verified.
+- **Research boundary:** Juanita can identify what needs investigation and formulate a precise research request. She must not claim she has researched or learned a technology unless a real permitted research operation ran and its sources/results were retained.
+- **No false anthropomorphism:** present this as a software self-model and metacognitive workflow, not proof of consciousness or subjective desire. Natural language may be warm and human-like, but capability claims must remain truthful.
+
+### Required report when a capability gap is detected
+
+A report should explain the user's intended outcome (in a privacy-minimized form), the steps Juanita could and could not perform, the exact missing capability, why the current implementation is insufficient, whether the obstacle is confirmed or only suspected, the evidence/tool result, dependencies and permissions, candidate technical approaches to research, free-tier/cost and privacy constraints, device compatibility, expected benefit, confidence, and a measurable acceptance test. The report must give the engineering assistant enough information to investigate and implement the missing capability without requiring the user to reconstruct the conversation.
+
+Use a compact example structure:
+- User goal (sanitized): what the user wanted to achieve.
+- Outcome: complete / partial / failed / blocked / not attempted.
+- Existing capability checked: registry entry and verified status.
+- Gap: precise missing step or dependency.
+- Cause: confirmed category or explicitly labelled hypothesis.
+- Evidence: event ID, tool result, error code, measured duration/frequency if available.
+- Needed capability: what Juanita must be able to do after the improvement.
+- Research/implementation questions: what the engineering assistant should verify.
+- Constraints and risks: permissions, Android version/device, privacy, offline behavior, battery/storage, license and cost.
+- Acceptance test: a reproducible test proving the new capability works.
+
+### Acceptance criteria for the cognitive layer
+
+- A normal conversation can reveal a missing or incomplete capability without the user explicitly asking for a diagnostic.
+- Juanita can distinguish a true product gap from a missing permission, unsupported device/API, temporary outage, quota failure or lack of knowledge.
+- A partial task is not reported as completed; the user receives a concise truthful explanation.
+- The generated plain-text report contains enough sanitized context, evidence, dependencies and acceptance criteria for an engineer to investigate the issue independently.
+- Repeated reports are deduplicated or linked to an existing unresolved proposal.
+- The capability registry is updated only after implementation and appropriate CI/device verification; planned or unverified capabilities are never presented as available.
+- Self-assessment and report generation run asynchronously and do not interrupt the live voice conversation.
+
 Goal: Juanita must be able to identify not only software errors but also inefficiencies, capability gaps, missing knowledge, repeated friction and opportunities to improve quality, speed, reliability or resource use. She writes simple text reports for the user to download and share with the engineering assistant. Juanita does not need direct GitHub access and does not rewrite her own source code.
 
 ### Report types
