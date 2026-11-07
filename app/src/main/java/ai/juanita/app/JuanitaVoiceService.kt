@@ -157,20 +157,6 @@ class JuanitaVoiceService : Service() {
                                         _memoryState.value = "Archivio conversazione non riuscito: ${archiveFailure.localizedMessage ?: archiveFailure.javaClass.simpleName}"
                                     }
                                     if (role.equals("USER", ignoreCase = true)) {
-                                        // Retrieve related experiences from previous sessions and
-                                        // inject them into the active Live context. The current
-                                        // session is excluded because the model already has it.
-                                        try {
-                                            val recallContext = withContext(Dispatchers.IO) {
-                                                memoryStore.buildRelevantRecallContext(
-                                                    combinedText,
-                                                    excludeSessionId = conversationId
-                                                )
-                                            }
-                                            if (recallContext.isNotBlank()) assistant.sendMemoryRecall(recallContext)
-                                        } catch (recallFailure: Exception) {
-                                            _memoryState.value = "Ricerca ricordi non riuscita: ${recallFailure.localizedMessage ?: recallFailure.javaClass.simpleName}"
-                                        }
                                         userTranscriptCount++
                                         _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
                                         try {
@@ -205,12 +191,22 @@ class JuanitaVoiceService : Service() {
                                     }
                                 }
                             }
-                            assistant.start(sessionInstruction, voice) { role, text ->
-                                val sent = transcriptQueue.trySend(role to text)
-                                if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
-                                    _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                            assistant.start(
+                                systemInstruction = sessionInstruction,
+                                voiceName = voice,
+                                onTranscript = { role, text ->
+                                    val sent = transcriptQueue.trySend(role to text)
+                                    if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
+                                        _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                                    }
+                                },
+                                onArchiveSearch = { query ->
+                                    memoryStore.buildRelevantRecallContext(
+                                        query,
+                                        excludeSessionId = conversationId
+                                    )
                                 }
-                            }
+                            )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
                         } catch (cancelled: CancellationException) {
