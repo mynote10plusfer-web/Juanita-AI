@@ -60,3 +60,13 @@
 - The Live function tool has compiled but its real invocation/response cycle must be verified on the target devices and selected model.
 - A successful CI build does not prove automatic extraction, recall, deletion, retention or camera behavior works end to end.
 - Biography timeline UI, robust contradiction consolidation, local semantic embeddings and source-linked web research remain future milestones.
+
+## Calendar archive and selective deletion
+- [ ] Calendar days with conversations show the correct local-date session count.
+- [ ] Sessions spanning midnight appear on every local day they cover.
+- [ ] Opening a session shows timestamped transcript turns.
+- [ ] Deleting a time interval affects only turns in that session and interval.
+- [ ] Deleting one day or multiple non-contiguous selected days affects only those days.
+- [ ] Deleting a conversation or transcript never deletes curated personal memories.
+- [ ] Cancelling confirmation leaves all data unchanged; retention options remain available.
+- [ ] Home screen prioritizes the avatar, displays device date/time and has distinguishable navigation items.
