@@ -168,7 +168,7 @@ Next steps:
 
 Desired interaction:
 1. When an unknown, hidden or potentially spam caller rings, Juanita offers an optional screening flow instead of forcing the user to answer immediately.
-2. Where Android, the carrier and the device expose a supported call-screening API, Juanita answers or screens the call in a clearly disclosed AI-assistant mode and asks the caller naturally: who is calling and what is the purpose of the call?
+2. The Android call-screening role first performs only the fast pre-ring screening decision supported by Telecom. A separate, explicitly validated answered-call audio path is required before Juanita can speak with the caller; only then may she disclose that she is an AI assistant and ask who is calling and why.
 3. Juanita transcribes the caller's response and the assistant's screening questions into text. She must distinguish what the caller actually said from any interpretation or summary.
 4. Juanita shows the user a readable live transcript or concise summary, caller number/name when available, and a spam/suspicion indication with reasons. Never label a caller as spam with certainty based only on an uncertain guess.
 5. Juanita asks the user whether to accept the call, reject it, or have her deliver a short response. The user remains in control.
@@ -184,6 +184,15 @@ Implementation phases:
 - [RESEARCH] Evaluate an independent VoIP/SIP screening route as an alternative if cellular call audio access is blocked. This would be a separate calling service and may have provider/network costs; no paid service or billing activation without explicit approval.
 
 Technical constraints and safeguards:
+
+Verified Android platform constraints (official Android documentation checked 2026-11-07):
+- CallScreeningService receives limited Call.Details metadata and must call respondToCall within five seconds. Its response can allow, silence or disallow the incoming call; it is not a two-way voice-conversation API.
+- The platform normally sends only calls not present in the user's contacts to a screening app unless READ_CONTACTS is granted. Calls with restricted, unknown, unavailable or payphone presentation are not delivered to CallScreeningService. Therefore hidden-number screening cannot be promised through this API alone.
+- On Android 11/API 30 and later, the screening role may receive carrier STIR/SHAKEN number-verification verdicts where supported by the carrier/network. This is a signal, not proof that a call is safe or spam.
+- A third-party app can request ROLE_CALL_SCREENING without becoming the default dialer. Becoming the default phone app is a much larger commitment: it must implement ACTION_DIAL and a complete InCallService UI for incoming and ongoing calls.
+- The five-second screening callback cannot wait for a conversation with the caller. Research and prototype the post-answer audio path separately; do not assume CallScreeningService grants microphone access to both sides of a cellular call.
+- Official references: https://developer.android.com/reference/android/telecom/CallScreeningService ; https://developer.android.com/develop/connectivity/telecom/dialer-app ; https://developer.android.com/develop/connectivity/telecom/dialer-app/prevent-spoofing
+
 - Android's call-screening role and Telecom APIs vary by OS version, manufacturer and carrier. A screening callback or caller-ID feature does not automatically grant access to the two-way cellular audio stream.
 - Do not promise full conversational screening until a working prototype proves both caller audio capture and assistant audio playback on the actual target devices.
 - Screening must be opt-in and user-configurable (unknown numbers only, suspected spam only, contacts bypass, schedule, allow/block lists, and immediate manual bypass).
