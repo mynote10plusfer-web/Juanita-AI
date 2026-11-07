@@ -67,6 +67,50 @@ class EncryptedMemoryStore(context: Context) {
         return emptyList()
     }
 
+    /**
+     * Atomically append one recognized user turn to the bounded encrypted queue.
+     * This prevents a stale read/modify/write from racing with batch acknowledgement.
+     *
+     * Returns the pending count, 0 when disabled/invalidated, or -2 when full.
+     */
+    @Synchronized
+    fun enqueuePendingAutomaticMemoryTurn(
+        turn: String,
+        expectedClearVersion: Long = memoryClearVersion
+    ): Int {
+        if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion || turn.isBlank()) return 0
+        val records = readRecords()
+        val pendingRecord = (0 until records.length())
+            .mapNotNull { records.optJSONObject(it) }
+            .firstOrNull {
+                it.optString("kind") == "pending_memory_batch" &&
+                    it.optLong("clearVersion", -1L) == expectedClearVersion
+            }
+        val current = buildList {
+            val turns = pendingRecord?.optJSONArray("turns") ?: JSONArray()
+            for (index in 0 until turns.length()) {
+                turns.optString(index).takeIf { it.isNotBlank() }?.let { add(it.take(1800)) }
+            }
+        }
+        if (current.size >= 8) return -2
+
+        val updated = current + turn.take(1800)
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+        }
+        kept.put(JSONObject().apply {
+            put("kind", "pending_memory_batch")
+            put("id", "automatic")
+            put("clearVersion", expectedClearVersion)
+            put("updatedAt", System.currentTimeMillis())
+            put("turns", JSONArray(updated))
+        })
+        writeRecords(kept, synchronous = true)
+        return updated.size
+    }
+
     @Synchronized
     fun savePendingAutomaticMemoryTurns(turns: List<String>, expectedClearVersion: Long = memoryClearVersion) {
         if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion) return
