@@ -313,6 +313,7 @@ private fun JuanitaApp(
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
+    val context = LocalContext.current
     var selectedSection by remember { mutableStateOf("HOME") }
     val notificationEntries by NotificationInbox.entries.collectAsState()
     var notificationAccessEnabled by remember { mutableStateOf(false) }
@@ -330,7 +331,6 @@ private fun JuanitaApp(
     }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
-    val context = LocalContext.current
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
         object : ServiceConnection {
