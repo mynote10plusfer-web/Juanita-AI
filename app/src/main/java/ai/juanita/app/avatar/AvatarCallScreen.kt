@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +59,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 import java.util.concurrent.Executors
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen call UI. Dismissing this window also ends the voice session so
@@ -78,6 +83,8 @@ fun AvatarCallScreen(
     var cameraEnabled by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(true) }
     var cameraError by remember { mutableStateOf<String?>(null) }
+    var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
+    LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
     val cameraPermissionGranted = remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
@@ -149,6 +156,7 @@ fun AvatarCallScreen(
             ) {
                 Text(avatarName.uppercase(), color = Color.White)
                 Text("MODALITÀ CHIAMATA · ANTEPRIMA", color = Color(0xFFE4BD69))
+                Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEE d MMM · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = Color.White)
                 Text(connectionStatus, color = Color.White)
             }
 
