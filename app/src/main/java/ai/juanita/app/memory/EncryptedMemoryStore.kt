@@ -303,7 +303,6 @@ class EncryptedMemoryStore(context: Context) {
     }.sortedByDescending { it.createdAtMillis }
 
     @Synchronized
-    @Synchronized
     fun deleteMemory(id: String) {
         val records = readRecords()
         val kept = JSONArray()
