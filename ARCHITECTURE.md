@@ -53,6 +53,11 @@ Compose screens, state holders, accessibility, settings, chat transcript.
 - Future adapters: sherpa-onnx local models, Android system speech fallback, optional remote providers.
 - VAD and keyword spotting are separate services; wake-word listening must run only after explicit opt-in.
 
+### Current Live microphone ownership and speaker-analysis integration
+
+The current `GeminiLiveAssistant` uses Firebase AI Logic `LiveSession.startAudioConversation()`. The app receives input/output transcript callbacks but no PCM-frame callback for local speaker identification. Do not open a competing microphone capture session. Firebase's official Android Live API guide explicitly permits a custom recorder/stream path; investigate replacing SDK-managed capture with one app-owned recorder that fans the same transient PCM frames out to (a) the Live session and (b) the local VAD/diarization/embedding pipeline. This must preserve one microphone owner, Live audio output, server VAD/turn behavior, interruption/stop semantics and foreground-service lifecycle. Keep the existing implementation until a prototype passes regression tests. Reference: https://firebase.google.com/docs/ai-logic/live-api.
+
+
 ### Speaker identity and diarization (planned; not implemented)
 
 Keep three separate concepts:
