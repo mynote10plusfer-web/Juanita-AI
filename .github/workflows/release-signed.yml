@@ -81,11 +81,22 @@ jobs:
           fi
           echo "Permanent signing certificate matches the known-good release."
           BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
-          grep -F "package: name='ai.juanita.app' versionCode='30' versionName='0.10.1'" <<< "$BADGING" >/dev/null || {
-            echo "::error::Unexpected application ID or version metadata."
+          EXPECTED_APPLICATION_ID=$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)
+          EXPECTED_VERSION_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' app/build.gradle.kts | head -n1)
+          EXPECTED_VERSION_NAME=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)
+          if [[ -z "$EXPECTED_APPLICATION_ID" || -z "$EXPECTED_VERSION_CODE" || -z "$EXPECTED_VERSION_NAME" ]]; then
+            echo "::error::Could not read application ID/version metadata from app/build.gradle.kts."
+            exit 1
+          fi
+          if (( EXPECTED_VERSION_CODE <= 30 )); then
+            echo "::error::Update versionCode must be greater than the previous known-good release (30)."
+            exit 1
+          fi
+          grep -F "package: name='$EXPECTED_APPLICATION_ID' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" <<< "$BADGING" >/dev/null || {
+            echo "::error::APK metadata does not match Gradle configuration."
             exit 1
           }
-          echo "Application ID and update version metadata verified."
+          echo "Application ID and monotonically increasing update version verified: $EXPECTED_APPLICATION_ID / $EXPECTED_VERSION_NAME ($EXPECTED_VERSION_CODE)."
 
       - name: Upload signed APK
         if: steps.signing.outputs.ready == 'true'
