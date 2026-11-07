@@ -103,9 +103,10 @@ class JuanitaVoiceService : Service() {
                             }
                             // A single ordered worker prevents transcript callbacks racing
                             // with one another or with the final memory flush.
-                            val transcriptQueue = Channel<Pair<String, String>>(Channel.UNLIMITED)
+                            val transcriptQueue = Channel<Pair<String, String>>(capacity = 64)
                             transcriptChannel = transcriptQueue
                             transcriptWorker = serviceScope.launch(Dispatchers.IO) {
+                                var userTranscriptCount = 0
                                 var bufferedEvent: Pair<String, String>? = null
                                 while (true) {
                                     val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
@@ -131,28 +132,44 @@ class JuanitaVoiceService : Service() {
                                     // Archive errors must never block automatic memory.
                                     runCatching { memoryStore.appendConversationTurn(conversationId, role, combinedText) }
                                     if (role.equals("USER", ignoreCase = true)) {
+                                        userTranscriptCount++
+                                        _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
                                         try {
                                             val saved = automaticMemoryEngine.acceptTurn(role, combinedText)
                                             _memoryState.value = when {
-                                                saved > 0 -> "Memoria aggiornata: $saved ricordi salvati o confermati."
-                                                saved < 0 -> "Memoria in attesa di rete o quota: riproverò automaticamente."
-                                                else -> "Memoria attiva: raccolta informazioni utili in corso."
+                                                saved > 0 -> "Memoria verificata: $saved ricordi salvati o aggiornati."
+                                                saved < 0 -> "Trascrizione ricevuta ma analisi non riuscita: batch conservato in memoria cifrata per il prossimo tentativo."
+                                                else -> "Trascrizione ricevuta ($userTranscriptCount) · raccolta in corso; nessun ricordo confermato ancora."
                                             }
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
-                                        } catch (_: Exception) {
-                                            // Memory errors must not break the voice conversation.
+                                        } catch (failure: Exception) {
+                                            _memoryState.value = "Errore memoria (${failure.javaClass.simpleName}): trascrizione ricevuta, conversazione vocale non interrotta."
                                         }
                                     }
                                 }
                             }
-                            assistant.start(sessionInstruction, voice) { role, text ->
-                                transcriptQueue.trySend(role to text)
-                            }
                             _memoryState.value = if (memoryStore.isAutomaticMemoryEnabled) {
-                                "Memoria automatica attiva · analisi ogni 3 interventi utente."
+                                "Memoria automatica attiva · trascrizioni monitorate; batch cifrati e recuperabili."
                             } else {
                                 "Memoria automatica in pausa."
+                            }
+                            // Retry an encrypted pending batch from an earlier process/session.
+                            if (memoryStore.isAutomaticMemoryEnabled) {
+                                serviceScope.launch(Dispatchers.IO) {
+                                    val recovered = automaticMemoryEngine.flush()
+                                    if (recovered > 0) {
+                                        _memoryState.value = "Memoria recuperata: $recovered ricordi salvati dal batch precedente."
+                                    } else if (recovered < 0) {
+                                        _memoryState.value = "Batch precedente conservato: rete/quota o risposta AI non disponibile."
+                                    }
+                                }
+                            }
+                            assistant.start(sessionInstruction, voice) { role, text ->
+                                val sent = transcriptQueue.trySend(role to text)
+                                if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
+                                    _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                                }
                             }
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
