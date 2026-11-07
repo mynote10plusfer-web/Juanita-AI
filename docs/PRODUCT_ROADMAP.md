@@ -241,6 +241,41 @@ Acceptance criteria:
 - [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
 - [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
+## Self-assessment, study requests and plain-text improvement reports — PROPOSED, high priority
+
+Goal: Juanita must be able to identify not only software errors but also inefficiencies, capability gaps, missing knowledge, repeated friction and opportunities to improve quality, speed, reliability or resource use. She writes simple text reports for the user to download and share with the engineering assistant. Juanita does not need direct GitHub access and does not rewrite her own source code.
+
+### Report types
+- `BUG`: concrete crash, exception, failed operation or malfunction.
+- `INEFFICIENCY`: a task is unnecessarily slow, repetitive, resource-intensive or awkward.
+- `CAPABILITY_GAP`: Juanita cannot perform a task because a feature, integration or technical capability is missing.
+- `KNOWLEDGE_GAP`: Juanita lacks reliable knowledge needed to complete a task.
+- `RESEARCH_REQUEST`: a technology, method or documented solution should be investigated.
+- `IMPROVEMENT_IDEA`: an evidence-based proposal to improve an existing workflow or capability.
+
+### Plain-text report format and workflow
+- Default export is ordinary UTF-8 `.txt`, readable on any phone or computer; no special viewer or complex archive format is required.
+- Each report includes a unique ID, local date/time and time-zone ID, type, affected area, observed situation, evidence, frequency or measured impact where available, suspected limitation, proposed research/change, expected benefit, confidence/uncertainty, cost/privacy/device constraints and a measurable acceptance test.
+- Clearly separate observed facts, user feedback, measurements and model-generated hypotheses. Never invent metrics or claim research has been completed when it has not.
+- Reports are stored locally with bounded retention and can be listed, inspected, selected, exported and deleted from a future Laboratorio / Miglioramenti screen. Multiple selected reports may be exported together, while each remains a simple text file.
+- The user downloads and shares reports in ChatGPT. The engineering assistant validates the diagnosis, researches official documentation/reputable sources, prepares a plan and implements approved changes on an isolated Git branch/PR. CI and device tests verify the change; the user approves merge/release.
+- Record report outcome (accepted, rejected, deferred, resolved) to avoid repeatedly proposing already-addressed work.
+
+### Privacy, performance and autonomy boundaries
+- Local-first; no automatic cloud upload and no GitHub credentials or repository write access in the Android app.
+- By default exclude conversation transcripts, personal memories, raw audio, contacts, phone numbers, passwords, API keys, Firebase/GitHub tokens and signing credentials. A user-selected conversation excerpt requires explicit preview and confirmation.
+- Redact sensitive identifiers and secrets before export.
+- Capture lightweight structured signals asynchronously without blocking or destabilizing Gemini Live audio.
+- Juanita's ability to self-assess is a software feature based on observable task outcomes, latency, failed operations, repeated user corrections, resource use, explicit feedback and known platform limits; it is not evidence of subjective human needs or consciousness.
+- Respect the free/no-billing constraint. Any proposed dependency, model, API, hosting or research path must state quota, cost, license, privacy and device-compatibility implications.
+
+### Acceptance criteria
+- Juanita can create a useful report for a real error and for a non-error inefficiency/capability/knowledge gap.
+- Reports are simple readable `.txt` files with timestamps/time zone, evidence, uncertainty, suggested next investigation and measurable acceptance criteria.
+- User can preview, select, export and delete reports locally, including while offline.
+- Default reports contain no private memories, full conversation text, raw audio or credentials.
+- A shared report can lead to a traceable engineering change on a reviewable branch/PR, with CI/device verification and no automatic release.
+
 ## Autonomous software improvement — PROPOSED, high priority
 
 Goal: Juanita may use accumulated conversations, user feedback, observed failures and verified research to identify ways to improve her own Android software, prepare changes and validate them. This is a software-engineering feedback loop, not a claim that the model rewrites its own neural weights or becomes conscious.
