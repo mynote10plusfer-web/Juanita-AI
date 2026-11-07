@@ -36,6 +36,17 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Verify debug APK cannot replace production app
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
+          grep -F "package: name='ai.juanita.app.debug'" <<< "$BADGING" >/dev/null || {
+            echo "::error::Debug APK must use application ID ai.juanita.app.debug, never the production ID."
+            exit 1
+          }
+          echo "Debug package identity verified: ai.juanita.app.debug"
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
