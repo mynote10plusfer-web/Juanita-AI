@@ -16,7 +16,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 - Gemini Live response voice selector with seven documented female voices; selection is saved locally and applied when a new Live session starts.
 - Android speech-recognition intent remains available as a separate microphone test.
 - Android requests foreground location permission on first launch (precise GPS or approximate location). It reads a fresh device location automatically on app launch and again before each Gemini Live session, then includes the locality and coordinates in that session context. No weather screen/provider, background tracking, or persistent coordinate history.
-- Android Keystore-backed encrypted manual memory with a dedicated privacy screen: list/edit/delete individual memories, clear all personal memories, enable/disable transcript archiving, choose retention (manual/7/30/90 days), delete individual archived conversations or clear the archive independently. Gemini Live text transcripts are captured into the local encrypted archive only when the user explicitly enables archiving; raw audio is never archived. Automatic curated personal-memory extraction is enabled by default (separate from transcript archiving). User transcript batches are stored in the existing AES-GCM encrypted local store before extraction, survive process restarts, and are retried in a later session after transient network/quota failures. Extraction still requires successful Gemini transcription and a successful model response; inspect the in-app memory status and memory list to verify each step. This pipeline is an initial foundation, not yet full associative memory or a generated biography.
+- Android Keystore-backed AES-256-GCM memory. Full text transcripts from both sides of every Gemini Live conversation are archived automatically by default, locally, in encrypted per-session files; archive survives app/process restarts and is independent of curated personal facts. Raw microphone audio is never archived. Archive can be paused, assigned manual/7/30/90-day retention, and individual conversations can be deleted; manual retention is the default. The app restores the latest 60 archived turns plus curated facts into a new Live session (bounded by the model context budget); older turns remain stored on-device but are not all injected into every prompt. Automatic curated personal-memory extraction is enabled by default, separately, and uses a retryable encrypted queue. Extraction still requires successful Gemini transcription and a successful model response; inspect the in-app memory status and memory list to verify each step. Full semantic search/associative retrieval across the entire archive and a generated biography are not yet implemented.
 - CameraX front/rear camera preview and optional 1 FPS image frames to the active Gemini Live session are implemented in 0.9.0; physical-device testing is pending.
 - GitHub Actions builds a debug APK and a permanently signed release APK.
 
@@ -35,7 +35,7 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 - Native regional neural voices guaranteed to sound authentically Sicilian, Canarian or Paisa.
 - Always-on wake phrase detection (not implemented; the current foreground service is user-started and does not listen for a wake phrase).
 - Offline ASR/TTS runtime and model downloads.
-- Automatic personal-memory extraction and curation from conversations (planned; not implemented).
+- Full semantic/associative retrieval across the complete transcript archive and an automatically generated evolving biography.
 - Background location tracking (intentionally not requested).
 - LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar), each requiring explicit permissions.
 
@@ -52,4 +52,4 @@ The release workflow uses the existing permanent GitHub Actions signing secrets.
 
 ## Privacy
 
-The microphone is activated only after the user grants permission and starts a Live session. Audio is streamed to Gemini for real-time conversation and is not stored by this app. Conversation archiving remains off by default. Manual memories are stored encrypted on-device.
+The microphone is activated only after the user grants permission and starts a Live session. Audio is streamed to Gemini for real-time conversation and is not stored by this app. Conversation text archiving is on by default and encrypted on-device with Android Keystore AES-GCM; raw audio is never stored. Users can pause or clear the archive in the privacy panel. Manual memories are also encrypted on-device.
