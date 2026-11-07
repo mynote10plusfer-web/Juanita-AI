@@ -18,8 +18,8 @@ android {
         applicationId = "ai.juanita.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "0.10.1"
+        versionCode = 31
+        versionName = "0.10.2"
     }
 
     signingConfigs {
