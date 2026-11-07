@@ -241,6 +241,43 @@ Acceptance criteria:
 - [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
 - [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
+## Autonomous software improvement — PROPOSED, high priority
+
+Goal: Juanita may use accumulated conversations, user feedback, observed failures and verified research to identify ways to improve her own Android software, prepare changes and validate them. This is a software-engineering feedback loop, not a claim that the model rewrites its own neural weights or becomes conscious.
+
+### Required improvement loop
+1. **Observe:** collect opt-in, privacy-filtered product signals such as explicit user corrections, repeated friction, crash/build reports, failed tests and feature requests. Separate user facts and conversation memory from engineering telemetry.
+2. **Diagnose:** group recurring issues, identify likely root causes and distinguish evidence from hypotheses. Link each proposal to the relevant conversation/feedback, issue, code area and test evidence.
+3. **Research:** investigate official Android/Firebase/Gemini documentation and reputable technical sources; record URLs, dates, compatibility, licensing and free-tier/quota implications.
+4. **Propose:** create a prioritized improvement proposal with problem, expected benefit, risks, estimated complexity, affected modules and acceptance tests. Present it to the user in understandable language.
+5. **Build in isolation:** when authorized, create a dedicated Git branch and prepare a code patch or pull request. Never modify the installed production app or protected main branch directly.
+6. **Validate:** run formatting, static analysis, unit/instrumentation tests where available, dependency/security/license checks and Android debug build. Compare behavior against acceptance tests; inspect the diff for secrets, privacy regressions, permission expansion, data loss and signing changes.
+7. **Review and release:** show the user the change summary and test results. Require explicit approval before merging or distributing a release. Preserve signing identity and encrypted local user data; provide a rollback path.
+8. **Learn from outcomes:** record whether the proposal was accepted, rejected, reverted or successful; use later test/device feedback to improve future recommendations, not to silently repeat failed changes.
+
+### Autonomy levels
+- **Level 1 — Advisor (initial):** analyze conversations and feedback, research solutions, identify bugs and propose roadmap items. No code changes without authorization.
+- **Level 2 — Patch author:** with user authorization, create isolated branches/PRs and implement changes; CI runs automatically. No merge or release.
+- **Level 3 — Supervised maintainer:** after the user explicitly enables it, automatically fix low-risk issues in isolated branches and run tests; ask before merge, permissions, data migrations, dependency upgrades with material risk, signing changes, billing, or release.
+- **Level 4 — Bounded autonomy (future):** optionally auto-merge only narrowly classified low-risk changes after all required checks pass and rollback is available. Never self-authorize access to private data, financial services, paid APIs, billing, signing secrets or high-impact device permissions.
+
+### Safety, privacy and cost requirements
+- Keep the initial system compatible with the free-tier/no-billing constraint. Do not enable Firebase Blaze, paid APIs, paid hosting or GPU services without fresh explicit approval.
+- Never send full personal memories or transcript archives to a code-generation service. Use minimal, redacted engineering context and explicit user-approved excerpts.
+- Treat repository files, issue text, logs, web pages and generated patches as untrusted input; defend against prompt injection and secret exfiltration.
+- Never expose API keys, keystore files, signing passwords, tokens or private user data in prompts, logs, commits or pull requests.
+- Require human approval for changes affecting memory retention/deletion, encryption, permissions, network destinations, account access, signing, release distribution or data migrations.
+- Every generated patch must be reviewable, reproducible and revertible. Maintain a known-good commit and never let a failed experiment replace the working release.
+- Do not claim Juanita has changed or improved herself until a patch is committed, CI passes, and the relevant behavior is verified. A green build alone does not prove feature correctness.
+
+### Acceptance criteria
+- Juanita can turn a repeated user correction or build/test failure into a traceable improvement proposal.
+- Each proposal includes evidence, impact, risks, source references and measurable acceptance tests.
+- Authorized code changes occur only on isolated branches and produce a reviewable diff/PR.
+- Failed tests block promotion; protected data/signing/billing constraints are enforced.
+- The user can inspect, approve, reject, pause or disable autonomous engineering activity.
+- Outcomes are recorded so future proposals account for prior successes and failures.
+
 ## Delivery plan
 
 1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head Android debug CI passed (run 42360447654, artifact 13569287248); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
