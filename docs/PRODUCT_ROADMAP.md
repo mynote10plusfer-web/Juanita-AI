@@ -64,7 +64,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Do NOT enable billing/Blaze, add payment method, use Vertex AI/Agent Platform, paid APIs, paid hosting or paid GPU without fresh explicit approval.
 - Respect free-tier quotas and data-processing terms.
 - No raw audio archive.
-- Long-term personal memory should be automatic for eligible non-sensitive facts, while transcript archive remains a separate user-controlled feature. Explain the distinction clearly and provide controls to pause, inspect, correct and delete memory.
+- Long-term personal memory and transcript archiving are automatic by default for eligible non-sensitive text; both remain separately inspectable, pausable and deletable by the user. Explain the distinction clearly and provide controls to pause, inspect, correct and delete memory.
 - Prefer encrypted local/private storage. Do not upload the memory store or transcript archive by default.
 - Ask before retaining sensitive/intimate information; do not silently store sensitive facts.
 - Preserve permanent release signing keystore and GitHub Actions secrets.
@@ -75,18 +75,18 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 - Kotlin + Jetpack Compose; package ai.juanita.app.
 - Firebase AI Logic / Gemini Developer API Live model gemini-3.1-flash-live-preview.
-- Encrypted on-device manual memories exist; user can list/edit/delete them. Transcript archive is separately opt-in and OFF by default.
-- Live text transcript events feed automatic-memory processing independently of transcript archiving. Only the optional full transcript archive is gated by the user's explicit consent; raw audio is never stored.
+- Encrypted on-device manual memories exist; user can list/edit/delete them. Full transcript archive is enabled by default and saved locally in encrypted per-session files; user can pause it in Memory & Privacy.
+- Live text transcript events feed automatic-memory processing independently of transcript archiving. The full transcript archive is enabled by default but can be paused; raw audio is never stored.
 - [IMPLEMENTED IN PR #4 BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory engine receives user transcript text independently of transcript archiving, batches three user turns, asks Firebase AI Logic/Gemini to extract a maximum of five durable non-sensitive facts, and saves only curated candidates. It does not store raw audio or full transcripts. Model/network/quota errors are non-fatal to the Live session.
 - [PROPOSED IN PR #5 — BUILD/DEVICE VERIFICATION PENDING] Persist each eligible user turn to the encrypted pending queue without making the transcript intake worker wait for Gemini. A separate conflated worker processes ready batches; each turn is atomically and synchronously persisted, processed turns are acknowledged by prefix, and the existing eight-turn queue is preserved instead of silently overwriting old pending turns when full. Editing/deleting/clearing memories also removes pending transcript snippets.
 - [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory is enabled by default and can be paused in Memory & Privacy settings. The UI can refresh the memory list and supports individual edit/delete and clear-all.
-- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Hard storage ceilings: at most 100 personal memories and 32,000 characters of memory text; each memory is capped at 500 characters. Automatic memories are lower priority than manually saved memories when pruning is required. The separate transcript archive is still opt-in and capped at 300 turns. Clearing memories invalidates pending extraction batches so deleted items are not re-added from buffered turns.
-- Memory retrieval into each new Live session already reads saved personal memories; retrieval quality, contradiction handling, semantic consolidation, biography generation and source-linked Internet knowledge library remain future work.
+- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Hard storage ceilings: at most 100 personal memories and 32,000 characters of memory text; each memory is capped at 500 characters. Automatic memories are lower priority than manually saved memories when pruning is required. The separate transcript archive is enabled by default, stored in encrypted per-session files without the former 300-turn cap; retention can be set to manual, 7, 30 or 90 days. Clearing memories invalidates pending extraction batches so deleted items are not re-added from buffered turns.
+- [IMPLEMENTED IN PR #6 BRANCH — BUILD/DEVICE VERIFICATION PENDING] New Live sessions restore curated facts, the latest 60 transcript turns and a grounded autobiographical continuity profile. A Gemini Live function tool, searchPastConversations, can query the encrypted archive across older sessions before answering, ranking exact phrases, token overlap and recency locally. It returns only a bounded set of relevant excerpts; the full archive is never inserted wholesale. This is lexical retrieval, not embedding-based semantic search. A multilingual vector index, robust contradiction consolidation, dedicated editable biography timeline and source-linked Internet knowledge library remain future work.
 - Existing photorealistic Juanita portrait is static; animated face/lip sync not implemented.
 - Avatar Studio stores profile metadata; it does not yet generate rigged models.
 - PR #3 call screen and reliability fixes are merged to main (commit dc05adbe065d0955352dce91a0c95cb751dfe8db). The signed 0.9.5 release workflow completed successfully on 2026-11-07 and verified the APK signature; camera hardware and end-to-end memory behavior still require physical-device verification.
 
-## Verified status update — 2026-11-07 (PR #6)
+## Verified status update — 2026-11-07 (PR #6, memory retrieval extension)
 
 ### Avatar generation gap — not implemented yet
 
