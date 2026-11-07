@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #3 reliability work merged; encrypted retryable memory queue and transcript diagnostics proposed in PR #4; physical-device verification still required
+Last updated: 2026-11-07 — PR #3 reliability work merged; PR #4 adds encrypted retryable memory queue; PR #5 separates transcript intake from background Gemini extraction; physical-device verification still required
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -76,8 +76,9 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 - Kotlin + Jetpack Compose; package ai.juanita.app.
 - Firebase AI Logic / Gemini Developer API Live model gemini-3.1-flash-live-preview.
 - Encrypted on-device manual memories exist; user can list/edit/delete them. Transcript archive is separately opt-in and OFF by default.
-- Live text transcript capture is wired only when archive consent is enabled; raw audio is never stored.
-- [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory engine receives user transcript text independently of transcript archiving, batches three user turns, asks Firebase AI Logic/Gemini to extract a maximum of five durable non-sensitive facts, and saves only curated candidates. It does not store raw audio or full transcripts. Model/network/quota errors are non-fatal to the Live session.
+- Live text transcript events feed automatic-memory processing independently of transcript archiving. Only the optional full transcript archive is gated by the user's explicit consent; raw audio is never stored.
+- [IMPLEMENTED IN PR #4 BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory engine receives user transcript text independently of transcript archiving, batches three user turns, asks Firebase AI Logic/Gemini to extract a maximum of five durable non-sensitive facts, and saves only curated candidates. It does not store raw audio or full transcripts. Model/network/quota errors are non-fatal to the Live session.
+- [PROPOSED IN PR #5 — BUILD/DEVICE VERIFICATION PENDING] Persist each eligible user turn to the encrypted pending queue without making the transcript intake worker wait for Gemini. A separate conflated worker processes ready batches; the existing eight-turn queue is preserved instead of silently overwriting old pending turns when full.
 - [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Automatic memory is enabled by default and can be paused in Memory & Privacy settings. The UI can refresh the memory list and supports individual edit/delete and clear-all.
 - [IMPLEMENTED IN PR BRANCH — BUILD/DEVICE VERIFICATION PENDING] Hard storage ceilings: at most 100 personal memories and 32,000 characters of memory text; each memory is capped at 500 characters. Automatic memories are lower priority than manually saved memories when pruning is required. The separate transcript archive is still opt-in and capped at 300 turns. Clearing memories invalidates pending extraction batches so deleted items are not re-added from buffered turns.
 - Memory retrieval into each new Live session already reads saved personal memories; retrieval quality, contradiction handling, semantic consolidation, biography generation and source-linked Internet knowledge library remain future work.
@@ -131,7 +132,7 @@ Juanita should feel like a warm, expressive, multilingual personal voice assista
 
 ## Delivery plan
 
-1. Memory engine: initial automatic extraction, encrypted local memories, duplicate suppression, sensitive-content guard, pause control, memory list refresh and storage caps are in main. PR #4 adds a durable encrypted pending-turn queue and explicit diagnostics; next verify CI and real-device transcript-to-recall behavior, then add provenance/conflict resolution and contextual retrieval.
+1. Memory engine: initial automatic extraction, encrypted local memories, duplicate suppression, sensitive-content guard, pause control, memory list refresh and storage caps are in main. PR #4 adds a durable encrypted pending-turn queue and explicit diagnostics. PR #5 decouples transcript intake from Gemini extraction to avoid blocking the transcript worker. Next verify CI and real-device transcript-to-recall behavior, then add provenance/conflict resolution and contextual retrieval.
 2. Biography and self-model: build an inspectable evolving biography with chronology, learned topics, projects, milestones and clear separation between user facts and Juanita's software history.
 3. Research and learning: focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Not implemented yet. Research must use a free-tier-supported model/tool configuration and hard quota limits; do not enable billing. Grounded responses must display Google's required Search suggestions and source links.
 4. Reliability and privacy: test long sessions, background service, memory pause/disable, export/restore, deletion and offline behavior.
