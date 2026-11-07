@@ -46,6 +46,7 @@ import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun MemoryPrivacySection(
@@ -298,6 +299,15 @@ private fun ConversationArchiveCalendar(
     var confirmSelectedDays by remember { mutableStateOf(false) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
+    // Refresh on entry and periodically while the archive is visible: the voice worker
+    // writes transcript turns asynchronously, so the initial activity snapshot can be stale.
+    LaunchedEffect(Unit) {
+        onRefresh()
+        while (true) {
+            delay(2_000L)
+            onRefresh()
+        }
+    }
     val byDay = remember(conversations) {
         conversations.flatMap { session ->
             val first = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDate()
