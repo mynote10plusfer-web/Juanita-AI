@@ -37,7 +37,7 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 - Offline ASR/TTS runtime and model downloads.
 - Multilingual semantic/vector retrieval beyond the current on-device lexical archive search; a dedicated editable biography/timeline screen.
 - Background location tracking (intentionally not requested).
-- LIFE integrations (notifications, SMS, WhatsApp, email, calls, calendar), each requiring explicit permissions.
+- LIFE integrations (notifications, SMS, WhatsApp, email, calendar) and intelligent cellular call screening/AI receptionist; each requires explicit permissions and separate platform-feasibility testing. Android call screening is not yet a two-way caller conversation feature.
 
 ## Product roadmap
 
