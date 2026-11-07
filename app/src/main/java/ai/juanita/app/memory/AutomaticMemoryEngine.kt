@@ -73,15 +73,22 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 .generativeModel(modelName = MODEL_NAME)
             val prompt = """
                 You are the memory curator for a personal assistant. Extract at most 5
-                concise, useful, durable, non-sensitive facts from the USER messages.
-                Return ONLY a JSON array. Each object must have: "text" (string),
-                "category" (one of preference, interest, project, routine, goal, language,
-                communication, important_event, general), "confidence" (number 0..1),
+                concise, useful, durable, non-sensitive facts and meaningful experiences
+                from the USER messages. Preserve context that helps future conversations:
+                recurring people the user explicitly identifies as important, ongoing projects,
+                decisions and their reasons, meaningful milestones, preferences, goals,
+                lessons learned, and events the user explicitly says matter. Do not turn
+                one-off questions into biography. Return ONLY a JSON array. Each object must
+                have: "text" (string), "category" (one of preference, interest, project,
+                routine, goal, language, communication, important_event, experience,
+                person, relationship, milestone, general), "confidence" (number 0..1),
                 and "sensitive" (boolean).
 
                 Save only information explicitly stated by the user. Ignore greetings,
                 small talk, one-off questions, temporary moods, jokes, hypotheticals,
-                guesses and facts about third parties unless essential and non-sensitive.
+                guesses and facts about third parties unless the user explicitly identifies
+                that person as relevant to an ongoing relationship or shared project; even
+                then store only minimal non-sensitive context and never private details.
                 Never extract health/medical details, political or religious beliefs,
                 sexual life/orientation, ethnicity, financial account data, passwords,
                 legal/criminal history or other sensitive/intimate information.
@@ -154,7 +161,8 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
         private const val MAX_CANDIDATES = 5
         private val ALLOWED_CATEGORIES = setOf(
             "preference", "interest", "project", "routine", "goal",
-            "language", "communication", "important_event", "general"
+            "language", "communication", "important_event", "experience",
+            "person", "relationship", "milestone", "general"
         )
     }
 }
