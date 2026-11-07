@@ -214,6 +214,30 @@ Next steps:
 - Keep multilingual transcription through Gemini Live as the default. Test language switching and mixed-language turns on device.
 - If the user later wants speaker identity, design an opt-in, privacy-preserving local speaker-recognition feature; never infer or identify a person from a voice without explicit enrollment and consent.
 
+## Notification access and personal inbox — candidate 0.10.4
+
+**Stage 1 — opt-in notification reader (implemented in feature branch; CI/device verification pending)**
+- Register an Android `NotificationListenerService` protected by `BIND_NOTIFICATION_LISTENER_SERVICE`; do not request notification access automatically. The user opens Android's notification-listener settings and enables Juanita explicitly.
+- Receive posted notifications, identify the source application and extract only text Android makes available in notification extras. Do not bypass lock-screen privacy or recover hidden previews.
+- Show the latest 30 notification entries in the Altro tab; provide an explicit clear action and a per-entry read-aloud action using the already configured Android TTS engine.
+- First implementation is volatile/in-memory only: no notification text is written to transcript archive, personal memory, logs or cloud services; do not send notifications to Gemini. App-process recreation clears the temporary inbox.
+- Ignore ongoing notifications and group-summary notifications. The user can revoke notification access at any time in Android settings.
+- Initial version does not access WhatsApp's private database, fetch historical chats, send messages, mark messages read or reply. WhatsApp support depends on the message preview exposed by Android and the sender/app's notification format.
+
+**Acceptance tests**
+- Verify access remains disabled until the user grants it, and revoking it stops new capture.
+- Verify notifications from WhatsApp and at least two other apps appear with correct app label/title/body where Android exposes them.
+- Verify hidden previews remain unavailable and no content is retained after process death.
+- Verify clear action empties the inbox and read-aloud uses the selected language.
+- Verify no notification body is present in Gemini requests, encrypted conversation archive, curated memories or application logs.
+- Physical-device tests required on Note10+ (Android 12) and S22 Ultra. CI compilation is not proof of OEM notification delivery.
+
+**Later stages**
+- Per-app allow/block list, notification categories and quiet hours.
+- User-controlled encrypted persistence/retention only if explicitly approved.
+- Contextual voice summaries and optional Gemini-based prioritization only after a separate opt-in and privacy review.
+- Quick actions/replies only where Android's public notification actions safely support them; no scraping or WhatsApp private APIs.
+
 ## Functional requirements
 
 ### A. Automatic memory, archive retrieval and evolving digital biography — highest priority
