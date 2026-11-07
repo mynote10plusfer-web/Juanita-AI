@@ -303,15 +303,20 @@ class EncryptedMemoryStore(context: Context) {
     }.sortedByDescending { it.createdAtMillis }
 
     @Synchronized
+    @Synchronized
     fun deleteMemory(id: String) {
         val records = readRecords()
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("id") != id) kept.put(record)
+            if (record.optString("kind") == "pending_memory_batch") continue
+            if (record.optString("kind") == "memory" && record.optString("id") == id) continue
+            kept.put(record)
         }
-        writeRecords(kept)
-        preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+        writeRecords(kept, synchronous = true)
+        check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
+            "Unable to invalidate pending memory after deletion"
+        }
     }
 
     /** Summary of one locally archived voice/text conversation. */
@@ -474,8 +479,12 @@ class EncryptedMemoryStore(context: Context) {
     /** Clears saved personal memories only; archived conversation turns are preserved. */
     @Synchronized
     fun clearPersonalMemories() {
-        filterRecords { it.optString("kind") != "memory" }
-        preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+        filterRecords {
+            it.optString("kind") != "memory" && it.optString("kind") != "pending_memory_batch"
+        }
+        check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
+            "Unable to invalidate pending memory after clearing"
+        }
     }
 
     @Synchronized
@@ -492,8 +501,15 @@ class EncryptedMemoryStore(context: Context) {
             }
         }
         if (updated) {
-            writeRecords(records)
-            preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).apply()
+            val kept = JSONArray()
+            for (index in 0 until records.length()) {
+                val record = records.optJSONObject(index) ?: continue
+                if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+            }
+            writeRecords(kept, synchronous = true)
+            check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
+                "Unable to invalidate pending memory after editing"
+            }
         }
         return updated
     }
