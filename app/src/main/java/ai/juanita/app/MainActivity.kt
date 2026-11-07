@@ -311,6 +311,7 @@ private fun JuanitaApp(
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
+    val memorySectionRequester = remember { BringIntoViewRequester() }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -415,14 +416,20 @@ private fun JuanitaApp(
         )
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = background) {
+            val mainScrollState = rememberScrollState()
             Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 28.dp),
+                modifier = Modifier.fillMaxSize().verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(text = assistantName.uppercase(), color = gold, fontSize = 29.sp,
                     fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                 Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
                 Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = gold, fontSize = 12.sp)
+                Button(
+                    onClick = { uiScope.launch { memorySectionRequester.bringIntoView() } },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                ) { Text("GESTISCI RICORDI E CONVERSAZIONI  ↓") }
                 JuanitaAvatarCard()
 
                 AvatarStudioSection(
@@ -625,6 +632,7 @@ private fun JuanitaApp(
                 }
 
                 MemoryPrivacySection(
+                    modifier = Modifier.bringIntoViewRequester(memorySectionRequester),
                     panel = panel,
                     gold = gold,
                     initialArchiveEnabled = archiveEnabled,
