@@ -261,6 +261,84 @@ class EncryptedMemoryStore(context: Context) {
     private fun normalizeMemoryText(value: String): String =
         value.trim().lowercase().replace(Regex("\\s+"), " ")
 
+    /** Store engineering reports in the same encrypted local record file, separate from personal memories and transcripts. */
+    @Synchronized
+    fun addImprovementReport(
+        title: String,
+        type: String,
+        area: String,
+        observed: String,
+        evidence: String,
+        expectedOutcome: String,
+        acceptanceTest: String
+    ): ImprovementReport {
+        require(title.isNotBlank() && observed.isNotBlank() && expectedOutcome.isNotBlank() && acceptanceTest.isNotBlank())
+        val report = ImprovementReport(
+            id = UUID.randomUUID().toString(),
+            title = title.trim().take(160),
+            type = type.take(40),
+            area = area.trim().take(120),
+            observed = observed.trim().take(4000),
+            evidence = evidence.trim().take(4000),
+            expectedOutcome = expectedOutcome.trim().take(2500),
+            acceptanceTest = acceptanceTest.trim().take(2500),
+            createdAtMillis = System.currentTimeMillis(),
+            timeZoneId = java.time.ZoneId.systemDefault().id,
+            status = "OPEN"
+        )
+        val records = readRecords()
+        records.put(improvementReportToJson(report))
+        writeRecords(records, synchronous = true)
+        return report
+    }
+
+    @Synchronized
+    fun listImprovementReports(): List<ImprovementReport> = buildList {
+        val records = readRecords()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "improvement_report") continue
+            runCatching { jsonToImprovementReport(record) }.getOrNull()?.let(::add)
+        }
+    }.sortedByDescending { it.createdAtMillis }
+
+    @Synchronized
+    fun deleteImprovementReports(ids: Set<String>) {
+        if (ids.isEmpty()) return
+        filterRecords { record ->
+            record.optString("kind") != "improvement_report" || record.optString("id") !in ids
+        }
+    }
+
+    private fun improvementReportToJson(report: ImprovementReport) = JSONObject().apply {
+        put("kind", "improvement_report")
+        put("id", report.id)
+        put("title", report.title)
+        put("type", report.type)
+        put("area", report.area)
+        put("observed", report.observed)
+        put("evidence", report.evidence)
+        put("expectedOutcome", report.expectedOutcome)
+        put("acceptanceTest", report.acceptanceTest)
+        put("createdAt", report.createdAtMillis)
+        put("timeZoneId", report.timeZoneId)
+        put("status", report.status)
+    }
+
+    private fun jsonToImprovementReport(json: JSONObject) = ImprovementReport(
+        id = json.getString("id"),
+        title = json.getString("title"),
+        type = json.optString("type", "IMPROVEMENT_IDEA"),
+        area = json.optString("area", "Generale"),
+        observed = json.optString("observed"),
+        evidence = json.optString("evidence"),
+        expectedOutcome = json.optString("expectedOutcome"),
+        acceptanceTest = json.optString("acceptanceTest"),
+        createdAtMillis = json.optLong("createdAt"),
+        timeZoneId = json.optString("timeZoneId", "UTC"),
+        status = json.optString("status", "OPEN")
+    )
+
     /** Explicitly saved semantic memory. Sensitive items require user confirmation. */
     @Synchronized
     fun addMemory(
@@ -727,11 +805,13 @@ class EncryptedMemoryStore(context: Context) {
         val memories = mutableListOf<JSONObject>()
         val turns = mutableListOf<JSONObject>()
         val other = mutableListOf<JSONObject>()
+        val reports = mutableListOf<JSONObject>()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             when (record.optString("kind")) {
                 "memory" -> memories += record
                 "turn" -> turns += record
+                "improvement_report" -> reports += record
                 else -> other += record
             }
         }
@@ -753,8 +833,10 @@ class EncryptedMemoryStore(context: Context) {
 
         val keptTurns = turns.sortedByDescending { it.optLong("createdAt") }
             .take(MAX_ARCHIVE_RECORDS)
+        val keptReports = reports.sortedByDescending { it.optLong("createdAt") }.take(MAX_IMPROVEMENT_REPORTS)
         return JSONArray().apply {
             other.forEach { put(it) }
+            keptReports.forEach { put(it) }
             keptMemories.forEach { put(it) }
             keptTurns.sortedBy { it.optLong("createdAt") }.forEach { put(it) }
         }
@@ -825,5 +907,6 @@ class EncryptedMemoryStore(context: Context) {
         private const val MAX_MEMORY_ITEMS = 100
         private const val MAX_MEMORY_CHARS = 32_000
         private const val MAX_ARCHIVE_RECORDS = 300
+        private const val MAX_IMPROVEMENT_REPORTS = 50
     }
 }
