@@ -25,17 +25,24 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
      * bounded encrypted queue is full. A full queue is preserved rather than silently
      * overwriting older unprocessed turns.
      */
-    suspend fun queueTurn(role: String, text: String): Int = mutex.withLock {
-        if (!store.isAutomaticMemoryEnabled || text.isBlank()) return@withLock 0
-        if (role.uppercase() != "USER") return@withLock 0
+    /**
+     * Persist a recognized user turn quickly. This method deliberately does not acquire
+     * the extraction mutex: a slow Gemini request must never block transcript intake.
+     * EncryptedMemoryStore serializes each read/write operation.
+     *
+     * Returns pending count, 0 when disabled/ignored, or -2 when the bounded queue is full.
+     */
+    suspend fun queueTurn(role: String, text: String): Int {
+        if (!store.isAutomaticMemoryEnabled || text.isBlank()) return 0
+        if (role.uppercase() != "USER") return 0
 
         val version = store.memoryClearVersion
         val pending = store.readPendingAutomaticMemoryTurns(version).toMutableList()
-        if (pending.size >= MAX_PENDING_TURNS) return@withLock -2
+        if (pending.size >= MAX_PENDING_TURNS) return -2
 
         pending += "USER: ${text.take(MAX_TURN_CHARS)}"
         store.savePendingAutomaticMemoryTurns(pending, version)
-        pending.size
+        return if (store.isAutomaticMemoryEnabled && store.memoryClearVersion == version) pending.size else 0
     }
 
     /** Process a complete batch away from the Live transcript callback worker. */
@@ -124,7 +131,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
 
             // Clear only after a valid model response has been processed. If the
             // process dies before this point, the encrypted queue remains for retry.
-            store.clearPendingAutomaticMemoryTurns(batchVersion)
+            store.removeProcessedAutomaticMemoryTurns(batchTurns, batchVersion)
             savedCount
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
