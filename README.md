@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Candidate release: 0.10.3 (versionCode 32)
+## Candidate release: 0.10.4 (versionCode 33)
 
-This candidate increments versionCode and keeps the permanent production application ID and signing certificate unchanged. Debug builds use the isolated package ai.juanita.app.debug and a separate Firebase variant configuration. Only the signed Release APK is suitable for updating the production app.
+This candidate adds opt-in Android notification reading, increments versionCode, and keeps the permanent production application ID and signing certificate unchanged. Debug builds use the isolated package ai.juanita.app.debug and a separate Firebase variant configuration. Only the signed Release APK is suitable for updating the production app.
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
