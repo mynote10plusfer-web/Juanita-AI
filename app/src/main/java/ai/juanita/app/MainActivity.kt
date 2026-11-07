@@ -436,14 +436,14 @@ OROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.
                 modifier = Modifier.weight(1f).verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(text = assistantName.uppercase(), color = gold, fontSize = 29.sp,
-                    fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
-                Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
-                Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = gold, fontSize = 12.sp)
-                Text("Usa il menu in basso per passare da una sezione all'altra.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 if (selectedSection == "HOME") {
                     JuanitaAvatarCard()
                 }
+                Text(text = assistantName.uppercase(), color = gold, fontSize = 25.sp,
+                    fontWeight = FontWeight.Bold, letterSpacing = 3.sp)
+                Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
+                Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = gold, fontSize = 12.sp)
+                Text("Usa il menu in basso per passare da una sezione all'altra.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
                 if (selectedSection == "AVATAR") {
                 AvatarStudioSection(
