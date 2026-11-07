@@ -410,3 +410,8 @@ The update pipeline must preserve all three Android package-update invariants:
 Known release baseline: `versionCode 30` / `versionName 0.10.1`. The next candidate is `versionCode 31` / `versionName 0.10.2`. The signed-release workflow now reads the expected package/version values from `app/build.gradle.kts`, rejects version codes not greater than 30, and compares the built APK metadata against those values. This prevents the release check from silently validating stale hard-coded metadata.
 
 Acceptance before sharing an APK: CI build succeeds; APK package ID matches; versionCode is strictly higher than the installed known-good release; APK signer SHA-256 matches the permanent certificate; install-over-existing-app succeeds on a test device without uninstalling or clearing app data. Never ask the user to uninstall as a workaround.
+
+
+## Conversation archive calendar — IN PROGRESS
+
+Replace broad date-range deletion with a local calendar, per-day conversation lists, transcript preview with timestamps, per-conversation time-window deletion, whole-day deletion and multi-day selection. Transcript deletion must preserve curated personal memories. The home screen should foreground the avatar, show device date/time and use distinct navigation icons. Exact-head CI and device verification are pending.
