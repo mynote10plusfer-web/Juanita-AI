@@ -37,6 +37,8 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 ## Not implemented yet
 
 - Native regional neural voices guaranteed to sound authentically Sicilian, Canarian or Paisa.
+- Local familiar-person speaker identification and diarization; Gemini Live transcription alone does not identify a speaker.
+- Familiar-person visual profiles and live face matching; ordinary photo memory and biometric recognition are separate features.
 - Always-on wake phrase detection (not implemented; the current foreground service is user-started and does not listen for a wake phrase).
 - Offline ASR/TTS runtime and model downloads.
 - Multilingual semantic/vector retrieval beyond the current on-device lexical archive search; a dedicated editable biography/timeline screen.
