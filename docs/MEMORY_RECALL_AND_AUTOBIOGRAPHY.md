@@ -13,6 +13,8 @@ Juanita should maintain continuity across app restarts and separate Live session
 
 ## Retrieval
 
+The Live function-call request/response is handled by the Firebase AI Logic SDK and Kotlin serialization JSON types; archive lookup itself remains on-device.
+
 - Gemini Live exposes a `searchPastConversations` function tool.
 - When a user asks about something previously discussed, a person, decision, event, project or experience, the model can request a search before answering.
 - Search runs locally over decrypted-in-memory copies of encrypted archived turns and curated facts. It normalizes accents/case, ranks exact phrase matches, token overlap and recency, and returns a small bounded set of excerpts.
