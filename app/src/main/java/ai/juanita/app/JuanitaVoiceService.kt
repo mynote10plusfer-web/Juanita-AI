@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
@@ -45,12 +46,18 @@ class JuanitaVoiceService : Service() {
     private var transcriptWorker: Job? = null
     private var memoryWorkChannel: Channel<Unit>? = null
     private var memoryWorker: Job? = null
+    private val videoFrameInFlight = AtomicBoolean(false)
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
+            if (!videoFrameInFlight.compareAndSet(false, true)) return
             serviceScope.launch {
-                runCatching { assistant.sendVideoFrame(bitmap) }
-                    .onFailure { _visionState.value = "Invio immagine non riuscito: ${it.localizedMessage ?: "errore"}" }
+                try {
+                    runCatching { assistant.sendVideoFrame(bitmap) }
+                        .onFailure { _visionState.value = "Invio immagine non riuscito: ${it.localizedMessage ?: "errore"}" }
+                } finally {
+                    videoFrameInFlight.set(false)
+                }
             }
         }
     }
