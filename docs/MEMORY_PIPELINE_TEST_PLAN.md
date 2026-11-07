@@ -31,6 +31,17 @@
 - [ ] Verify app restart, process death and device reboot do not corrupt the encrypted archive or lose pending extraction batches.
 - [ ] Confirm no raw audio is stored and no full archive is uploaded to cloud services.
 
+## Improvement Lab acceptance checks — Phase 1
+- [x] Android debug CI passed for the Improvement Lab implementation (run 42394260616; artifact 13582442394).
+- [ ] Altro shows the capability catalogue and clearly distinguishes integrated-but-unverified, planned, under-research and unimplemented functions.
+- [ ] Create each report type and verify required fields, timestamp and IANA time-zone ID are saved.
+- [ ] Force-stop/relaunch and verify reports remain available after restart.
+- [ ] Preview a report and export it as UTF-8 .txt to a user-selected location.
+- [ ] Select multiple reports and verify the exported text contains each selected report exactly once.
+- [ ] Delete selected reports and verify personal memories and conversation archive remain unchanged.
+- [ ] Confirm reports are stored encrypted locally; no transcript, memory, audio or credentials are included automatically.
+- [ ] Verify the UI states that automatic gap detection is not yet implemented.
+
 ## Phone-screening research checks (future phase)
 - [ ] Confirm ROLE_CALL_SCREENING availability and user opt-in flow on Note10+ Android 12 and S22 Ultra OS version.
 - [ ] Verify the five-second CallScreeningService response requirement and test fail-open behavior.
