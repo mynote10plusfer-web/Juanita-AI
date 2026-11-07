@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +36,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -283,6 +286,7 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var selectedSection by remember { mutableStateOf("HOME") }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
     val context = LocalContext.current
@@ -420,22 +424,22 @@ private fun JuanitaApp(
         )
     ) {
         Surface(modifier = Modifier.fillMaxSize(), color = background) {
-            val mainScrollState = rememberScrollState()
-            Column(
-                modifier = Modifier.fillMaxSize().verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 28.dp),
+            Column(modifier = Modifier.fillMaxSize()) {
+              val mainScrollState = rememberScrollState()
+              Column(
+                modifier = Modifier.weight(1f).verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(text = assistantName.uppercase(), color = gold, fontSize = 29.sp,
                     fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                 Text("PERSONAL VOICE ASSISTANT", color = Color(0xFF9A9DA4), fontSize = 11.sp, letterSpacing = 2.sp)
                 Text(deviceDateTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy · HH:mm:ss", Locale.getDefault())) + " · " + deviceDateTime.zone.id, color = gold, fontSize = 12.sp)
-                Button(
-                    onClick = { uiScope.launch { memorySectionRequester.bringIntoView() } },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-                ) { Text("GESTISCI RICORDI E CONVERSAZIONI  ↓") }
-                JuanitaAvatarCard()
+                Text("Usa il menu in basso per passare da una sezione all'altra.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                if (selectedSection == "HOME") {
+                    JuanitaAvatarCard()
+                }
 
+                if (selectedSection == "AVATAR") {
                 AvatarStudioSection(
                     panel = panel,
                     gold = gold,
@@ -446,6 +450,9 @@ private fun JuanitaApp(
                     onDeleteProfile = onDeleteAvatarProfile
                 )
 
+                }
+
+                if (selectedSection == "SETTINGS") {
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     OutlinedTextField(
                         value = assistantName,
@@ -587,6 +594,9 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
+                }
+
+                if (selectedSection == "HOME") {
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                     Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
@@ -623,9 +633,9 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
-                // The call screen owns the camera while visible. Dispose the other
-                // CameraX preview first so two UI surfaces never fight for the camera.
-                if (!callScreenVisible) {
+                }
+
+                if (selectedSection == "AVATAR" && !callScreenVisible) {
                     CameraVisionSection(
                         panel = panel,
                         gold = gold,
@@ -635,6 +645,7 @@ private fun JuanitaApp(
                     )
                 }
 
+                if (selectedSection == "MEMORY") {
                 MemoryPrivacySection(
                     modifier = Modifier.bringIntoViewRequester(memorySectionRequester),
                     panel = panel,
@@ -664,6 +675,9 @@ private fun JuanitaApp(
                     onRetentionChanged = onRetentionChanged
                 )
 
+                }
+
+                if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
@@ -673,6 +687,7 @@ private fun JuanitaApp(
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
 
                 if (callScreenVisible) {
                     val activeAvatarName = initialAvatarProfiles
@@ -695,6 +710,17 @@ private fun JuanitaApp(
                         }
                     )
                 }
+              }
+              NavigationBar(containerColor = panel, contentColor = gold) {
+                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Impostazioni", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
+                      NavigationBarItem(
+                          selected = selectedSection == key,
+                          onClick = { selectedSection = key },
+                          icon = {},
+                          label = { Text(label, fontSize = 10.sp) }
+                      )
+                  }
+              }
             }
         }
     }
