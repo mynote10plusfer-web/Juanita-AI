@@ -41,6 +41,12 @@ Juanita must behave like a continuous personal assistant with an accumulating, u
 - Juanita never claims to have searched, learned, stored or remembered something unless the corresponding operation actually succeeded.
 - No claim of genuine consciousness or subjective experience; the evolving biography is an inspectable software self-model.
 
+### Video-call screen behavior and first-meeting profile
+
+- [IN PROGRESS — CANDIDATE 0.10.3; CI VERIFICATION PENDING] While the in-app video-call screen is open, set Android `FLAG_KEEP_SCREEN_ON` for the host activity window. Clear it immediately when the call screen closes or the composable is disposed. Audio-only sessions must not hold the display awake; they continue through the foreground microphone service and may run with the display off.
+- [IN PROGRESS — CANDIDATE 0.10.3; CI/DEVICE VERIFICATION PENDING] On first launch, offer a guided first-meeting profile with optional fields for preferred name, location, languages, interests, lifestyle/priorities, goals and desired assistance. Every field is optional; users can skip. Only explicitly submitted answers are stored as user-confirmed profile memories in the encrypted local memory store. The onboarding completion flag is stored locally. No passwords or sensitive personal data are requested.
+- Acceptance: verify the screen stays awake throughout a video call, including when the user's camera is disabled; verify it returns to normal immediately after ending/closing the call; verify an audio-only session does not keep the screen awake. Verify onboarding can be skipped, saved, and shown only once, and submitted profile memories appear in the memory manager and are available to later sessions.
+
 ## Product vision
 
 Juanita should feel like a warm, expressive, multilingual personal voice assistant and a familiar conversational presence: she should get to know the user gradually, remember useful context automatically, learn from focused research, and build a coherent, revisable digital biography over time. She is software, not a conscious person; do not claim otherwise.
