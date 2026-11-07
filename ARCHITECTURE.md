@@ -11,7 +11,7 @@
 - Preserve package identity `ai.juanita.app`; increment `versionCode` for every installable build.
 - Never rotate the permanent release signing key.
 
-## Current baseline (0.10.2 / versionCode 31)
+## Current baseline (candidate 0.10.3 / versionCode 32)
 
 - Kotlin + Jetpack Compose; package/application ID `ai.juanita.app`; multi-device Android target (minimum SDK 26).
 - Firebase AI Logic with Gemini Developer API Live model `gemini-3.1-flash-live-preview`; voice session runs in a microphone foreground service with explicit start/stop and Android notification.
