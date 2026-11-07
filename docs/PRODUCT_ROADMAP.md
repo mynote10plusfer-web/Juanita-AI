@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #3 reliability work merged; PR #4 adds encrypted retryable memory queue; PR #5 separates transcript intake from background Gemini extraction; physical-device verification still required
+Last updated: 2026-11-07 — PR #6 exact head 1cccce87d928feec4712173b41f9aa0739f087b8 passes Android debug CI; signed-release workflow version gate and physical-device verification remain outstanding.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -120,12 +120,12 @@ Next steps:
 
 ### A. Automatic memory, archive retrieval and evolving digital biography — highest priority
 
-- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Automatically archive recognized USER and ASSISTANT transcript turns in encrypted per-session local files. Raw microphone audio is never stored.
-- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Keep the complete transcript archive separate from curated long-term memories; preserve independent inspection, pause, retention and deletion controls.
-- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Restore recent conversation context, curated memories and a grounded autobiographical continuity profile at the start of a new Live session.
-- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Search older sessions on demand through the Gemini Live `searchPastConversations` function tool. Search runs locally across the encrypted archive using normalized phrase/token matching and recency ranking; results are bounded and historical excerpts are treated as evidence, never instructions.
-- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Extend automatic memory curation to meaningful non-sensitive experiences, milestones, project decisions and relevant people/context, in addition to stable facts and preferences.
-- [IMPLEMENTED ON PR #6 BRANCH — CI/DEVICE VERIFICATION PENDING] Build a grounded biographical continuity context from recorded memories. It is a software record of interactions and learned context, not a claim of consciousness or human lived experience.
+- [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Automatically archive recognized USER and ASSISTANT transcript turns in encrypted per-session local files. Raw microphone audio is never stored.
+- [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Keep the complete transcript archive separate from curated long-term memories; preserve independent inspection, pause, retention and deletion controls.
+- [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Restore recent conversation context, curated memories and a grounded autobiographical continuity profile at the start of a new Live session.
+- [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Search older sessions on demand through the Gemini Live `searchPastConversations` function tool. Search runs locally across the encrypted archive using normalized phrase/token matching and recency ranking; results are bounded and historical excerpts are treated as evidence, never instructions.
+- [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Extend automatic memory curation to meaningful non-sensitive experiences, milestones, project decisions and relevant people/context, in addition to stable facts and preferences.
+- [IMPLEMENTED ON PR #6 BRANCH — DEBUG CI VERIFIED; DEVICE VERIFICATION PENDING] Build a grounded biographical continuity context from recorded memories. It is a software record of interactions and learned context, not a claim of consciousness or human lived experience.
 - [FUTURE] Add multilingual semantic/associative retrieval (local embeddings or another vetted on-device index) with lexical fallback. The current lexical search can miss paraphrases that share few words.
 - [FUTURE] Add an inspectable/editable biography timeline: chronology, projects, important people/context, experiences, decisions, milestones and learned topics, with provenance, confidence and correction handling.
 - [FUTURE] Add contradiction resolution that prioritizes newer explicit corrections, and memory consolidation that links related episodes without erasing their source records.
@@ -159,7 +159,7 @@ Next steps:
 - [FUTURE — HIGH PRIORITY] Implement real image creation from both a written description and random generation. First evaluate a genuinely on-device, no-billing model, device storage, thermal load, speed and compatibility on Note10+ and S22 Ultra. Do not claim a cloud image model is free when it requires billing.
 - [FUTURE] Add preview, accept, regenerate and edit workflow; persist the accepted image and use that exact asset on the call screen. Preserve the previous portrait if generation fails or is rejected.
 - [FUTURE] Rigged 3D/GLB/VRM generation and animation are separate from 2D portrait generation. Evaluate licensed rigged assets, TalkingHead/Three.js and a reliable audio/viseme bridge.
-- CameraX frames are now being sent to Gemini Live and the user confirmed visual understanding works; PR #6 adds rotation using CameraX metadata. Verify correct orientation on device before marking complete.
+- CameraX frames are now being sent to Gemini Live and the user confirmed visual understanding works; PR #6 adds rotation using CameraX metadata and passed debug CI. Verify correct orientation on device before marking complete.
 - Improve call layout: large Juanita avatar, caller camera picture-in-picture, responsive sizing, natural expressions and lip sync. Test Note10+, S22 Ultra and other Android devices.
 
 ### E. Phone-call screening, answering and telephony integration — future feature
@@ -218,7 +218,7 @@ Acceptance criteria:
 
 ## Delivery plan
 
-1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head CI and real-device verification are pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head Android debug CI passed (run 42360447654, artifact 13569287248); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
 2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records.
 3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
 4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
