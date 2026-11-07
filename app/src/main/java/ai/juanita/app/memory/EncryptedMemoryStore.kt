@@ -369,6 +369,23 @@ class EncryptedMemoryStore(context: Context) {
     )
 
     @Synchronized
+    /** Deletes only this session's turns in [startInclusive, endExclusive). */
+    @Synchronized
+    fun deleteConversationRange(sessionId: String, startInclusive: Long, endExclusive: Long) {
+        require(endExclusive > startInclusive)
+        filterRecords { record ->
+            if (record.optString("kind") != "turn" || record.optString("sessionId") != sessionId) true
+            else record.optLong("createdAt") < startInclusive || record.optLong("createdAt") >= endExclusive
+        }
+        val file = sessionArchiveFile(sessionId)
+        if (file.exists()) {
+            val remaining = readSessionArchive(file).filter {
+                it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive
+            }
+            if (remaining.isEmpty()) file.delete() else writeSessionArchive(file, remaining)
+        }
+    }
+
     fun deleteConversation(sessionId: String) {
         filterRecords { record -> record.optString("kind") != "turn" || record.optString("sessionId") != sessionId }
         sessionArchiveFile(sessionId).delete()
