@@ -156,7 +156,9 @@ class MainActivity : ComponentActivity() {
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
-                onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },\n                onListConversationTurns = { memoryStore.listConversationTurns(it) },\n                onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
+                onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
+                onListConversationTurns = { memoryStore.listConversationTurns(it) },
+                onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
                 onRefreshArchive = { memoryStore.listArchivedConversations() },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
@@ -377,12 +379,18 @@ private fun JuanitaApp(
                     val instruction = buildString {
                         append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
                          val sessionNow = ZonedDateTime.now()
-                         append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
+                         append("
+
+OROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
                         if (locationContext.isNotBlank()) {
-                            append("\n\n")
+                            append("
+
+")
                             append(locationContext)
                         } else {
-                            append("\n\n")
+                            append("
+
+")
                             append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
                         }
                     }
@@ -666,7 +674,9 @@ private fun JuanitaApp(
                     onUpdateMemory = onUpdateMemory,
                     onClearMemories = onClearMemories,
                     onDeleteConversation = onDeleteConversation,
-                    onDeleteArchiveRange = onDeleteArchiveRange,\n                    onListConversationTurns = onListConversationTurns,\n                    onDeleteConversationRange = onDeleteConversationRange,
+                    onDeleteArchiveRange = onDeleteArchiveRange,
+                    onListConversationTurns = onListConversationTurns,
+                    onDeleteConversationRange = onDeleteConversationRange,
                     onRefreshArchive = onRefreshArchive,
                     onClearArchive = onClearArchive,
                     onRetentionChanged = onRetentionChanged
