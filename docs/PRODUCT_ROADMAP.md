@@ -247,9 +247,9 @@ Acceptance criteria:
 
 
 ### Delivery status — Phase 1
-- [IMPLEMENTED IN FEATURE BRANCH — CI PENDING] Add an Altro-tab capability catalogue that labels each capability as integrated-but-unverified, not implemented, planned or under research, and explains known limits without presenting plans as working features.
-- [IMPLEMENTED IN FEATURE BRANCH — CI PENDING] Add a local Improvement Lab for manually authored BUG, INEFFICIENCY, CAPABILITY_GAP, KNOWLEDGE_GAP, RESEARCH_REQUEST and IMPROVEMENT_IDEA reports.
-- [IMPLEMENTED IN FEATURE BRANCH — CI PENDING] Store reports inside the existing Android Keystore AES-GCM encrypted local record store, separately from transcripts and personal memories; support preview, multi-select export to ordinary UTF-8 .txt and deletion.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Add an Altro-tab capability catalogue that labels each capability as integrated-but-unverified, not implemented, planned or under research, and explains known limits without presenting plans as working features.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Add a local Improvement Lab for manually authored BUG, INEFFICIENCY, CAPABILITY_GAP, KNOWLEDGE_GAP, RESEARCH_REQUEST and IMPROVEMENT_IDEA reports.
+- [IMPLEMENTED — DEBUG CI VERIFIED (run 42394260616); DEVICE VERIFICATION PENDING] Store reports inside the existing Android Keystore AES-GCM encrypted local record store, separately from transcripts and personal memories; support preview, multi-select export to ordinary UTF-8 .txt and deletion.
 - [FUTURE] Automatically detect meaningful capability gaps from observable task outcomes and create privacy-minimized draft reports asynchronously. Phase 1 does not yet perform automatic gap detection or self-modify code.
 
 ### Required cognitive layer: capability self-model and runtime gap reasoning
