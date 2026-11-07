@@ -43,6 +43,8 @@ class JuanitaVoiceService : Service() {
     private var stopJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
     private var transcriptWorker: Job? = null
+    private var memoryWorkChannel: Channel<Unit>? = null
+    private var memoryWorker: Job? = null
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -105,6 +107,18 @@ class JuanitaVoiceService : Service() {
                             // with one another or with the final memory flush.
                             val transcriptQueue = Channel<Pair<String, String>>(capacity = 64)
                             transcriptChannel = transcriptQueue
+                            val memoryQueue = Channel<Unit>(Channel.CONFLATED)
+                            memoryWorkChannel = memoryQueue
+                            memoryWorker = serviceScope.launch(Dispatchers.IO) {
+                                for (signal in memoryQueue) {
+                                    val saved = automaticMemoryEngine.processReadyBatch()
+                                    _memoryState.value = when {
+                                        saved > 0 -> "Memoria verificata: $saved ricordi salvati o aggiornati."
+                                        saved < 0 -> "Analisi non riuscita: batch conservato in memoria cifrata per il prossimo tentativo."
+                                        else -> _memoryState.value
+                                    }
+                                }
+                            }
                             transcriptWorker = serviceScope.launch(Dispatchers.IO) {
                                 var userTranscriptCount = 0
                                 var bufferedEvent: Pair<String, String>? = null
@@ -135,12 +149,13 @@ class JuanitaVoiceService : Service() {
                                         userTranscriptCount++
                                         _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
                                         try {
-                                            val saved = automaticMemoryEngine.acceptTurn(role, combinedText)
+                                            val pendingCount = automaticMemoryEngine.queueTurn(role, combinedText)
                                             _memoryState.value = when {
-                                                saved > 0 -> "Memoria verificata: $saved ricordi salvati o aggiornati."
-                                                saved < 0 -> "Trascrizione ricevuta ma analisi non riuscita: batch conservato in memoria cifrata per il prossimo tentativo."
-                                                else -> "Trascrizione ricevuta ($userTranscriptCount) · raccolta in corso; nessun ricordo confermato ancora."
+                                                pendingCount == -2 -> "Coda memoria piena: gli 8 turni non elaborati sono conservati; avvia una nuova sessione quando la rete torna disponibile."
+                                                pendingCount > 0 -> "Trascrizione ricevuta ($userTranscriptCount) · $pendingCount turni cifrati in attesa."
+                                                else -> "Memoria automatica in pausa o nessun testo idoneo."
                                             }
+                                            if (pendingCount >= 3) memoryQueue.trySend(Unit)
                                         } catch (cancelled: CancellationException) {
                                             throw cancelled
                                         } catch (failure: Exception) {
@@ -213,6 +228,7 @@ class JuanitaVoiceService : Service() {
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                withTimeoutOrNull(5_000L) { drainMemoryWorker() }
                 val flushedCount = withTimeoutOrNull(5_000L) {
                     withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
                 }
@@ -253,6 +269,16 @@ class JuanitaVoiceService : Service() {
         if (worker?.isActive == true) worker.cancel()
         transcriptChannel = null
         transcriptWorker = null
+    }
+
+    private suspend fun drainMemoryWorker() {
+        val queue = memoryWorkChannel
+        queue?.close()
+        val worker = memoryWorker
+        withTimeoutOrNull(5_000L) { worker?.join() }
+        if (worker?.isActive == true) worker.cancel()
+        memoryWorkChannel = null
+        memoryWorker = null
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -311,6 +337,8 @@ class JuanitaVoiceService : Service() {
         assistant.stopAudioCapture()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
+        memoryWorkChannel?.close()
+        memoryWorker?.cancel()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { assistant.stop() }
         }
