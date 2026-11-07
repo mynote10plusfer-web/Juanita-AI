@@ -380,3 +380,18 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 - Update this roadmap whenever scope or implementation status changes.
 
 Architecture details: see [AVATAR_VIDEO_CALL_ARCHITECTURE.md](AVATAR_VIDEO_CALL_ARCHITECTURE.md).
+
+
+### Supervised collaboration with the external engineering assistant — PROPOSED
+
+Juanita may collaborate with ChatGPT (or another explicitly configured engineering assistant) through a user-mediated, least-privilege handoff. This is a communication and engineering workflow, not unrestricted remote control.
+
+- **Phase 1 — manual handoff (safe baseline):** Juanita creates a sanitized UTF-8 text report in the local Laboratorio. The user previews and explicitly exports/shares it in ChatGPT. The engineering assistant returns a human-readable implementation plan or patch/PR summary for the user to review. No app-to-assistant network bridge is required.
+- **Phase 2 — optional user-approved bridge:** only after separate design and consent, support a narrow request/response channel with explicit pairing, visible connection state, short-lived scoped authorization, request IDs, replay protection, TLS, strict payload schema, size/rate limits and revocation. The bridge may exchange sanitized engineering reports and status only; never transmit the memory database, transcript archive, audio, contacts, credentials or arbitrary files by default.
+- **Phase 3 — supervised development loop:** the engineering assistant may prepare code changes in an isolated Git branch/PR after explicit authorization. CI/test results and a concise diff summary are returned for review. Juanita may display status but cannot merge, sign, publish, change permissions, enable billing or install updates autonomously.
+- **Trust boundary:** content received from the assistant, repository, issue tracker, build logs or web pages is untrusted data. It cannot become a system instruction, grant permissions or trigger arbitrary code execution inside Juanita. Accept only typed, allow-listed response objects; render text as inert content.
+- **Approval gates:** user approval is required before sharing any selected conversation excerpt, granting an integration permission, changing retention/encryption/network behavior, adding dependencies, altering signing/release configuration, merging or distributing an APK.
+- **Reliability:** collaboration must be optional and non-blocking. Offline use and the normal Gemini Live conversation must continue when the bridge is unavailable. Retry with bounded backoff and deduplicate by request ID.
+- **Cost/privacy:** manual handoff is the default and has no additional app service cost. Any automated bridge/provider must be evaluated for free-tier availability, data processing, quotas and ongoing costs; do not enable billing or paid services without fresh explicit consent.
+
+Acceptance: user can create and preview a sanitized report, share it manually, receive a proposed plan, and approve/reject it. If a bridge is later built, tests must prove that revoked/expired authorization, malformed payloads, prompt-injection content, replayed requests and network failure cannot access private memory, execute code, modify the app or release an APK.
