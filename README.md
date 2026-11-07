@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current branch version: 0.10.2 (versionCode 31)
+## Candidate release: 0.10.3 (versionCode 32)
 
-The 0.10.2 release compiles successfully. PR #8 corrects the pinned certificate to the SHA-256 independently verified against the previous successful 0.9.5 APK; the signed Release must be rerun after merge. Do not install a debug APK as an update.
+This candidate increments versionCode and keeps the permanent production application ID and signing certificate unchanged. Debug builds use the isolated package ai.juanita.app.debug and a separate Firebase variant configuration. Only the signed Release APK is suitable for updating the production app.
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
