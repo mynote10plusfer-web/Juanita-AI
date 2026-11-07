@@ -68,6 +68,12 @@ Compose screens, state holders, accessibility, settings, chat transcript.
 - Data minimization, export, and delete controls.
 - Raw microphone audio is not persisted by default.
 
+### Capability self-assessment and Improvement Lab
+- Keep a truthful, inspectable capability catalogue separate from personal memory.
+- Engineering reports are stored in the existing Android Keystore-backed encrypted local record store, with a bounded retention count.
+- Reports are manually authored in Phase 1 and exported only after an explicit user action as UTF-8 text. Do not automatically include transcripts, personal memories, raw audio, contacts or credentials.
+- Automatic gap detection, runtime outcome assessment and asynchronous report drafting are later milestones; never infer successful completion from model text alone.
+
 ### LIFE mode / Android integrations
 The user-approved product direction is an opt-in daily copilot: wake-up greeting, reminders, incoming-call announcements, and message/email notifications; reading and replying to messages only after explicit user enablement. Build each integration separately behind Android permissions and user controls. No broad permissions are requested until the corresponding feature is implemented and explained.
 
