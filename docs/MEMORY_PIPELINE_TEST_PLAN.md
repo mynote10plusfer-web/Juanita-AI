@@ -26,6 +26,14 @@
 - [ ] Verify app restart, process death and device reboot do not corrupt the encrypted archive or lose pending extraction batches.
 - [ ] Confirm no raw audio is stored and no full archive is uploaded to cloud services.
 
+## Phone-screening research checks (future phase)
+- [ ] Confirm ROLE_CALL_SCREENING availability and user opt-in flow on Note10+ Android 12 and S22 Ultra OS version.
+- [ ] Verify the five-second CallScreeningService response requirement and test fail-open behavior.
+- [ ] Test contact bypass, hidden/restricted caller behavior and carrier STIR/SHAKEN verdict availability.
+- [ ] Keep the initial spam decision independent of Gemini Live/network calls; do not block based on an uncertain model score.
+- [ ] Prototype post-answer audio access separately before attempting any caller conversation or transcript.
+- [ ] Verify Spanish/EU disclosure, consent, transcript retention and deletion requirements before release.
+
 ## Known limitations
 - Archive search is local lexical phrase/token matching with recency ranking, not semantic vector retrieval; multilingual paraphrases may be missed.
 - The Live function tool has compiled but its real invocation/response cycle must be verified on the target devices and selected model.
