@@ -78,6 +78,22 @@ Privacy constraints:
 
 Validation must include false-accept/false-reject rates, threshold calibration, Italian/Spanish/Czech/English coverage, microphone contention with Gemini Live, battery/thermal/RAM impact and real-device tests on Note10+ Android 12 and S22 Ultra. A successful build does not establish recognition quality.
 
+### Familiar-person visual profiles (planned; not implemented)
+
+A person's optional visual profile is distinct from face recognition:
+- **Photo/profile memory:** a person knowingly provides or approves a photo and a short, neutral description of visible appearance. This can be linked to their confirmed person ID and separately enrolled voice profile.
+- **Face matching:** any future comparison of a live camera frame to enrolled people is a separate biometric feature requiring separate explicit opt-in. A stored photo does not silently enable recognition.
+
+Design constraints:
+- No silent photo capture or storage. Use an explicit enrollment screen and camera indicator.
+- No identifying bystanders or unenrolled people; no background or covert face recognition.
+- No inference/storage of sensitive attributes from appearance.
+- If researched and feasible, perform face matching locally on-device, with encrypted templates, calibrated thresholds and an unknown/uncertain result. Do not send photos/templates to cloud models by default.
+- Keep photo, appearance description, voice template and face template independently reviewable and deletable. Deleting/revoking one modality must not silently retain its biometric template.
+- Never treat a visual match as authentication or proof of identity.
+
+Validate camera permission/lifecycle, privacy indicator, thermal/RAM impact and profile isolation on Note10+ Android 12 and S22 Ultra. No feature is implemented merely because its data model or roadmap exists.
+
 ### Conversation
 - `ConversationProvider`: local or remote conversational engine.
 - Every request should include the selected persona/system instruction, language and regional dialect.
