@@ -137,3 +137,20 @@ Do not crawl the entire Internet indiscriminately. Respect access restrictions, 
 - A relevant knowledge gap triggers focused research; saved knowledge includes provenance and can be refreshed.
 - The assistant never claims an operation succeeded unless storage/search returned success.
 - The existing SDK-managed audio path continues to work unchanged during memory processing.
+
+
+## Bidirectional call video — implementation requirement
+
+The full-screen WhatsApp-style call must not stop at a local CameraX preview. While the user has granted camera permission and Gemini Live is connected, the call screen must run CameraX ImageAnalysis, convert frames to JPEG-compatible bitmaps, and forward them to the active Live session through the voice service. Use a bounded cadence (initial target: one frame per second), keep only the latest frame, and allow at most one upload in flight so camera capture cannot build an unbounded network queue. Closing the call or revoking permission must release the owned CameraX use cases. Never save camera frames to the local transcript or memory archive.
+
+Acceptance checks:
+- The user sees Juanita large and their own camera preview in the PiP tile.
+- With explicit camera permission and an active Live session, a status indicator confirms that frames are being sent; Juanita can answer a visual question about the current camera view.
+- If Live is disconnected, the local preview may remain visible but no frame is uploaded; the UI says why.
+- Denying camera permission leaves voice-only calling available.
+- Switching front/rear cameras releases only the call screen's own CameraX use cases.
+- Test on Samsung Note10+ (Android 12) and Galaxy S22 Ultra; do not mark device acceptance complete from emulator/CI alone.
+
+## Update compatibility — permanent signing acceptance
+
+Every installable release must keep applicationId = ai.juanita.app, use a strictly increasing versionCode, and be signed with the exact SHA-256 certificate fingerprint of the last known-good signed release. CI must fail closed if the signing certificate changes. A generic APK signature-valid check is not sufficient to guarantee Android update compatibility. Never instruct the user to uninstall the installed app or clear app data as a workaround.
