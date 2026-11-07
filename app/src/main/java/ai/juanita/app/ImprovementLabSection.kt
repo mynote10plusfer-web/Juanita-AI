@@ -51,6 +51,8 @@ private val capabilityRows = listOf(
     CapabilityRow("Archivio conversazioni cifrato", "INTEGRATO · DA VERIFICARE", "Trascrizioni testuali locali per sessione, calendario, ricerca lessicale e cancellazioni selettive. Nessun audio grezzo archiviato."),
     CapabilityRow("Richiamo delle conversazioni passate", "INTEGRATO · DA VERIFICARE", "Ricerca locale per frasi e parole chiave; non è ancora una ricerca semantica multilingue basata su vettori."),
     CapabilityRow("Fotocamera durante la chiamata", "INTEGRATA · DA VERIFICARE", "CameraX invia fotogrammi a Gemini Live quando autorizzata. Orientamento e stabilità vanno verificati su Note10+ e S22 Ultra."),
+    CapabilityRow("Riconoscimento delle persone dalla voce", "RICERCA / NON IMPLEMENTATO", "Richiede diarizzazione, registrazione vocale con consenso esplicito, modelli locali, profili cifrati e prove di accuratezza. La trascrizione Gemini non identifica chi parla."),
+    CapabilityRow("Profili visivi e riconoscimento del volto", "RICERCA / NON IMPLEMENTATO", "La foto di un profilo non equivale al riconoscimento live. Un eventuale confronto video richiederà consenso biometrico separato, verifica legale UE e test locali."),
     CapabilityRow("Ritratto animato e sincronizzazione labiale", "NON IMPLEMENTATA", "Il ritratto attuale ha solo un movimento leggero. Non esistono ancora animazione facciale reale e lip-sync."),
     CapabilityRow("Creazione automatica di nuovi ritratti", "NON IMPLEMENTATA", "Avatar Studio salva profili e descrizioni, ma non genera ancora immagini."),
     CapabilityRow("Riconoscimento della parola di attivazione", "NON IMPLEMENTATO", "La frase è configurabile ma non è collegata a un motore wake-word."),
