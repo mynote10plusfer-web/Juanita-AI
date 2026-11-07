@@ -27,14 +27,11 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     suspend fun queueTurn(role: String, text: String): Int {
         if (!store.isAutomaticMemoryEnabled || text.isBlank()) return 0
         if (role.uppercase() != "USER") return 0
-
         val version = store.memoryClearVersion
-        val pending = store.readPendingAutomaticMemoryTurns(version).toMutableList()
-        if (pending.size >= MAX_PENDING_TURNS) return -2
-
-        pending += "USER: ${text.take(MAX_TURN_CHARS)}"
-        store.savePendingAutomaticMemoryTurns(pending, version)
-        return if (store.isAutomaticMemoryEnabled && store.memoryClearVersion == version) pending.size else 0
+        return store.enqueuePendingAutomaticMemoryTurn(
+            "USER: ${text.take(MAX_TURN_CHARS)}",
+            version
+        )
     }
 
     /** Process a complete batch away from the Live transcript callback worker. */
