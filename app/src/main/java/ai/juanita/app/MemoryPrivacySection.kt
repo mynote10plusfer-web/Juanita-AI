@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import java.text.DateFormat
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Date
 
 @Composable
@@ -53,6 +55,8 @@ internal fun MemoryPrivacySection(
     onUpdateMemory: (String, String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
+    onDeleteArchiveRange: (Long, Long) -> Unit,
+    onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onRefreshMemories: () -> List<MemoryItem>
@@ -67,10 +71,15 @@ internal fun MemoryPrivacySection(
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var editingMemory by remember { mutableStateOf<MemoryItem?>(null) }
     var editText by remember { mutableStateOf("") }
+    var archiveRangeStart by remember { mutableStateOf("") }
+    var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(memoryStatus) {
         memories = onRefreshMemories()
     }
+    val rangeStartDate = runCatching { LocalDate.parse(archiveRangeStart.trim()) }.getOrNull()
+    val rangeEndDate = runCatching { LocalDate.parse(archiveRangeEnd.trim()) }.getOrNull()
+    val validArchiveRange = rangeStartDate != null && rangeEndDate != null && !rangeEndDate.isBefore(rangeStartDate)
     val retentionLabel = when (retentionDays) {
         7 -> "7 giorni"
         30 -> "30 giorni"
@@ -155,6 +164,7 @@ internal fun MemoryPrivacySection(
             }
 
             Text("ARCHIVIO CONVERSAZIONI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            TextButton(onClick = { conversations = onRefreshArchive() }) { Text("Aggiorna elenco conversazioni", color = gold, fontSize = 12.sp) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = archiveEnabled, onCheckedChange = {
                     archiveEnabled = it
@@ -179,6 +189,11 @@ internal fun MemoryPrivacySection(
                     }
                 }
             }
+            Text("CANCELLA CONVERSAZIONI PER PERIODO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Inserisci le date nel formato AAAA-MM-GG. Verranno eliminati solo i messaggi dell'intervallo scelto; i ricordi personali resteranno intatti.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+            OutlinedTextField(value = archiveRangeStart, onValueChange = { archiveRangeStart = it }, label = { Text("Dal (AAAA-MM-GG)") }, placeholder = { Text("2026-11-01") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = archiveRangeEnd, onValueChange = { archiveRangeEnd = it }, label = { Text("Al (AAAA-MM-GG)") }, placeholder = { Text("2026-11-07") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Button(onClick = { confirmAction = "archive_range" }, enabled = validArchiveRange, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)) { Text("ELIMINA CONVERSAZIONI NEL PERIODO") }
             if (conversations.isEmpty()) {
                 Text("Nessuna conversazione presente nell'archivio.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
             } else {
@@ -205,7 +220,9 @@ internal fun MemoryPrivacySection(
     confirmAction?.let { action ->
         val isMemory = action.startsWith("memory:")
         val isConversation = action.startsWith("conversation:")
+        val isArchiveRange = action == "archive_range"
         val title = when (action) {
+            "archive_range" -> "Eliminare le conversazioni nel periodo?"
             "clear_memories" -> "Eliminare tutti i ricordi?"
             "clear_archive" -> "Svuotare l'archivio?"
             "selected_memories" -> "Eliminare i ricordi selezionati?"
@@ -215,6 +232,7 @@ internal fun MemoryPrivacySection(
             "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
             "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
             "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
+            "archive_range" -> "Saranno eliminati tutti i messaggi archiviati dal ${rangeStartDate} al ${rangeEndDate}, estremi inclusi. I ricordi personali non verranno modificati. L'operazione è definitiva."
             else -> "Questa operazione è definitiva e non può essere annullata."
         }
         AlertDialog(
@@ -223,6 +241,17 @@ internal fun MemoryPrivacySection(
             confirmButton = {
                 TextButton(onClick = {
                     when {
+                        action == "archive_range" -> {
+                            val start = rangeStartDate
+                            val end = rangeEndDate
+                            if (start != null && end != null && !end.isBefore(start)) {
+                                val zone = ZoneId.systemDefault()
+                                val startMillis = start.atStartOfDay(zone).toInstant().toEpochMilli()
+                                val endMillis = end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                                onDeleteArchiveRange(startMillis, endMillis)
+                                conversations = onRefreshArchive()
+                            }
+                        }
                         action == "clear_memories" -> { onClearMemories(); memories = emptyList() }
                         action == "clear_archive" -> { onClearArchive(); conversations = emptyList() }
                         action == "selected_memories" -> { onDeleteMemories(selectedMemoryIds); memories = memories.filterNot { it.id in selectedMemoryIds }; selectedMemoryIds = emptySet() }
