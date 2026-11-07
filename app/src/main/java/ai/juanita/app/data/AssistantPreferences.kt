@@ -9,6 +9,10 @@ import android.content.Context
 class AssistantPreferences(context: Context) {
     private val storage = context.applicationContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
 
+    var hasCompletedOnboarding: Boolean
+        get() = storage.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+        set(value) { storage.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply() }
+
     var languageTag: String
         get() = storage.getString(KEY_LANGUAGE_TAG, DEFAULT_LANGUAGE_TAG) ?: DEFAULT_LANGUAGE_TAG
         set(value) { storage.edit().putString(KEY_LANGUAGE_TAG, value).apply() }
@@ -45,6 +49,7 @@ class AssistantPreferences(context: Context) {
     companion object {
         private const val FILE_NAME = "juanita_preferences"
         private const val KEY_LANGUAGE_TAG = "language_tag"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_WAKE_PHRASE = "wake_phrase"
         private const val KEY_DIALECT_ID = "dialect_id"
         private const val KEY_ASSISTANT_NAME = "assistant_name"
