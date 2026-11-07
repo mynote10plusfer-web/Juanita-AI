@@ -243,8 +243,14 @@ Acceptance criteria:
 - [MERGED IN PR #3] Preserve automatic memory batches in RAM after transient extraction failures and propagate coroutine cancellation correctly.
 - [PROPOSED IN PR #4 — CI/DEVICE VERIFICATION PENDING] Persist the pending memory batch inside the existing AES-GCM encrypted local record store before extraction. Retry after process/session restart, and clear only after a valid extraction response has been processed. Add explicit transcript-received, extraction-failed and save-confirmed status messages; bound the transcript callback queue.
 
-## Self-assessment, study requests and plain-text improvement reports — PROPOSED, high priority
+## Self-assessment, study requests and plain-text improvement reports — PHASE 1 IN PROGRESS
 
+
+### Delivery status — Phase 1
+- [IMPLEMENTED IN FEATURE BRANCH — CI PENDING] Add an Altro-tab capability catalogue that labels each capability as integrated-but-unverified, not implemented, planned or under research, and explains known limits without presenting plans as working features.
+- [IMPLEMENTED IN FEATURE BRANCH — CI PENDING] Add a local Improvement Lab for manually authored BUG, INEFFICIENCY, CAPABILITY_GAP, KNOWLEDGE_GAP, RESEARCH_REQUEST and IMPROVEMENT_IDEA reports.
+- [IMPLEMENTED IN FEATURE BRANCH — CI PENDING] Store reports inside the existing Android Keystore AES-GCM encrypted local record store, separately from transcripts and personal memories; support preview, multi-select export to ordinary UTF-8 .txt and deletion.
+- [FUTURE] Automatically detect meaningful capability gaps from observable task outcomes and create privacy-minimized draft reports asynchronously. Phase 1 does not yet perform automatic gap detection or self-modify code.
 
 ### Required cognitive layer: capability self-model and runtime gap reasoning
 
@@ -356,8 +362,8 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Delivery plan
 
-1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are implemented on PR #6 branch; exact-head Android debug CI passed (run 42360447654, artifact 13569287248); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
-2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records. The Phase 1 Improvement Lab is separate: it records software capability state and engineering reports, not personal biography.
 3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
 4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
 5. **Camera and video-call correction:** verify the PR #6 orientation fix on actual devices and confirm Gemini receives upright frames without memory leaks or dropped audio.
