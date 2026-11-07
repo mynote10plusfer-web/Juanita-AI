@@ -81,7 +81,7 @@ jobs:
           fi
           echo "Permanent signing certificate matches the known-good release."
           BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
-          grep -F "package: name='ai.juanita.app' versionCode='27' versionName='0.9.8'" <<< "$BADGING" >/dev/null || {
+          grep -F "package: name='ai.juanita.app' versionCode='29' versionName='0.10.0'" <<< "$BADGING" >/dev/null || {
             echo "::error::Unexpected application ID or version metadata."
             exit 1
           }
