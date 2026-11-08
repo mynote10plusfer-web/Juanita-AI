@@ -47,6 +47,29 @@ Juanita must behave like a continuous personal assistant with an accumulating, u
 - [IN PROGRESS — CANDIDATE 0.10.3; CI/DEVICE VERIFICATION PENDING] On first launch, offer a guided first-meeting profile with optional fields for preferred name, location, languages, interests, lifestyle/priorities, goals and desired assistance. Every field is optional; users can skip. Only explicitly submitted answers are stored as user-confirmed profile memories in the encrypted local memory store. The onboarding completion flag is stored locally. No passwords or sensitive personal data are requested.
 - Acceptance: verify the screen stays awake throughout a video call, including when the user's camera is disabled; verify it returns to normal immediately after ending/closing the call; verify an audio-only session does not keep the screen awake. Verify onboarding can be skipped, saved, and shown only once, and submitted profile memories appear in the memory manager and are available to later sessions.
 
+### Full-fidelity episodic conversation archive — USER-REQUESTED; FIRST IMPLEMENTATION SLICE — CI VERIFIED; DEVICE TESTS PENDING (2026-11-08)
+
+**User goal:** retain complete conversation text so Juanita can search past exchanges and reopen the original context. Exact transcript history is the source record; summaries and curated memories are indexes/shortcuts, never replacements.
+
+**First code change on branch `feature/full-fidelity-conversation-archive`:**
+- Removed the silent 1,800-character truncation from the encrypted per-session conversation archive write path. New archived turns are now written with their complete recognized text.
+- Kept the separate automatic-memory extraction queue bounded; that queue is not the transcript archive and must not be confused with it.
+- Added Android instrumentation tests for exact round-trip of long multilingual/Unicode turns across fresh store instances and for preserving multiple turns in order.
+- Added a CI step to compile the Android instrumentation-test APK. Compilation is not execution; actual Android/Keystore behavior still requires running the tests on a device or emulator.
+
+**Known limitations and safeguards still to implement:**
+- Text already truncated in historical archive entries cannot be reconstructed from the stored file. Do not pretend this change restores previously lost characters.
+- The per-session archive currently rewrites the encrypted session JSON file on each appended turn. Benchmark large sessions and consider an encrypted append-only/chunked format with crash-safe migration before claiming unlimited scale.
+- Legacy transcript records remain subject to their legacy storage cap; audit and migrate them without deleting or duplicating existing sessions.
+- Add explicit encrypted export/backup and restore with integrity validation. Local-only data may be lost if app data is cleared, the app is uninstalled or the Keystore key becomes unavailable.
+- Improve recall so a search result reopens the complete original turn and nearby turns before Juanita quotes or makes a historical claim. Keep model context bounded; never send the entire archive wholesale.
+- Preserve separate controls for transcript archive, curated semantic memories and the permanent personal profile. Clearing one layer must not silently erase another.
+
+**Acceptance gates:** exact round-trip for turns longer than 1,800 characters; chronological and role integrity; process restart; write interruption/corruption handling; retention and deletion behavior; migration of legacy records; relevant search across languages and paraphrases; source-turn reopening; encrypted backup/restore; no invented historical quotations. No raw audio recording is implied: the archive stores text received from the speech-recognition/transcription pipeline, whose recognition may itself contain errors.
+
+**Status:** FIRST CODE SLICE COMMITTED; ANDROID DEBUG CI AND INSTRUMENTATION-TEST APK COMPILATION PASSED (run 42469575958); INSTRUMENTATION TESTS NOT YET EXECUTED; DEVICE VERIFICATION NOT PERFORMED.
+
+
 ## Product vision
 
 Juanita should feel like a warm, expressive, multilingual personal voice assistant and a familiar conversational presence: she should get to know the user gradually, remember useful context automatically, learn from focused research, and build a coherent, revisable digital biography over time. She is software, not a conscious person; do not claim otherwise.
