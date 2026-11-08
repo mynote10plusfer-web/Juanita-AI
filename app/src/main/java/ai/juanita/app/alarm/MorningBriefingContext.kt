@@ -76,6 +76,17 @@ object MorningBriefingContext {
         }.getOrElse { "Calendario temporaneamente non leggibile (${it.javaClass.simpleName}); non assumere che sia vuoto." }
     }
 
+    private data class ModelWeather(
+        val model: String,
+        val temperature: Double,
+        val feelsLike: Double,
+        val wind: Double,
+        val precipitation: Double,
+        val minimum: Double,
+        val maximum: Double,
+        val rainChance: Double
+    )
+
     private fun readWeather(context: Context): String {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
@@ -86,32 +97,66 @@ object MorningBriefingContext {
                 .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
                 .maxByOrNull { it.time }
         }.getOrNull() ?: return "Meteo non disponibile: il telefono non ha una posizione recente."
-        return runCatching {
-            val url = URL(
-                "https://api.open-meteo.com/v1/forecast?latitude=${location.latitude}&longitude=${location.longitude}" +
-                    "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m" +
-                    "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1"
-            )
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 4500
-                readTimeout = 4500
-                requestMethod = "GET"
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "JuanitaAI-Android")
-            }
-            try {
-                val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
-                val current = json.getJSONObject("current")
-                val daily = json.getJSONObject("daily")
-                val temp = current.optDouble("temperature_2m", Double.NaN)
-                val feels = current.optDouble("apparent_temperature", Double.NaN)
-                val wind = current.optDouble("wind_speed_10m", Double.NaN)
-                val rain = current.optDouble("precipitation", Double.NaN)
-                val max = daily.getJSONArray("temperature_2m_max").optDouble(0, Double.NaN)
-                val min = daily.getJSONArray("temperature_2m_min").optDouble(0, Double.NaN)
-                val rainChance = daily.getJSONArray("precipitation_probability_max").optDouble(0, Double.NaN)
-                "Open-Meteo: ora ${temp}°C, percepita ${feels}°C, vento ${wind} km/h, pioggia attuale ${rain} mm; oggi minima ${min}°C, massima ${max}°C, probabilità massima di pioggia ${rainChance}%."
-            } finally { connection.disconnect() }
-        }.getOrElse { "Meteo non disponibile al momento (rete o servizio non raggiungibile)." }
+
+        val models = listOf(
+            "ecmwf_ifs025" to "ECMWF",
+            "icon_seamless" to "DWD ICON",
+            "ncep_gfs_seamless" to "NOAA GFS"
+        )
+        val results = models.mapNotNull { (modelId, label) ->
+            runCatching {
+                // Open-Meteo coordinates are rounded to four decimals to avoid unnecessary precision.
+                val lat = String.format(Locale.US, "%.4f", location.latitude)
+                val lon = String.format(Locale.US, "%.4f", location.longitude)
+                val url = URL(
+                    "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&models=$modelId" +
+                        "&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m" +
+                        "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=1"
+                )
+                val connection = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    requestMethod = "GET"
+                    setRequestProperty("Accept", "application/json")
+                    setRequestProperty("User-Agent", "JuanitaAI-Android")
+                }
+                try {
+                    val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+                    val current = json.getJSONObject("current")
+                    val daily = json.getJSONObject("daily")
+                    ModelWeather(
+                        model = label,
+                        temperature = current.optDouble("temperature_2m", Double.NaN),
+                        feelsLike = current.optDouble("apparent_temperature", Double.NaN),
+                        wind = current.optDouble("wind_speed_10m", Double.NaN),
+                        precipitation = current.optDouble("precipitation", Double.NaN),
+                        minimum = daily.getJSONArray("temperature_2m_min").optDouble(0, Double.NaN),
+                        maximum = daily.getJSONArray("temperature_2m_max").optDouble(0, Double.NaN),
+                        rainChance = daily.getJSONArray("precipitation_probability_max").optDouble(0, Double.NaN)
+                    )
+                } finally { connection.disconnect() }
+            }.getOrNull()
+        }
+        if (results.isEmpty()) return "Meteo non disponibile: nessuno dei modelli meteorologici ha risposto."
+
+        fun average(selector: (ModelWeather) -> Double): Double {
+            val values = results.map(selector).filter { it.isFinite() }
+            return if (values.isEmpty()) Double.NaN else values.average()
+        }
+        val temperatures = results.map { it.temperature }.filter { it.isFinite() }
+        val spread = if (temperatures.size > 1) temperatures.maxOrNull()!! - temperatures.minOrNull()!! else 0.0
+        val sources = results.joinToString(", ") { it.model }
+        val confidenceNote = if (results.size >= 2 && spread <= 3.0) {
+            "I modelli sono abbastanza concordi sulla temperatura attuale."
+        } else if (results.size >= 2) {
+            "I modelli divergono di circa ${String.format(Locale.ITALIAN, "%.1f", spread)} gradi: segnala l'intervallo, senza presentare la media come certezza."
+        } else {
+            "È disponibile un solo modello: il dato non è stato confrontato."
+        }
+        return "Open-Meteo, confronto di ${results.size} modelli ($sources): temperatura media attuale ${String.format(Locale.ITALIAN, "%.1f", average { it.temperature })}°C; " +
+            "percepita media ${String.format(Locale.ITALIAN, "%.1f", average { it.feelsLike })}°C; vento medio ${String.format(Locale.ITALIAN, "%.0f", average { it.wind })} km/h; " +
+            "minima media ${String.format(Locale.ITALIAN, "%.1f", average { it.minimum })}°C, massima media ${String.format(Locale.ITALIAN, "%.1f", average { it.maximum })}°C; " +
+            "probabilità media di pioggia ${String.format(Locale.ITALIAN, "%.0f", average { it.rainChance })}%. $confidenceNote"
     }
+
 }
