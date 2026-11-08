@@ -147,7 +147,8 @@ class EncryptedMemoryStore(context: Context) {
         processedTurns: List<String>,
         expectedClearVersion: Long = memoryClearVersion
     ) {
-        if (processedTurns.isEmpty() || memoryClearVersion != expectedClearVersion) return        val records = readRecords()
+        if (processedTurns.isEmpty() || memoryClearVersion != expectedClearVersion) return
+        val records = readRecords()
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
@@ -296,7 +297,8 @@ class EncryptedMemoryStore(context: Context) {
         val records = readRecords()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "improvement_report") continue            runCatching { jsonToImprovementReport(record) }.getOrNull()?.let(::add)
+            if (record.optString("kind") != "improvement_report") continue
+            runCatching { jsonToImprovementReport(record) }.getOrNull()?.let(::add)
         }
     }.sortedByDescending { it.createdAtMillis }
 
@@ -445,7 +447,8 @@ class EncryptedMemoryStore(context: Context) {
     )
 
     /** Deletes only this session's turns in [startInclusive, endExclusive). */
-    @Synchronized    fun deleteConversationRange(sessionId: String, startInclusive: Long, endExclusive: Long) {
+    @Synchronized
+    fun deleteConversationRange(sessionId: String, startInclusive: Long, endExclusive: Long) {
         require(endExclusive > startInclusive)
         filterRecords { record ->
             if (record.optString("kind") != "turn" || record.optString("sessionId") != sessionId) true
@@ -594,7 +597,8 @@ class EncryptedMemoryStore(context: Context) {
         val sessionId: String,
         val turn: ArchivedTurn,
         val score: Double,
-        val matchedTerms: Int    )
+        val matchedTerms: Int
+    )
 
     private fun normalizeSearchText(value: String): String =
         java.text.Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
@@ -743,7 +747,8 @@ class EncryptedMemoryStore(context: Context) {
         try {
             Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
         } catch (_: Exception) {
-            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)        }
+            Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 
     private fun filterRecords(keep: (JSONObject) -> Boolean) {
@@ -892,7 +897,8 @@ class EncryptedMemoryStore(context: Context) {
         private const val MILLIS_PER_DAY = 86_400_000L
         private val ALLOWED_RETENTION_DAYS = setOf(0, 7, 30, 90)
         private const val KEY_ENCRYPTED_DATA = "encrypted_records"
-        private const val KEY_ALIAS = "juanita.memory.aes.v1"        private const val ANDROID_KEY_STORE = "AndroidKeyStore"
+        private const val KEY_ALIAS = "juanita.memory.aes.v1"
+        private const val ANDROID_KEY_STORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
