@@ -28,6 +28,7 @@ class JuanitaAlarmRingingService : Service() {
     private var player: MediaPlayer? = null
     private var volumeJob: Job? = null
     private var activeAlarmId: String = JuanitaAlarmStore.LEGACY_ID
+    private var volumeNotice: String = "Controllo volume sveglia…"
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,6 +42,7 @@ class JuanitaAlarmRingingService : Service() {
             ACTION_START -> {
                 activeAlarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
                     ?: JuanitaAlarmStore.LEGACY_ID
+                volumeNotice = AlarmVolumeController.ensureAudible(this)
                 startForeground(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
                 if (player == null) startAlarmTone()
             }
@@ -111,7 +113,7 @@ class JuanitaAlarmRingingService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Sveglia · Juanita")
-            .setContentText(title)
+            .setContentText("$title · $volumeNotice")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -148,6 +150,7 @@ class JuanitaAlarmRingingService : Service() {
         runCatching { player?.stop() }
         runCatching { player?.release() }
         player = null
+        AlarmVolumeController.restore(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(JuanitaAlarmScheduler.NOTIFICATION_ID)
     }
