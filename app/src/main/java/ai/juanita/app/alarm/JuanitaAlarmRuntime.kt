@@ -43,12 +43,17 @@ class AlarmPreferences(context: Context) {
         load()?.let { save(it.copy(enabled = false)) }
     }
 
+    fun saveSnooze(epochMillis: Long) { prefs.edit().putLong(KEY_SNOOZE, epochMillis).apply() }
+    fun loadSnooze(): Long = prefs.getLong(KEY_SNOOZE, 0L)
+    fun clearSnooze() { prefs.edit().remove(KEY_SNOOZE).apply() }
+
     companion object {
         private const val KEY_CONFIGURED = "configured"
         private const val KEY_HOUR = "hour"
         private const val KEY_MINUTE = "minute"
         private const val KEY_DAYS = "days"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_SNOOZE = "snooze_at"
     }
 }
 
@@ -94,6 +99,7 @@ object JuanitaAlarmScheduler {
     }
 
     internal fun onAlarmFired(context: Context, isSnooze: Boolean = false) {
+        if (isSnooze) AlarmPreferences(context).clearSnooze()
         if (!isSnooze) {
             val schedule = AlarmPreferences(context).load()
             if (schedule == null || !schedule.enabled) return
@@ -108,6 +114,7 @@ object JuanitaAlarmScheduler {
         val pending = snoozePendingIntent(context)
         manager.cancel(pending)
         val triggerAt = System.currentTimeMillis() + SNOOZE_MILLIS
+        AlarmPreferences(context).saveSnooze(triggerAt)
         runCatching {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
                 manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
@@ -148,6 +155,7 @@ class JuanitaAlarmReceiver : BroadcastReceiver() {
                         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                     )
                 )
+                AlarmPreferences(context).clearSnooze()
                 JuanitaAlarmRingingService.stop(context)
             }
         }
@@ -165,5 +173,19 @@ class JuanitaAlarmBootReceiver : BroadcastReceiver() {
         ) return
         val schedule = AlarmPreferences(context).load() ?: return
         if (schedule.enabled) JuanitaAlarmScheduler.schedule(context, schedule)
+        val snoozeAt = AlarmPreferences(context).loadSnooze()
+        if (snoozeAt > System.currentTimeMillis()) {
+            val snoozeIntent = PendingIntent.getBroadcast(
+                context, 5207,
+                Intent(context, JuanitaAlarmReceiver::class.java).setAction(JuanitaAlarmScheduler.ACTION_SNOOZE_FIRE),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            runCatching {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
+                    manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, snoozeAt, snoozeIntent)
+                } else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, snoozeAt, snoozeIntent)
+            }
+        } else if (snoozeAt != 0L) AlarmPreferences(context).clearSnooze()
     }
 }
