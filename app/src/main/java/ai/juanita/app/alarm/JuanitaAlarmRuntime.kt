@@ -24,6 +24,12 @@ object JuanitaAlarmScheduler {
     private const val REQUEST_BASE = 5200
     private const val SNOOZE_MILLIS = 10 * 60 * 1000L
 
+    fun hasExactAlarmAccess(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        return manager.canScheduleExactAlarms()
+    }
+
     fun schedule(context: Context, alarm: JuanitaAlarm): Boolean {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pending = alarmPendingIntent(context, alarm.id, false)
