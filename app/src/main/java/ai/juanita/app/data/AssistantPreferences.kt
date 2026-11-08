@@ -58,7 +58,6 @@ class AssistantPreferences(context: Context) {
         private const val KEY_WAKE_PHRASE = "wake_phrase"
         private const val KEY_DIALECT_ID = "dialect_id"
         private const val KEY_ASSISTANT_NAME = "assistant_name"
-        private const val KEY_NOTIFICATION_CLOUD_CONSENT = "notification_cloud_consent"
         private const val KEY_LIVE_VOICE = "live_voice_name"
         private const val KEY_IRONY = "trait_irony"
         private const val KEY_SWEETNESS = "trait_sweetness"
