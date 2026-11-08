@@ -7,6 +7,8 @@ import android.util.Base64
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -110,13 +112,22 @@ class PersonalProfileStore(context: Context) {
             stream.write(encoded.toByteArray(Charsets.UTF_8))
             stream.fd.sync()
         }
-        if (profileFile.exists() && !profileFile.delete()) {
-            temporary.delete()
-            throw IllegalStateException("Impossibile aggiornare il profilo senza rischiare i dati esistenti.")
-        }
-        if (!temporary.renameTo(profileFile)) {
-            temporary.delete()
-            throw IllegalStateException("Impossibile completare il salvataggio del profilo.")
+        try {
+            Files.move(
+                temporary.toPath(),
+                profileFile.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE
+            )
+        } catch (atomicFailure: Exception) {
+            // Some filesystems do not support ATOMIC_MOVE. Retry a replace move;
+            // never delete the previous profile before the replacement is ready.
+            try {
+                Files.move(temporary.toPath(), profileFile.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (replaceFailure: Exception) {
+                temporary.delete()
+                throw IllegalStateException("Impossibile completare il salvataggio del profilo.", replaceFailure)
+            }
         }
     }
 
@@ -165,6 +176,8 @@ class PersonalProfileStore(context: Context) {
     }
 
     private fun profileFromJson(json: JSONObject): PersonalProfile {
+        val schemaVersion = json.optInt("schemaVersion", 0)
+        require(schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata: $schemaVersion" }
         val values = json.optJSONObject("fields") ?: JSONObject()
         val fields = LinkedHashMap<String, PersonalProfileField>()
         val iterator = values.keys()
