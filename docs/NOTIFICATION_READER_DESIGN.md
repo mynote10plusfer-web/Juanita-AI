@@ -16,15 +16,15 @@
 - If the setting is OFF, Juanita can show local counts in the app UI but must not return notification bodies to Gemini. Explain how to enable the feature.
 - Do not upload notifications in the background, proactively summarize them, or include them in ordinary conversation context.
 - Do not add notification text to transcript archive, curated memories, logs, analytics, crash reports or diagnostics.
-- Keep notification contents in volatile in-memory storage only, with a short bounded queue; clear after explicit read, user clear, process death, or revocation of access.
+- Keep notification contents in volatile in-memory storage only, with a short bounded queue; clear on user request, process death, or revocation of access.
 - Exclude OTP/security-code-like content where identifiable; never promise perfect detection. Respect Android redaction and hidden previews.
 - Never dismiss, mark read, reply to, open or otherwise mutate source notifications in this phase.
 
 ## Gemini Live tools
 
 Implement two narrowly scoped function tools:
-- `listNotificationApps`: return only app display names and counts, no titles or bodies.
-- `readRecentNotifications`: require an explicit app identifier supplied from the current local inventory and a small bounded limit; return only title/body for that app. Reject missing/unknown app IDs, disabled consent, and excessive limits.
+- `listNotificationApps`: return app display names, opaque package identifiers for exact selection, and counts only; never titles or bodies. Do not speak package identifiers aloud.
+- `readRecentNotifications`: require an exact package identifier supplied from the current local inventory and a small bounded limit; return only title/body for that app. Reject missing/unknown app IDs, disabled consent, and excessive limits.
 
 The local provider must be the only source of notification data. The function handler must fail closed (empty/denied result) on any error. Tool descriptions and system instructions must tell Gemini to ask the user which app to read before calling the content tool, and to read only the requested app/items.
 
