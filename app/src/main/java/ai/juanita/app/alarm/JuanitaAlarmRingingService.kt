@@ -22,22 +22,42 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-/** Plays the device's selected alarm tone locally; no network or speech synthesis. */
+/** Plays one local alarm tone for all currently ringing alarm occurrences. */
 class JuanitaAlarmRingingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val activeAlarmIds = linkedSetOf<String>()
     private var player: MediaPlayer? = null
     private var volumeJob: Job? = null
+    private var activeAlarmId: String = JuanitaAlarmStore.LEGACY_ID
+    private var volumeNotice: String = "Controllo volume sveglia…"
+    private var testMode: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
-                stopRinging()
-                stopSelf()
+                val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
+                if (alarmId.isNullOrBlank()) activeAlarmIds.clear() else activeAlarmIds.remove(alarmId)
+                if (activeAlarmIds.isNotEmpty()) {
+                    activeAlarmId = activeAlarmIds.first()
+                    testMode = activeAlarmId == JuanitaAlarmStore.LEGACY_ID &&
+                        activeAlarmIds.size == 1 && testMode
+                    getSystemService(NotificationManager::class.java)
+                        .notify(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
+                } else {
+                    stopRinging()
+                    stopSelf(startId)
+                }
                 return START_NOT_STICKY
             }
             ACTION_START -> {
+                val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
+                    ?: JuanitaAlarmStore.LEGACY_ID
+                activeAlarmIds.add(alarmId)
+                activeAlarmId = alarmId
+                testMode = intent.getBooleanExtra(EXTRA_TEST_MODE, false)
+                if (activeAlarmIds.size == 1) volumeNotice = AlarmVolumeController.ensureAudible(this)
                 startForeground(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
                 if (player == null) startAlarmTone()
             }
@@ -48,7 +68,13 @@ class JuanitaAlarmRingingService : Service() {
     private fun startAlarmTone() {
         val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ?: return
+            ?: run {
+                AlarmVolumeController.restore(this)
+                volumeNotice = "Nessun tono di allarme disponibile."
+                getSystemService(NotificationManager::class.java)
+                    .notify(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
+                return
+            }
         runCatching {
             val media = MediaPlayer()
             media.setAudioAttributes(
@@ -61,10 +87,13 @@ class JuanitaAlarmRingingService : Service() {
             media.isLooping = true
             media.setVolume(0.05f, 0.05f)
             media.setOnPreparedListener {
+                if (player !== it || activeAlarmIds.isEmpty()) {
+                    runCatching { it.release() }
+                    return@setOnPreparedListener
+                }
                 it.start()
                 volumeJob?.cancel()
                 volumeJob = scope.launch {
-                    // Smooth 12-second fade without changing the user's system volume.
                     for (step in 1..24) {
                         if (!isActive) break
                         val volume = 0.05f + (0.95f * step / 24f)
@@ -75,12 +104,14 @@ class JuanitaAlarmRingingService : Service() {
             }
             media.setOnErrorListener { _, _, _ ->
                 stopRinging()
+                stopSelf()
                 true
             }
-            media.prepareAsync()
             player = media
+            media.prepareAsync()
         }.onFailure {
             stopRinging()
+            stopSelf()
         }
     }
 
@@ -88,23 +119,35 @@ class JuanitaAlarmRingingService : Service() {
         createChannel()
         val fullScreen = PendingIntent.getActivity(
             this, 5205, Intent(this, AlarmRingingActivity::class.java)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId)
+                .putExtra(EXTRA_TEST_MODE, testMode)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val dismiss = PendingIntent.getBroadcast(
-            this, 5204,
-            Intent(this, JuanitaAlarmReceiver::class.java).setAction(JuanitaAlarmScheduler.ACTION_DISMISS),
+            this, actionRequestCode(4),
+            Intent(this, JuanitaAlarmReceiver::class.java)
+                .setAction(JuanitaAlarmScheduler.ACTION_DISMISS)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val snooze = PendingIntent.getBroadcast(
-            this, 5206,
-            Intent(this, JuanitaAlarmReceiver::class.java).setAction(JuanitaAlarmScheduler.ACTION_SNOOZE),
+            this, actionRequestCode(5),
+            Intent(this, JuanitaAlarmReceiver::class.java)
+                .setAction(JuanitaAlarmScheduler.ACTION_SNOOZE)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val title = if (testMode) "Prova della sveglia" else
+            JuanitaAlarmStore(this).find(activeAlarmId)?.label?.takeIf { it.isNotBlank() }
+                ?: "È ora di svegliarsi."
+        val contentText = if (activeAlarmIds.size > 1) {
+            "${activeAlarmIds.size} sveglie attive · $volumeNotice"
+        } else "$title · $volumeNotice"
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Sveglia · Juanita")
-            .setContentText("È ora di svegliarsi.")
+            .setContentTitle(if (testMode) "Prova · Juanita" else "Sveglia · Juanita")
+            .setContentText(contentText)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -112,10 +155,13 @@ class JuanitaAlarmRingingService : Service() {
             .setAutoCancel(false)
             .setFullScreenIntent(fullScreen, true)
             .setContentIntent(fullScreen)
-            .addAction(android.R.drawable.ic_lock_idle_alarm, "Posticipa 10 min", snooze)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Spegni", dismiss)
+        if (!testMode) builder.addAction(android.R.drawable.ic_lock_idle_alarm, "Posticipa 10 min", snooze)
+        return builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, if (testMode) "Chiudi prova" else "Spegni", dismiss)
             .build()
     }
+
+    private fun actionRequestCode(suffix: Int): Int =
+        5200 + ((activeAlarmId.hashCode() and 0x0fffffff) * 3) + suffix
 
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -124,7 +170,7 @@ class JuanitaAlarmRingingService : Service() {
                 manager.createNotificationChannel(
                     NotificationChannel(CHANNEL_ID, "Sveglia Juanita", NotificationManager.IMPORTANCE_HIGH).apply {
                         description = "Suono della sveglia locale di Juanita"
-                        setSound(null, null) // MediaPlayer owns alarm audio and gradual volume.
+                        setSound(null, null)
                         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     }
                 )
@@ -138,6 +184,8 @@ class JuanitaAlarmRingingService : Service() {
         runCatching { player?.stop() }
         runCatching { player?.release() }
         player = null
+        activeAlarmIds.clear()
+        AlarmVolumeController.restore(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(JuanitaAlarmScheduler.NOTIFICATION_ID)
     }
@@ -151,14 +199,21 @@ class JuanitaAlarmRingingService : Service() {
     companion object {
         const val ACTION_START = "ai.juanita.app.alarm.RING"
         const val ACTION_STOP = "ai.juanita.app.alarm.STOP_RING"
+        const val EXTRA_TEST_MODE = "alarm_test_mode"
         private const val CHANNEL_ID = "juanita_alarm_ringing"
-        fun start(context: Context) {
-            val intent = Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_START)
+        fun start(context: Context, alarmId: String = JuanitaAlarmStore.LEGACY_ID, testMode: Boolean = false) {
+            val intent = Intent(context, JuanitaAlarmRingingService::class.java)
+                .setAction(ACTION_START)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
+                .putExtra(EXTRA_TEST_MODE, testMode)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
-        fun stop(context: Context) {
-            context.stopService(Intent(context, JuanitaAlarmRingingService::class.java))
+        fun startTest(context: Context) = start(context, JuanitaAlarmStore.LEGACY_ID, testMode = true)
+        fun stop(context: Context, alarmId: String? = null) {
+            val intent = Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_STOP)
+            if (alarmId != null) intent.putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
+            runCatching { context.startService(intent) }
         }
     }
 }

@@ -1116,3 +1116,99 @@ Candidate branch: `feature/complete-gentle-morning-alarm-0.11.0`.
 ## Familiar-person voice recognition — USER-APPROVED; NOT IMPLEMENTED
 
 Speech-to-text is not speaker identification. Juanita must not claim she recognizes a friend merely because she transcribed their words. The planned behavior remains: at a natural pause, ask who is speaking only when the speaker is genuinely unknown and audio confidence is adequate; request explicit permission before enrolling a local voice profile; associate the confirmed voice with the confirmed name; provide guest/decline, correction, revoke and delete paths. Avoid enrollment from TV/radio, overlapping voices or uncertain audio. Local model feasibility, per-model licensing, Samsung-device performance and GDPR biometric-data review remain mandatory gates. See the speaker identity research section above.
+
+
+## Smart Alarm 0.11.1 — multi-alarm, voice commands and reliable morning greeting
+
+**STATUS: IN PROGRESS — isolated branch `feature/smart-alarm-0.11.1-multi-alarm-voice`; issue #27.** The 0.11.0 user test confirmed that local ringing works, while spoken greeting and natural-language alarm creation do not meet the intended behavior.
+
+### Implementation progress — 2026-11-08 (draft PR #29)
+
+**Source implementation added; first CI pass succeeded for the PR's earlier head. The branch has since received additional hardening commits, so CI must be rerun against the latest head. No Release APK has been produced and no Samsung device test has been claimed.**
+
+Implemented in the current feature branch:
+- Independent alarm collection with backward-compatible migration from the 0.11.0 singleton setting.
+- Per-alarm scheduling identities, independent snooze/dismiss, recurrence, boot/time/time-zone/exact-alarm and package-update rescheduling.
+- In-app list/add/edit/enable-disable/delete manager; seven equal weekday chips keep Dom on one line.
+- Gemini Live alarm tools for create/list/update/enable/delete and a public intent to open the phone Clock app.
+- First-launch permission guide plus persistent access status/review in Settings.
+- Five-second delay before starting morning Live, visible asynchronous failure and retry, no TTS fallback.
+- Alarm stream temporary 70% minimum, original volume restore, stale-volume recovery and 3-second tone/volume test.
+- Instrumentation tests for independent alarm records, isolation on disable/delete and legacy migration.
+
+Known limits / validation still required:
+- Android does not expose Samsung Clock's private list of alarms; the public Clock intent can open it, while AlarmManager.getNextAlarmClock() exposes only the next alarm where available.
+- The Firebase Live audio helper currently gives no verified callback for the exact first speaker-audio sample. Tone stop is tied to the first assistant output transcript, so overlap/gap must be checked on real devices.
+- The alarm stream can be adjusted; Gemini Live's speech output may use another stream. Test both separately.
+- The current CI success was for an earlier PR head; latest branch commits need a fresh CI pass.
+
+### Historical findings from the 0.11.0 baseline — superseded by this candidate
+The following issues were confirmed against 0.11.0 and were the reason for this branch. They must not be read as current branch status:
+- The 0.11.0 UI persisted one alarm schedule only.
+- Morning voice was opt-in and defaulted OFF; this remains an explicit consent choice in 0.11.1 and must be enabled by the user in alarm settings.
+- The 0.11.0 alarm had no five-second delayed voice startup.
+- The 0.11.0 branch lacked alarm function tools and reliable UI error feedback.
+- The weekday layout issue was addressed in 0.11.1 with one-line labels.
+
+### Required implementation
+1. Replace the single-schedule preference with a backward-compatible local collection of alarm records. Each record has a stable ID, independent time/date or repeat-day set, enabled state and optional label. Allow many alarms at once and different times on different days. Migrate the current alarm without deleting or duplicating it.
+2. Give each alarm its own stable Android PendingIntent identity. Reschedule all alarms after boot, time/time-zone changes, package update and exact-alarm permission changes. Snooze/dismiss must affect only the active occurrence and never cancel another alarm or future recurrence.
+3. Provide Samsung Clock-style list/add/edit/enable-disable/delete controls. Use a seven-day layout with sufficient minimum chip width so `Dom` remains on one line.
+4. Register narrow Gemini Live function tools for alarm creation, listing, editing and deletion. Parse clear spoken requests in the device locale/time zone, persist and schedule before reporting success, and ask one short clarification for ambiguous time/date/day. Do not create alarms from casual conversation. Destructive edits/deletes require confirmation.
+5. Start the greeting after five seconds of local ringing. Reuse only the selected Gemini Live voice. Surface connection, permission, network/quota and service errors in the UI. Keep the local alarm tone until the first assistant audio actually starts, not merely until transcript text arrives. If Android blocks microphone foreground-service startup, retain the alarm and offer a visible user-initiated start; never bypass microphone restrictions or use Android TTS.
+6. Inspect the Android alarm stream before ringing. If muted/too low, raise only that stream to a configurable safe threshold where Android permits; remember the prior level and restore it after the alarm unless the user chooses persistent behavior. Respect DND/OEM restrictions and explain when adjustment is blocked. Do not assume changing the alarm stream also changes Gemini Live's output stream.
+7. Keep all alarms local and free. No billing, paid APIs, TTS substitution, package ID/signing changes, uninstall or data-clear workaround.
+
+### Acceptance and release gates
+- Unit tests for multiple IDs, different per-day times, same-time selected weekdays, one-shot expiry, old-data migration, duplicate delivery, snooze isolation, DST/time-zone changes and disabled records.
+- Verify voice tool arguments/results, durable persistence before success, error reporting and no-network/microphone-denied fallbacks.
+- Verify the five-second delay and stop the alarm only on actual audio-start evidence.
+- Test alarm volume at zero/low/normal, DND, restore behavior and the distinct Gemini audio stream.
+- CI debug/test compilation and signed Release verification must preserve `ai.juanita.app`, monotonic versionCode and the permanent release certificate.
+- Physical tests on Note10+ Android 12 and S22 Ultra are mandatory before claiming the spoken alarm is reliable or distributing the cumulative APK.
+
+
+### First-launch permission onboarding — added 2026-11-08 (user requested)
+
+- On first launch, show a clear permission setup/welcome flow that audits current grants and explains each access in plain Italian.
+- Request microphone for Live voice and alarm greeting; location only for local weather/location features; calendar only for agenda reading; notifications for alarm/reminder alerts; camera only when the user enters a visual feature.
+- Include alarm-specific special access checks: exact-alarm scheduling and full-screen alarm intent where the Android version/device requires them. Explain and open the appropriate Android Settings page; these are not ordinary runtime permission dialogs.
+- Explain that Android does not provide a single "grant everything" switch. Request permissions in understandable contextual groups, one system flow at a time, and let the user skip optional permissions.
+- Provide a persistent "Permessi e accessi" screen with granted / missing / optional status, a reason, a "configure" action, and a re-check button. Re-check on every app resume because permissions can be revoked in Android Settings.
+- Never block the whole app because an optional permission is denied. Disable only the affected feature and explain what will not work; keep local alarm sound and other independent features working.
+- Do not request contacts, SMS, call logs, background location, accessibility, notification-listener, or broad storage access unless a separately approved, implemented feature genuinely requires it. No hidden microphone/camera/background collection.
+- First-launch flow must be compatible with Android 12 (Note10+) and newer Android releases, and must not reset existing app data or signing/package identity.
+
+
+## Engineering incident log — 2026-11-08 — PR #29 / candidate 0.11.1
+
+### API 35 CI failure diagnosis
+- The API 35 instrumentation job did not reach Gradle or execute a single test.
+- The emulator took approximately 545 seconds to report boot complete. Immediately afterward, the emulator-runner action attempted `adb shell settings put global window_animation_scale 0.0`; ADB returned `Broken pipe (32)`, and the action terminated with exit code 224.
+- Therefore this failure is an emulator/ADB startup/transport failure, not evidence of a Juanita application test failure. API 31 instrumentation completed successfully and the debug APK plus instrumentation APK compilation passed on the same run.
+- CI workflow adjustment committed on the PR branch: use the lean AOSP `default` image (these tests do not require Google Play services), Pixel 2 emulator profile, 900-second boot timeout, do not run the post-boot animation-setting ADB command, and verify ADB/device boot state before invoking Gradle. If the device drops, capture device list and logcat. The API 35 test remains mandatory; no failure is ignored or converted to success.
+- Commit: `0a8b7da0b2bd86bdb16d39ca1d82bc4b1462b20b`. New CI result pending.
+
+### Source-level release blockers still open
+- The local alarm scheduler now stores independent alarms and gives each its own PendingIntent identity; however, the ringing service still owns one MediaPlayer, one active alarm ID and one notification ID. Simultaneous ringing therefore needs explicit arbitration/queue semantics before claiming that concurrent alarms are independently dismissible.
+- The five-second delay is present. The morning voice feature remains explicit opt-in and defaults OFF until the user enables it and grants microphone permission.
+- The alarm tone is currently stopped on the first assistant output transcript callback, not a verified first audio sample. This is not equivalent to actual audible speech start.
+- The foreground activity starts Gemini Live using the configured voice. Android's while-in-use microphone rules apply to microphone foreground services on API 34+; real-device validation is mandatory and no background-start bypass is permitted. See Android documentation: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+- Do not publish a Release APK until latest CI is green, the remaining functional blockers are fixed or explicitly scoped, permanent signing is verified, and physical-device tests pass on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+### Follow-up hardening — independent active ringing occurrences
+- The local ringing service previously had one mutable active alarm ID. If two alarm events arrived while the tone was already playing, the later event could overwrite the ID shown in the notification; dismissing one occurrence could stop the shared tone for both.
+- The service now tracks a set of currently ringing alarm IDs and keeps one shared local alarm tone while at least one occurrence remains active. Snooze/dismiss requests remove only the matching ID; the tone and notification remain while another occurrence is active. The notification reports the number of active alarms.
+- The alarm activity passes its own ID into the Gemini Live service. When the first assistant transcript callback ends the tone for that morning session, it removes only that alarm occurrence rather than stopping every active alarm.
+- Stale stop requests are guarded so a late notification action after service teardown does not crash the caller.
+- This is a source-level correction, not yet a proven device behavior. CI compilation/instrumentation and physical overlapping-alarm tests are still required. The SDK callback limitation remains: transcript arrival is not proof of first audible audio.
+- Commits: `a7fd047`, `04f3b4b`, `7b56f25`, `cbfc582`, `81879b7`.
+
+### API 35 CI follow-up — explicit ADB server initialization (2026-11-08)
+
+- The latest run (42524003792, commit 600608e) confirmed that the shell conditional is now parsed and the API 31 instrumentation job passes; the debug build and instrumentation APK compilation also pass.
+- API 35 still fails before the custom test script and before Gradle starts. Its emulator-runner log reports `Unable to connect to adb daemon on port: 5037`, followed by repeated failures of the runner's own `adb -s emulator-5554 shell getprop sys.boot_completed`. No Juanita instrumentation test ran on API 35.
+- Inspection of the pinned upstream action source (ReactiveCircus/android-emulator-runner v2) shows that `launchEmulator()` immediately polls ADB and does not explicitly start the ADB server. The action exposes `pre-emulator-launch-script`, executed after AVD creation and before emulator launch.
+- Workflow change on this branch: `pre-emulator-launch-script: adb start-server`, so the ADB daemon is initialized before the action begins boot polling. This is a targeted CI infrastructure correction; its effectiveness is pending the next run.
+- No test is skipped, no failure is masked, and API 35 remains a mandatory release gate.

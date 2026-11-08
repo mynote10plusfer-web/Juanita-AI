@@ -57,7 +57,8 @@ class GeminiLiveAssistant {
         onArchiveSearch: (query: String) -> String = { "" },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
         onConnectionState: (status: String) -> Unit = {},
-        initialPrompt: String = ""
+        initialPrompt: String = "",
+        onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
         synchronized(recentTranscript) { recentTranscript.clear() }
@@ -83,6 +84,20 @@ class GeminiLiveAssistant {
                     to YYYY-MM-DD and saved only when the user explicitly gives it. Save only fields
                     the user actually stated; do not ask a list of questions to fill the profile.
                     The user may correct any saved detail later.
+
+                    You can manage the user's local alarms with createAlarm, listAlarms, updateAlarm,
+                    setAlarmEnabled and deleteAlarm. Use openDeviceAlarms to open the phone's
+                    Clock app when the user asks about alarms managed outside Juanita. Android
+                    does not expose Samsung Clock's private alarm list to third-party apps.
+                    Only call createAlarm when the user
+                    explicitly asks to create a reminder/alarm and the time/date or repeat
+                    days are clear; ask one concise clarification when needed. If a request
+                    specifies different times on different days, create separate independent
+                    alarms, one tool call per time. Use getCurrentDateTime to resolve relative
+                    dates. Never claim an alarm was saved until the tool confirms it.
+                    Before setAlarmEnabled(false) or deleteAlarm, ask for explicit confirmation
+                    and wait for the user's confirmation. Never interpret casual conversation
+                    as an alarm request. Explain that alarms are stored locally on this device.
 
                 """.trimIndent())
             },
@@ -120,6 +135,52 @@ class GeminiLiveAssistant {
                                 "goals" to Schema.string("Ongoing goals or projects explicitly described by the user."),
                                 "assistance_preferences" to Schema.string("How the user explicitly prefers Juanita to communicate or help."),
                                 "clear_fields" to Schema.string("Comma-separated profile field keys the user explicitly asked Juanita to forget. Allowed: preferred_name, birth_date, languages, home_locality, interests, lifestyle, goals, assistance_preferences.")
+                            )
+                        ),
+                        FunctionDeclaration(
+                            name = "createAlarm",
+                            description = "Create one independent local alarm after an explicit user request. time is required in HH:mm. Supply either date (YYYY-MM-DD) for a one-off alarm or repeat_days (comma-separated English weekday names MONDAY..SUNDAY) for a weekly alarm. Different times on different days must be separate calls.",
+                            parameters = mapOf(
+                                "time" to Schema.string("Required local 24-hour time HH:mm."),
+                                "date" to Schema.string("Optional local date YYYY-MM-DD for a one-time alarm."),
+                                "repeat_days" to Schema.string("Optional comma-separated weekdays MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY,SATURDAY,SUNDAY."),
+                                "label" to Schema.string("Optional short alarm label.")
+                            )
+                        ),
+                        FunctionDeclaration(
+                            name = "listAlarms",
+                            description = "List every locally stored alarm, including independent times, dates, repeat days and enabled state.",
+                            parameters = emptyMap()
+                        ),
+                        FunctionDeclaration(
+                            name = "openDeviceAlarms",
+                            description = "Open the phone's default Clock app to show alarms already managed there. Do not claim you can read Samsung Clock's private alarm list; Android exposes only this public intent.",
+                            parameters = emptyMap()
+                        ),
+                        FunctionDeclaration(
+                            name = "updateAlarm",
+                            description = "Edit one existing alarm by exact ID. Supply only changed fields: time HH:mm, date YYYY-MM-DD to make it one-off, repeat_days to make it weekly, and/or label. Preserve all unspecified fields.",
+                            parameters = mapOf(
+                                "alarm_id" to Schema.string("Exact ID returned by listAlarms."),
+                                "time" to Schema.string("Optional new local 24-hour time HH:mm."),
+                                "date" to Schema.string("Optional date YYYY-MM-DD; converts to a one-time alarm."),
+                                "repeat_days" to Schema.string("Optional comma-separated weekdays MONDAY..SUNDAY; converts to weekly recurrence."),
+                                "label" to Schema.string("Optional new label.")
+                            )
+                        ),
+                        FunctionDeclaration(
+                            name = "setAlarmEnabled",
+                            description = "Enable or disable one existing alarm by its exact ID. Before disabling, obtain explicit confirmation from the user.",
+                            parameters = mapOf(
+                                "alarm_id" to Schema.string("Exact ID returned by listAlarms."),
+                                "enabled" to Schema.string("true or false.")
+                            )
+                        ),
+                        FunctionDeclaration(
+                            name = "deleteAlarm",
+                            description = "Permanently delete one alarm by its exact ID. Ask for and receive explicit confirmation before calling.",
+                            parameters = mapOf(
+                                "alarm_id" to Schema.string("Exact ID returned by listAlarms.")
                             )
                         )
                     )
@@ -165,6 +226,17 @@ class GeminiLiveAssistant {
                     FunctionResponsePart(
                         functionCall.name,
                         JsonObject(mapOf("profile_update" to JsonPrimitive(result.take(1200)))),
+                        functionCall.id
+                    )
+                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "openDeviceAlarms", "updateAlarm", "setAlarmEnabled", "deleteAlarm")) {
+                    val args = functionCall.args.mapValues { (_, value) ->
+                        runCatching { value.jsonPrimitive.content }.getOrDefault("")
+                    }
+                    val result = runCatching { onAlarmCommand(functionCall.name, args) }
+                        .getOrElse { "Operazione sveglia non riuscita: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+                    FunctionResponsePart(
+                        functionCall.name,
+                        JsonObject(mapOf("alarm_result" to JsonPrimitive(result.take(3000)))),
                         functionCall.id
                     )
                 } else {

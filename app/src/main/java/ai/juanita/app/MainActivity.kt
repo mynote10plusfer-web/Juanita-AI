@@ -319,6 +319,10 @@ private fun JuanitaApp(
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
     var showFirstMeeting by remember { mutableStateOf(!initialOnboardingCompleted) }
+    var showPermissionOnboarding by remember {
+        mutableStateOf(!context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
+            .getBoolean("onboarding_completed", false))
+    }
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
@@ -351,16 +355,7 @@ private fun JuanitaApp(
             locationContext = result.orEmpty()
             locationStatus = if (result.isNullOrBlank()) "Permesso attivo · posizione non ancora disponibile" else "Posizione disponibile per Juanita"
         } else {
-            val permissionPrefs = context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
-            if (!permissionPrefs.getBoolean("location_permission_requested", false)) {
-                permissionPrefs.edit().putBoolean("location_permission_requested", true).apply()
-                locationPermissionLauncher.launch(arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ))
-            } else {
-                locationStatus = "Permesso posizione non concesso · puoi abilitarlo dalle impostazioni Android"
-            }
+            locationStatus = "Posizione facoltativa non autorizzata · puoi abilitarla in Permessi e accessi"
         }
     }
     val livePermissionLauncher = rememberLauncherForActivityResult(
@@ -455,6 +450,35 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "SETTINGS") {
+                SettingsCard(panel, gold, "PERMESSI E ACCESSI") {
+                    fun permissionState(permission: String): String =
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) "Autorizzato" else "Non autorizzato"
+                    Text("Microfono: ${permissionState(Manifest.permission.RECORD_AUDIO)}", color = Color.White, fontSize = 12.sp)
+                    Text("Posizione: ${if (permissionState(Manifest.permission.ACCESS_FINE_LOCATION) == "Autorizzato" || permissionState(Manifest.permission.ACCESS_COARSE_LOCATION) == "Autorizzato") "Autorizzata" else "Facoltativa · non autorizzata"}", color = Color.White, fontSize = 12.sp)
+                    Text("Calendario: ${permissionState(Manifest.permission.READ_CALENDAR)}", color = Color.White, fontSize = 12.sp)
+                    Text("Fotocamera: ${permissionState(Manifest.permission.CAMERA)}", color = Color.White, fontSize = 12.sp)
+                    Text("Notifiche: ${if (android.os.Build.VERSION.SDK_INT < 33 || permissionState(Manifest.permission.POST_NOTIFICATIONS) == "Autorizzato") "Autorizzate" else "Non autorizzate"}", color = Color.White, fontSize = 12.sp)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        Text("Orari esatti: ${if (context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()) "Autorizzati" else "Da autorizzare"}", color = Color.White, fontSize = 12.sp)
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= 34) {
+                        Text("Sveglia a schermo intero: ${if (context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()) "Autorizzata" else "Da autorizzare"}", color = Color.White, fontSize = 12.sp)
+                    }
+                    Button(onClick = { showPermissionOnboarding = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Rivedi guida permessi") }
+                    Button(onClick = {
+                        val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = android.net.Uri.parse("package:${context.packageName}")
+                        }
+                        runCatching { context.startActivity(intent) }
+                    }, modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Apri impostazioni permessi") }
+                    Text("Puoi revocare o modificare gli accessi in qualsiasi momento. Le funzioni facoltative non bloccano il resto dell'app.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                }
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     OutlinedTextField(
                         value = assistantName,
@@ -751,6 +775,13 @@ private fun JuanitaApp(
                           showFirstMeeting = false
                       }
                   )
+              }
+              if (showPermissionOnboarding) {
+                  PermissionOnboarding {
+                      context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
+                          .edit().putBoolean("onboarding_completed", true).apply()
+                      showPermissionOnboarding = false
+                  }
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "ALARM" to "Sveglia", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
