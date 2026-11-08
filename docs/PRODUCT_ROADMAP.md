@@ -830,3 +830,39 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 - Do not merge or deliver a candidate APK without successful CI and explicit package/version/signature checks.
 - CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra, including battery, background behavior, permissions and lifecycle.
 - No paid APIs, billing upgrades, cloud hosting or recurring service costs without fresh explicit approval.
+
+### Permanent personal identity profile and gradual getting-to-know-you dialogue — USER-REQUESTED / APPROVED SPECIFICATION (2026-11-08)
+
+**Product concept:** create a separate, durable memory branch called **Personal Profile** (Italian UI label: “Profilo personale”). It is distinct from daily/conversational memory, conversation archive, project memory, reminders and transient notification inbox.
+
+**Profile lifecycle and controls**
+- Profile facts persist across ordinary daily-memory cleanup and conversation-archive cleanup.
+- The profile is editable at any time through a dedicated screen and conversational corrections.
+- It is not silently erased by “clear daily memory”. Provide a separate, clearly explained profile-reset/delete action only after explicit confirmation; do not make the profile technically undeletable, because the user must retain control over personal data and applicable privacy rights.
+- Store facts with provenance, timestamp, confidence/status and whether the user explicitly confirmed them or they were inferred. Prefer explicit confirmation for identity facts.
+- Corrections update the active value and mark the old value as superseded rather than allowing conflicting values to coexist as current.
+- Keep the profile encrypted locally using the app's existing secure storage approach; do not send profile data to third parties except when a feature clearly requires it and the user has consented.
+
+**First-run spoken introduction**
+- The initial profile setup should be a natural voice conversation, not a long form or interrogation.
+- Ask only a few foundational questions, one at a time: preferred/name to use; current locality; age (optional); date of birth (optional).
+- Do not ask both age and date of birth as mandatory fields. If date of birth is supplied, calculate age when needed rather than storing inconsistent values; if age alone is supplied, store it as age-at-date with a timestamp and do not pretend it remains current.
+- Location: request Android location permission only when needed and explain why. If granted, resolve a human-readable locality from device location; if denied/unavailable, ask naturally or allow “later”. Never treat approximate location as a verified home address. Keep current location distinct from home/permanent residence.
+- Allow skipping any question and continue the conversation without pressure. Do not block app use on completion.
+
+**Gradual discovery over later conversations**
+- Juanita should learn interests, hobbies, occupation, routines, preferences, important relationships and life context gradually, by asking at most one relevant question at a suitable conversational moment.
+- Examples: “Cosa ti piace fare nel tempo libero?”, “Di cosa ti occupi?”, “Hai qualche passione che ti prende particolarmente?”
+- No fixed barrage or repeated onboarding questionnaire. Use context and conversation flow; skip questions when irrelevant, sensitive, or already answered.
+- Track topics already asked, answered, declined or deferred, so Juanita avoids repetition and respects “non voglio parlarne”.
+- Treat answers as candidate profile facts; distinguish direct statements from guesses. For potentially sensitive information, do not infer or persist it without clear user intent/consent.
+- Ask for confirmation when a fact is ambiguous, contradictory, unusually consequential or inferred. Let the user say “ricordatelo” or correct it naturally.
+- The profile is gradually enriched from eligible conversations, but daily episodic memories remain separate and may link to profile facts without duplicating or overwriting them.
+
+**Architecture and acceptance tests**
+- Separate data model/repository for PersonalProfile and its entries, with independent lifecycle and dedicated UI/audit.
+- Conversation orchestrator receives only the small relevant profile context needed for the current exchange; do not inject the entire profile indiscriminately into every prompt.
+- Add tests for independent profile persistence when daily memory is cleared, edits/corrections, skipped/declined questions, one-question-at-a-time pacing, location permission denied, approximate vs confirmed location, age/date-of-birth consistency, duplicate-question avoidance, offline operation and explicit profile reset confirmation.
+- This is a specification, not evidence of implementation. First audit the existing onboarding/profile and memory storage before changing code, then implement migration-safe separation.
+
+**Status: USER-APPROVED SPECIFICATION — NOT IMPLEMENTED / EXISTING PROFILE ARCHITECTURE TO BE AUDITED.**
