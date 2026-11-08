@@ -286,6 +286,9 @@ private fun JuanitaApp(
     var selectedSection by remember { mutableStateOf("HOME") }
     val notificationEntries by NotificationInbox.entries.collectAsState()
     var notificationAccessEnabled by remember { mutableStateOf(false) }
+    var notificationCloudConsent by remember {
+        mutableStateOf(AssistantPreferences(context).allowNotificationContentToGemini)
+    }
     LaunchedEffect(selectedSection) {
         if (selectedSection == "MORE") {
             while (true) {
@@ -726,10 +729,28 @@ private fun JuanitaApp(
                         Text(if (notificationAccessEnabled) "Gestisci accesso notifiche" else "Autorizza lettura notifiche")
                     }
                     Text(
-                        "Le notifiche vengono lette solo dopo il tuo consenso Android. Per questa prima versione, gli ultimi 30 avvisi restano soltanto in memoria temporanea dell'app: non vengono salvati nell'archivio delle conversazioni né inviati a Gemini.",
+                        "Gli ultimi 30 avvisi restano temporanei sul dispositivo. L'elenco delle app e i conteggi vengono comunicati a Gemini solo quando chiedi di controllare le notifiche. I testi dei messaggi restano bloccati finché non attivi il consenso qui sotto.",
                         color = Color(0xFF9A9DA4),
                         fontSize = 11.sp
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = notificationCloudConsent,
+                            onCheckedChange = { enabled ->
+                                notificationCloudConsent = enabled
+                                AssistantPreferences(context).allowNotificationContentToGemini = enabled
+                                status = if (enabled) {
+                                    "Consenso attivo: Juanita potrà leggere solo le notifiche che selezioni esplicitamente."
+                                } else {
+                                    "Consenso disattivato: i contenuti delle notifiche non vengono inviati a Gemini."
+                                }
+                            }
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Consenti lettura dei messaggi selezionati con Gemini", color = Color.White, fontSize = 13.sp)
+                            Text("Disattivato per impostazione predefinita. Puoi revocarlo in qualsiasi momento.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Notifiche recenti (${notificationEntries.size})", color = Color.White, modifier = Modifier.weight(1f))
                         TextButton(onClick = { NotificationInbox.clear() }) { Text("Svuota", color = gold) }
