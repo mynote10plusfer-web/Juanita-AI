@@ -2,7 +2,7 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current signed release: 0.10.8 (versionCode 37)
+## Current development candidate: 0.11.3 (versionCode 42) — not yet released
 
 Signed Release 0.10.8 adds progressive personal knowledge: a voice-led first meeting, optional name and birth date gathered naturally, a dedicated encrypted profile store connected to Gemini Live, and gradual learning from ordinary conversation. PR #23 has merged the timezone-safe Smart Alarm schedule model (not yet a working alarm). PR #24 is under CI review for automatic recovery after Gemini Live disconnects; it is not yet released or physically tested. Intermediate builds are not for installation.
 
@@ -40,9 +40,10 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 
 ## Notification reader — deferred
 
-- Notification reading is intentionally disabled in the 0.10.6 sideload build. The Android notification-listener service is not declared in the manifest, and no Gemini Live notification-reading tools or notification-access UI are exposed.
-- The implementation source is retained for a later project phase, after a distribution path that passes Google Play Protect requirements is established.
-- Do not ask users to disable Play Protect or grant notification access for this build.
+- Notification reading is excluded from the 0.11.3 sideload candidate after Google Play Protect blocked the 0.11.2 candidate.
+- The shipped manifest does not declare the privileged Android notification-listener service; Gemini Live notification tools, notification-reader settings and onboarding actions are removed.
+- Historical implementation files may remain in the repository for a later review, but they are not part of the active app experience.
+- Do not ask users to disable Play Protect. Revisit only after a compliant distribution/policy path is established; Play Developer registration alone does not guarantee approval.
 
 
 ## Not implemented yet
@@ -78,3 +79,11 @@ The microphone is activated only after the user grants permission and starts a L
 - Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks, bounded reconnection and recent transcript context replay. It must pass CI and real-device testing before being called fixed or included in a Release APK.
 - Familiar-person speaker identification remains unimplemented. Voice transcription is not speaker recognition; local enrollment requires explicit consent and privacy/legal review.
 - Notification reading remains deferred; do not disable Play Protect.
+
+
+## Current candidate status — 2026-11-08
+
+- PR #31 remains draft and unmerged. Candidate 0.11.2 (versionCode 41) completed signed Release CI and permanent certificate verification but was blocked by Google Play Protect during sideload installation; it is not physically validated.
+- Candidate 0.11.3 (versionCode 42) removes the notification reader from the shipped app while preserving the permanent package/signing identity and existing local data. It must pass a fresh signed Release workflow before distribution.
+- Current tabs: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. Do not remove or redesign these tabs as part of the notification deferral.
+- Next approved product area: Juanita Personal Organizer — validate multi-alarm and spoken morning greeting, then local reminders/tasks and calendar integration. No paid APIs, subscriptions or billing without explicit approval.
