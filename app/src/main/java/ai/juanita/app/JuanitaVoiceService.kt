@@ -114,7 +114,11 @@ class JuanitaVoiceService : Service() {
                                 memoryStore.buildAssistantContext()
                             }
                             val profileContext = withContext(Dispatchers.IO) {
-                                buildPersonalProfileContext(personalProfileStore.load())
+                                runCatching { buildPersonalProfileContext(personalProfileStore.load()) }
+                                    .getOrElse {
+                                        _memoryState.value = "Profilo personale non leggibile: conversazione disponibile, profilo non caricato."
+                                        ""
+                                    }
                             }
                             val sessionInstruction = buildString {
                                 append(instruction)
@@ -221,7 +225,7 @@ class JuanitaVoiceService : Service() {
                                     val saved = mutableListOf<String>()
                                     fields.forEach { (key, value) ->
                                         if (key !in PersonalProfile.allowedKeys) return@forEach
-                                        if (key == PersonalProfile.BIRTH_DATE) {
+                                        if (key == PersonalProfile.BIRTH_DATE && value.isNotBlank()) {
                                             val parsed = runCatching { LocalDate.parse(value) }.getOrNull()
                                             require(parsed != null && !parsed.isAfter(LocalDate.now())) {
                                                 "La data di nascita deve essere una data valida in formato YYYY-MM-DD."
@@ -236,7 +240,7 @@ class JuanitaVoiceService : Service() {
                                         saved += key
                                     }
                                     if (saved.isEmpty()) "No profile fields were saved."
-                                    else "Saved explicitly stated profile fields: " + saved.joinToString(", ") + "."
+                                    else "Profile fields updated or removed: " + saved.joinToString(", ") + "."
                                 }
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
