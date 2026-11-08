@@ -1,6 +1,21 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — 0.10.5 is the latest previously verified signed release. 0.10.6 source is merged but its signed release is not yet verified. 0.10.7 humanized-conversation slice is in development; CI and device verification are pending.
+Last updated: 2026-11-08 — 0.10.7 is the latest signed release (versionCode 36); 0.10.8 progressive personal knowledge is in development. Do not ask the user to install intermediate builds; deliver the next cumulative signed Release APK after CI and signing verification.
+
+## Progressive personal knowledge — candidate 0.10.8
+
+**STATUS: IMPLEMENTATION IN PROGRESS; CI AND DEVICE VERIFICATION PENDING.**
+
+The next cumulative release connects the dedicated encrypted PersonalProfile store to Gemini Live:
+- Replace the seven-field manual first-meeting form with a short introduction; the first meeting happens in voice, not in a form.
+- Ask preferred name once, then birth date separately only when natural; age is calculated from the explicit birth date.
+- Add a Gemini Live function tool that writes only explicitly stated, durable, non-sensitive profile fields to the dedicated AES-GCM PersonalProfile store.
+- Restore confirmed profile details and calculated age into later Live sessions, separately from transcript archive and curated memory.
+- Keep the existing automatic memory curator for interests, routines, projects and useful experiences; profile writes are a separate structured layer.
+- No questionnaire, no repeated questions after refusal, no inferred birth date or residence, and no automatic retention of sensitive/intimate details.
+- Corrections overwrite the relevant profile field; the user can manage ordinary memories separately. Profile-specific edit/delete UI remains a follow-up task and must be completed before claiming full profile management.
+
+The 0.10.8 package is intended as one cumulative install after the 0.10.7 base. Do not distribute Debug builds or ask the user to install every intermediate version.
 
 ## Humanized conversation runtime — candidate 0.10.7
 

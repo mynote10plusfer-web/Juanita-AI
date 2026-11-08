@@ -46,4 +46,16 @@ class PersonaProfileBehaviorTest {
         assertTrue(instruction.contains("Selected regional speech profile: Español canario"))
         assertTrue(instruction.contains("You are Juanita"))
     }
+    @Test
+    fun systemInstructionMakesPersonalKnowledgeGradualNotAnInterview() {
+        val instruction = PersonaProfile().toSystemInstruction("Italiano", "Italiano")
+
+        assertTrue(instruction.contains("Do not run a questionnaire"))
+        assertTrue(instruction.contains("ask only once in a natural opening"))
+        assertTrue(instruction.contains("Ask for the birth date separately"))
+        assertTrue(instruction.contains("age is calculated from the birth date"))
+        assertTrue(instruction.contains("listen and learn from volunteered details"))
+        assertTrue(instruction.contains("Conversation is not data collection"))
+    }
+
 }

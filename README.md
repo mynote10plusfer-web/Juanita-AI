@@ -2,7 +2,11 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Candidate release: 0.10.4 (versionCode 33)
+## Current signed release: 0.10.7 (versionCode 36)
+
+Candidate 0.10.8 adds progressive personal knowledge: a voice-led first meeting, optional name and birth date gathered naturally, a dedicated encrypted profile store connected to Gemini Live, and gradual learning from ordinary conversation. The next cumulative signed release is the next user installation target; intermediate builds are not for installation.
+
+## Historical release: 0.10.4 (versionCode 33)
 
 This candidate adds opt-in Android notification reading, increments versionCode, and keeps the permanent production application ID and signing certificate unchanged. Debug builds use the isolated package ai.juanita.app.debug and a separate Firebase variant configuration. Only the signed Release APK is suitable for updating the production app.
 
