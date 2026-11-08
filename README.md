@@ -96,3 +96,10 @@ The microphone is activated only after the user grants permission and starts a L
 - If multiple alarms are ringing, Juanita must ask which one. Supported limits: 1–86,400 seconds and 1–100 complete ringtone playbacks.
 - The count is defined as one full playback of the configured Android alarm tone, not a short beep. Device testing is required to validate this behavior on Samsung hardware.
 - Notification reading remains deferred in the sideload candidate. Do not disable Play Protect.
+
+
+## 0.11.5 candidate — gender-separated Gemini Live voices
+
+- VersionCode 44. The voice selector groups the full 30-voice Gemini Live catalogue into 14 female and 16 male voices, following Firebase AI Logic's published gender labels.
+- Existing saved voice IDs remain unchanged; the selected voice continues to be used by Live conversations and the voice preview. Selection is persisted as before.
+- No Android system TTS is introduced. Each option can be auditioned through the existing Gemini Live preview; actual availability must be confirmed by a successful Live session on the configured model.
