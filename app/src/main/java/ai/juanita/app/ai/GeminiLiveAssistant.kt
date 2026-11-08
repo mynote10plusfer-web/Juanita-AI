@@ -125,10 +125,7 @@ class GeminiLiveAssistant {
                 )
             )
         )
-        val connected = model.connect()
-        session = connected
-
-        // Keep the known-good SDK-managed microphone/speaker path and server VAD.
+        // Prepare reusable callbacks before opening the single active session.
         this.functionCallHandler = { functionCall ->
                 if (functionCall.name == "getCurrentDateTime") {
                     val now = ZonedDateTime.now()
