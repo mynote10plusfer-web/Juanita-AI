@@ -72,6 +72,10 @@ class JuanitaAlarmRingingService : Service() {
             media.isLooping = true
             media.setVolume(0.05f, 0.05f)
             media.setOnPreparedListener {
+                if (player !== it) {
+                    runCatching { it.release() }
+                    return@setOnPreparedListener
+                }
                 it.start()
                 volumeJob?.cancel()
                 volumeJob = scope.launch {
