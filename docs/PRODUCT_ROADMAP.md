@@ -797,3 +797,36 @@ This is a distinct approach from the secretary-originated call/bridge above and 
 5. Do not add always-on listening, call recording or transcription. Show an explicit active-call assistant state, user-controlled mute/stop, visible microphone indication, and announce to the other participant that an automated assistant is participating where appropriate.
 
 **Status: USER-PROPOSED — RESEARCH / PROTOTYPE REQUIRED; NOT IMPLEMENTED.** Test separately for SIM and WhatsApp; do not claim feasibility until the full two-way conversation succeeds on both target devices.
+
+
+## Engineering priorities — next implementation sequence (updated 2026-11-08)
+
+This sequence is the working plan; a roadmap entry is not evidence that a feature has shipped.
+
+### Priority 1 — make learning reliable before making it broader
+1. Audit the existing automatic-memory path end to end: Live transcript callback → durable encrypted pending queue → extraction → validation/deduplication → encrypted memory store → retrieval in a later Live session.
+2. Add explicit provenance to every candidate: source turn/session, timestamp, user-confirmed vs model-inferred, confidence, category, sensitivity and optional expiry. Do not promote guesses, jokes, role-play, hypothetical statements or temporary details into durable facts.
+3. Add correction handling: when the user corrects a fact, replace or supersede the old item, invalidate dependent summaries and preserve the correction's provenance. If two claims cannot safely be reconciled, retain the conflict and ask rather than silently choosing.
+4. Improve retrieval beyond simple keyword overlap in a bounded, local-first way. Evaluate multilingual embeddings only after checking model size, licence, offline operation, latency, RAM and battery on both target phones. Keep lexical fallback.
+5. Build a visible memory audit: what was learned, why it was saved, when it was last confirmed, where it came from, and controls to correct/delete/pause. Separate user facts, preferences, project state, people, reminders and external knowledge.
+6. Add repeatable tests for extraction failures, offline recovery, queue overflow, duplicate facts, contradiction, correction, deletion, expiry and cross-session recall. A successful build is not proof of correct learning.
+
+**Definition of done:** after a normal eligible conversation, Juanita can recall a useful durable fact in a later session, explain its source/status, accept a correction, and stop using the superseded fact. No sensitive detail is silently promoted.
+
+### Priority 2 — notification reader candidate 0.10.4
+- Keep notification access opt-in and revocable. Display only information exposed by Android notification extras; no private WhatsApp database, historical chat scraping or automatic replies.
+- Keep notification contents volatile and local in the first release. Do not send them to Gemini or save them as memories.
+- Voice read-aloud is deliberately deferred until it can use Juanita's configured Gemini Live voice path. Android TextToSpeech is not an acceptable fallback for Riccardo.
+- Before release: pass CI, verify the production package/version and permanent signing certificate, then have the user test permission grant/revocation and WhatsApp/other-app previews on both Samsung devices.
+
+### Priority 3 — smart alarm and morning briefing
+- Implement the app-owned alarm first: one-time/repeating schedule, exact-alarm permission handling, snooze/dismiss, reboot/time-zone/DST recovery, lock-screen behavior and duplicate-fire prevention.
+- Only after alarm reliability is established, integrate the morning greeting, today's agenda/reminders and optional weather.
+- Speech must use the already selected Juanita voice through a technically supported Gemini audio-generation path. No Android TTS or silent voice substitution. If speech cannot be generated, the alarm must still ring and offer normal controls.
+- Keep the alarm, reminders and calendar data local and encrypted where appropriate; request only the permissions needed for each feature.
+
+### Release and test discipline
+- Never replace the production install with a debug package. Keep applicationId `ai.juanita.app`, monotonically increasing versionCode and the permanent release certificate.
+- Do not merge or deliver a candidate APK without successful CI and explicit package/version/signature checks.
+- CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra, including battery, background behavior, permissions and lifecycle.
+- No paid APIs, billing upgrades, cloud hosting or recurring service costs without fresh explicit approval.
