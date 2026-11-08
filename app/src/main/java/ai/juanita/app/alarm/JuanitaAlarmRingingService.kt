@@ -27,6 +27,7 @@ class JuanitaAlarmRingingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var player: MediaPlayer? = null
     private var volumeJob: Job? = null
+    private var activeAlarmId: String = JuanitaAlarmStore.LEGACY_ID
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -38,6 +39,8 @@ class JuanitaAlarmRingingService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_START -> {
+                activeAlarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
+                    ?: JuanitaAlarmStore.LEGACY_ID
                 startForeground(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
                 if (player == null) startAlarmTone()
             }
@@ -64,7 +67,6 @@ class JuanitaAlarmRingingService : Service() {
                 it.start()
                 volumeJob?.cancel()
                 volumeJob = scope.launch {
-                    // Smooth 12-second fade without changing the user's system volume.
                     for (step in 1..24) {
                         if (!isActive) break
                         val volume = 0.05f + (0.95f * step / 24f)
@@ -79,32 +81,37 @@ class JuanitaAlarmRingingService : Service() {
             }
             media.prepareAsync()
             player = media
-        }.onFailure {
-            stopRinging()
-        }
+        }.onFailure { stopRinging() }
     }
 
     private fun buildNotification(): Notification {
         createChannel()
         val fullScreen = PendingIntent.getActivity(
             this, 5205, Intent(this, AlarmRingingActivity::class.java)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val dismiss = PendingIntent.getBroadcast(
-            this, 5204,
-            Intent(this, JuanitaAlarmReceiver::class.java).setAction(JuanitaAlarmScheduler.ACTION_DISMISS),
+            this, actionRequestCode(4),
+            Intent(this, JuanitaAlarmReceiver::class.java)
+                .setAction(JuanitaAlarmScheduler.ACTION_DISMISS)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val snooze = PendingIntent.getBroadcast(
-            this, 5206,
-            Intent(this, JuanitaAlarmReceiver::class.java).setAction(JuanitaAlarmScheduler.ACTION_SNOOZE),
+            this, actionRequestCode(5),
+            Intent(this, JuanitaAlarmReceiver::class.java)
+                .setAction(JuanitaAlarmScheduler.ACTION_SNOOZE)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        val title = JuanitaAlarmStore(this).find(activeAlarmId)?.label?.takeIf { it.isNotBlank() }
+            ?: "È ora di svegliarsi."
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
             .setContentTitle("Sveglia · Juanita")
-            .setContentText("È ora di svegliarsi.")
+            .setContentText(title)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -117,6 +124,9 @@ class JuanitaAlarmRingingService : Service() {
             .build()
     }
 
+    private fun actionRequestCode(suffix: Int): Int =
+        5200 + ((activeAlarmId.hashCode() and 0x0fffffff) * 3) + suffix
+
     private fun createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(NotificationManager::class.java)
@@ -124,7 +134,7 @@ class JuanitaAlarmRingingService : Service() {
                 manager.createNotificationChannel(
                     NotificationChannel(CHANNEL_ID, "Sveglia Juanita", NotificationManager.IMPORTANCE_HIGH).apply {
                         description = "Suono della sveglia locale di Juanita"
-                        setSound(null, null) // MediaPlayer owns alarm audio and gradual volume.
+                        setSound(null, null)
                         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                     }
                 )
@@ -152,8 +162,10 @@ class JuanitaAlarmRingingService : Service() {
         const val ACTION_START = "ai.juanita.app.alarm.RING"
         const val ACTION_STOP = "ai.juanita.app.alarm.STOP_RING"
         private const val CHANNEL_ID = "juanita_alarm_ringing"
-        fun start(context: Context) {
-            val intent = Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_START)
+        fun start(context: Context, alarmId: String = JuanitaAlarmStore.LEGACY_ID) {
+            val intent = Intent(context, JuanitaAlarmRingingService::class.java)
+                .setAction(ACTION_START)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
