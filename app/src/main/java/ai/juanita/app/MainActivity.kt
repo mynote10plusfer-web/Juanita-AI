@@ -846,12 +846,19 @@ private fun JuanitaApp(
                   )
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
-                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Impostazioni", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
+                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
                       NavigationBarItem(
                           selected = selectedSection == key,
                           onClick = { selectedSection = key },
                           icon = { Text(when (key) { "HOME" -> "🏠"; "AVATAR" -> "👩🏻"; "SETTINGS" -> "⚙️"; "MEMORY" -> "🧠"; else -> "⋯" }, fontSize = 16.sp) },
-                          label = { Text(label, fontSize = 10.sp) }
+                          label = {
+                              Text(
+                                  label,
+                                  fontSize = 9.sp,
+                                  maxLines = 1,
+                                  softWrap = false
+                              )
+                          }
                       )
                   }
               }
