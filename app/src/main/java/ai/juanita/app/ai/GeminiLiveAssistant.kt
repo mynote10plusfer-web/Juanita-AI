@@ -62,8 +62,10 @@ class GeminiLiveAssistant {
                     the returned device time zone and distinguish historical event times from now.
 
                     Notification privacy rules: when the user explicitly asks to check notifications,
-                    call listNotificationApps first. It returns app names and counts only. Tell the
-                    user what is available and ask which app they want. Never call readRecentNotifications
+                    call listNotificationApps first. It returns app labels, opaque package identifiers and counts only.
+                    Tell the user what is available, but never speak package identifiers. If the user has
+                    already named one of the listed apps in the latest spoken request, that is the selection;
+                    otherwise ask which app they want. Never call readRecentNotifications
                     before the user has explicitly selected an app. That tool is locally blocked unless
                     the user separately enabled notification-content sharing in Juanita settings.
                     Read only the selected app and at most the requested small number of items.
@@ -96,7 +98,7 @@ class GeminiLiveAssistant {
                         ),
                         FunctionDeclaration(
                             name = "listNotificationApps",
-                            description = "When the user explicitly asks to check notifications, return only local notification app names and counts. Never return titles or message bodies. Use this first, then ask the user which app to read.",
+                            description = "When the user explicitly asks to check notifications, return app labels, opaque package identifiers and counts only. Never return titles or message bodies. Use this first, then honor an app already named by the user or ask which app they want.",
                             parameters = emptyMap()
                         ),
                         FunctionDeclaration(
