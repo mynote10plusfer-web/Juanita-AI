@@ -81,6 +81,19 @@ object JuanitaAlarmScheduler {
         var success = true
         alarms.forEach { alarm ->
             if (alarm.schedule.enabled && !schedule(context, alarm)) success = false
+            val snoozeAt = JuanitaAlarmStore(context).snoozeAt(alarm.id)
+            if (snoozeAt > System.currentTimeMillis()) {
+                val pendingSnooze = alarmPendingIntent(context, alarm.id, true)
+                runCatching {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
+                        manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, snoozeAt, pendingSnooze)
+                    } else {
+                        manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, snoozeAt, pendingSnooze)
+                    }
+                }.onFailure { success = false }
+            } else if (snoozeAt != 0L) {
+                JuanitaAlarmStore(context).clearSnooze(alarm.id)
+            }
         }
         return success
     }
