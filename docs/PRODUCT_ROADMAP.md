@@ -676,3 +676,30 @@ Replace broad date-range deletion with a local calendar, per-day conversation li
 - Priority: HIGH product value; implementation should follow stabilization and device verification of the notification-reader release rather than being mixed into that release.
 - Dependencies: Android alarm/foreground-service compatibility research; local alarm persistence and reboot rescheduling; research and integration of Juanita's already configured Gemini Live voice/output path (no Android TextToSpeech or substitute voice); optional location; a vetted no-cost weather source.
 - Status: PROPOSED — no alarm code implemented, no weather provider selected, no device verification.
+
+
+### Clarification — Juanita originates and hosts the call, then brings Riccardo into the same call — USER-REQUESTED / FEASIBILITY RESEARCH
+
+**This clarification supersedes the earlier interpretation of `JUANITA_CALLS_FIRST` as a generic call transfer or handoff to another app.** The user does not want Juanita to open the system dialer, switch to another calling app, or merely notify him to take over.
+
+**Required experience**
+1. Riccardo schedules or requests a call to a confirmed contact and exact telephone number, choosing the secretary mode. This is intended for hands-busy situations (for example, while he is doing repair or workshop work).
+2. Juanita herself originates the outgoing call to the contact.
+3. When the contact answers, Juanita speaks first, identifies herself truthfully as Riccardo's assistant, and explains the reason for the call using a user-approved script. Example: “Buongiorno, sono Juanita, l'assistente di Riccardo. La chiamo per conto suo. Potrebbe attendere un momento? Le passo Riccardo.”
+4. Juanita then brings Riccardo into that same live conversation and enables the phone's speakerphone (vivavoce), so he can speak hands-free without opening or switching to another application. The desired outcome is a continuous conversation on the same device/call, not a second app or a blind transfer.
+5. If the contact does not answer, is busy, declines, or the bridge/handover cannot be established, Juanita must end or recover safely and tell Riccardo the actual result. Never claim that the call was passed successfully when it was not.
+
+**Technical feasibility — important boundary**
+- This is more demanding than placing a call and toggling speakerphone. A normal Android app can request an outgoing cellular call only under applicable permissions/roles and platform rules; it does not automatically gain control of the carrier call's media path or a universal API for inserting its own spoken introduction and then handing the same call to the user.
+- Investigate whether a supported Android Telecom integration can own/manage the call and provide a reliable assistant-to-user transition on both target Samsung devices and with the user's mobile operator. Verify speakerphone routing and audio focus/ownership; do not assume a third-party app can force speakerphone for every carrier call.
+- Investigate carrier-supported conference/three-way calling as a possible same-call route, but do not assume the operator, SIM plan or device supports it.
+- A VoIP implementation could potentially originate the contact leg, play Juanita's introduction and bridge a second audio leg to Riccardo within one Juanita-controlled call session. However, it requires a VoIP/SIP service or equivalent backend/media infrastructure, connectivity, credentials and likely ongoing provider costs. No paid provider, subscription, hosted service, billing or API secret may be introduced without Riccardo's explicit approval.
+- The implementation must not quietly fall back to opening the system dialer or another app: if the requested same-call experience is unavailable, explain the limitation and offer the separate manual-call mode only as an explicitly chosen alternative.
+- Before every outgoing call, confirm the contact, exact number, purpose and selected call mode. Provide a clear cancel/stop control. Do not record or transcribe the other party by default; any recording or transcription would require a separate explicit design and consent review.
+
+**Prototype and acceptance gates**
+- First produce a documented feasibility matrix for Android 12 / Note10+, S22 Ultra, carrier SIM calls, supported conference features, Telecom roles/permissions, speakerphone control and a possible VoIP route with transparent cost/privacy implications.
+- Build a minimal prototype only after choosing a lawful, supported route. Test the exact sequence: outbound call → contact answers → Juanita greeting → “please wait” → Riccardo joins the same call → speakerphone active → two-way conversation → clean hang-up.
+- Test no-answer, busy, decline, loss of connectivity, permission denial, audio-route failure, app process death and user cancellation.
+- No implementation may be labelled complete until the same-call sequence is physically demonstrated on the target devices; CI alone is insufficient.
+- **Status: USER-CLARIFIED REQUIREMENT — FEASIBILITY RESEARCH; NOT IMPLEMENTED.** This is a core hands-busy secretary use case, not a simple reminder-to-dialer feature.
