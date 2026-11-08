@@ -86,7 +86,7 @@ fun AlarmSection(panel: Color, gold: Color) {
                 checked = morningVoiceEnabled,
                 onCheckedChange = { checked ->
                     if (checked) {
-                        morningPermissions.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_CALENDAR))
+                        morningPermissions.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_CALENDAR, Manifest.permission.ACCESS_COARSE_LOCATION))
                     } else {
                         morningVoiceEnabled = false
                         context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).edit()
@@ -96,7 +96,7 @@ fun AlarmSection(panel: Color, gold: Color) {
                 }
             )
         }
-        Text("Il microfono serve per poter rispondere a Juanita dopo il buongiorno. Il calendario è facoltativo; se non autorizzato, non verrà dichiarato che la giornata è libera.",
+        Text("Il microfono serve per poter rispondere a Juanita dopo il buongiorno. Calendario e posizione sono facoltativi: senza autorizzazione Juanita dirà chiaramente quali dati non può leggere.",
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
         Divider(color = Color(0xFF30343B))
         Text("SVEGLIA DI JUANITA", color = gold, fontSize = 13.sp)
