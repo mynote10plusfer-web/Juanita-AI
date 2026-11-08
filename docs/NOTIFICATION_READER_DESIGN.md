@@ -15,7 +15,7 @@
 - Keep this setting OFF by default. Enabling it is not blanket permission to read all notifications: each read is still user-initiated and scoped.
 - If the setting is OFF, Juanita can show local counts in the app UI but must not return notification bodies to Gemini. Explain how to enable the feature.
 - Do not upload notifications in the background, proactively summarize them, or include them in ordinary conversation context.
-- Do not add notification text to transcript archive, curated memories, logs, analytics, crash reports or diagnostics.
+- Do not add notification text to curated memories, logs, analytics, crash reports or diagnostics. When a notification body is returned, suppress assistant-side transcript archiving for the rest of that Live session; user-side turns may still be archived.
 - Keep notification contents in volatile in-memory storage only, with a short bounded queue; clear on user request, process death, or revocation of access.
 - Exclude OTP/security-code-like content where identifiable; never promise perfect detection. Respect Android redaction and hidden previews.
 - Never dismiss, mark read, reply to, open or otherwise mutate source notifications in this phase.
