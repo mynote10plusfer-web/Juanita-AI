@@ -13,6 +13,7 @@ import android.widget.TextView
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import androidx.activity.ComponentActivity
 import androidx.lifecycle.lifecycleScope
 import ai.juanita.app.JuanitaVoiceService
 import ai.juanita.app.data.AssistantPreferences
@@ -21,7 +22,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Lock-screen alarm controls. */
-class AlarmRingingActivity : Activity() {
+class AlarmRingingActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -65,7 +66,7 @@ class AlarmRingingActivity : Activity() {
             sendAlarmAction(JuanitaAlarmScheduler.ACTION_DISMISS)
         })
         root.addView(TextView(this).apply {
-            text = "Dopo aver spento la sveglia puoi aprire Juanita e avviare la conversazione con la sua voce Live."
+            text = "Puoi posticipare la sveglia di dieci minuti oppure spegnerla quando sei pronto."
             textSize = 14f
             setTextColor(Color.LTGRAY)
             gravity = Gravity.CENTER
@@ -92,7 +93,6 @@ class AlarmRingingActivity : Activity() {
                     Sii dolce, naturale, luminosa e rassicurante. Non usare TTS Android.
                     Non inventare dati. Dopo il riepilogo lascia che l'utente possa risponderti.
                 """.trimIndent()
-                JuanitaAlarmRingingService.stop(this@AlarmRingingActivity)
                 runCatching {
                     JuanitaVoiceService.start(
                         this@AlarmRingingActivity,
