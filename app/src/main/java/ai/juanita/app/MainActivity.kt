@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.WindowManager
 import android.speech.RecognizerIntent
-import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -112,8 +111,6 @@ private val voiceLanguages = listOf(
 )
 
 class MainActivity : ComponentActivity() {
-    private var tts: TextToSpeech? = null
-    @Volatile private var ttsReady = false
     private lateinit var preferences: AssistantPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -121,7 +118,6 @@ class MainActivity : ComponentActivity() {
         preferences = AssistantPreferences(applicationContext)
         val memoryStore = EncryptedMemoryStore(applicationContext)
         val avatarStore = AvatarProfileStore(applicationContext)
-        tts = TextToSpeech(this) { result -> ttsReady = result == TextToSpeech.SUCCESS }
 
         val savedPersona = PersonaProfile(
             name = preferences.assistantName,
@@ -201,35 +197,10 @@ class MainActivity : ComponentActivity() {
                     preferences.formality = profile.formality
                     preferences.empathy = profile.empathy
                 },
-                onSpeak = { text, language ->
-                    val engine = tts
-                    when {
-                        !ttsReady || engine == null -> "Il motore vocale Android non è ancora pronto."
-                        engine.isLanguageAvailable(language.locale) < TextToSpeech.LANG_AVAILABLE ->
-                            "La voce ${language.label} non è installata o non è supportata."
-                        else -> {
-                            val languageResult = engine.setLanguage(language.locale)
-                            if (languageResult < TextToSpeech.LANG_AVAILABLE) {
-                                "Impossibile attivare la lingua ${language.label}."
-                            } else {
-                                val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "juanita-preview")
-                                if (result == TextToSpeech.ERROR) "Errore durante la riproduzione."
-                                else "Voce di sistema avviata: ${language.label}. Il timbro regionale non è garantito."
-                            }
-                        }
-                    }
-                }
             )
         }
     }
 
-    override fun onDestroy() {
-        tts?.stop()
-        tts?.shutdown()
-        tts = null
-        ttsReady = false
-        super.onDestroy()
-    }
 }
 
 @Composable
@@ -277,7 +248,6 @@ private fun JuanitaApp(
     onLiveVoiceChanged: (String) -> Unit,
     onWakePhraseChanged: (String) -> Unit,
     onPersonaChanged: (PersonaProfile) -> Unit,
-    onSpeak: (String, VoiceLanguage) -> String
 ) {
     val background = Color(0xFF090A0C)
     val panel = Color(0xFF17191D)
@@ -587,12 +557,11 @@ private fun JuanitaApp(
                     }
                     Text(selectedDialect.note, color = Color(0xFF9A9DA4), fontSize = 12.sp)
                     Text("Esempio: ${selectedDialect.sample}", color = Color.White, fontSize = 14.sp)
-                    Button(onClick = { status = onSpeak(selectedDialect.sample, selectedLanguage) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)) {
-                        Icon(Icons.Default.RecordVoiceOver, contentDescription = null)
-                        Text("  Ascolta esempio")
-                    }
+                    Text(
+                        "La voce configurata di Juanita viene usata nelle conversazioni Live. L'anteprima vocale autonoma non è ancora disponibile; nessuna voce TTS di sistema verrà riprodotta.",
+                        color = Color(0xFF9A9DA4),
+                        fontSize = 12.sp
+                    )
                 }
 
                 SettingsCard(panel, gold, "PROVA MICROFONO") {
