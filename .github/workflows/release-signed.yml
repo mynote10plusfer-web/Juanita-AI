@@ -2,7 +2,7 @@ name: Signed Android Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/onboarding-alarm-voice-notifications-preview-0.11.2" ]
   workflow_dispatch:
 
 permissions:
