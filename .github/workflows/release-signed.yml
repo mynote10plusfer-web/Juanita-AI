@@ -88,8 +88,8 @@ jobs:
             echo "::error::Could not read application ID/version metadata from app/build.gradle.kts."
             exit 1
           fi
-          if (( EXPECTED_VERSION_CODE <= 30 )); then
-            echo "::error::Update versionCode must be greater than the previous known-good release (30)."
+          if (( EXPECTED_VERSION_CODE <= 32 )); then
+            echo "::error::Update versionCode must be greater than the previous production release (32)."
             exit 1
           fi
           grep -F "package: name='$EXPECTED_APPLICATION_ID' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" <<< "$BADGING" >/dev/null || {
