@@ -89,16 +89,47 @@ private data class RegionalDialect(
     val note: String
 )
 
-private data class LiveVoice(val id: String, val label: String, val quality: String)
+private data class LiveVoice(
+    val id: String,
+    val label: String,
+    val quality: String,
+    val gender: String
+)
 
 private val liveVoices = listOf(
-    LiveVoice("Kore", "Kore", "Equilibrata"),
-    LiveVoice("Aoede", "Aoede", "Fresca e leggera"),
-    LiveVoice("Sulafat", "Sulafat", "Calda e avvolgente"),
-    LiveVoice("Achernar", "Achernar", "Morbida e delicata"),
-    LiveVoice("Vindemiatrix", "Vindemiatrix", "Dolce e gentile"),
-    LiveVoice("Zephyr", "Zephyr", "Vivace e luminosa"),
-    LiveVoice("Pulcherrima", "Pulcherrima", "Decisa e presente")
+    // Voci femminili — catalogo Gemini Live
+    LiveVoice("Kore", "Kore", "Ferma ed equilibrata", "FEMMINILE"),
+    LiveVoice("Aoede", "Aoede", "Fresca e ariosa", "FEMMINILE"),
+    LiveVoice("Sulafat", "Sulafat", "Calda e avvolgente", "FEMMINILE"),
+    LiveVoice("Achernar", "Achernar", "Morbida e delicata", "FEMMINILE"),
+    LiveVoice("Vindemiatrix", "Vindemiatrix", "Dolce e gentile", "FEMMINILE"),
+    LiveVoice("Zephyr", "Zephyr", "Vivace e luminosa", "FEMMINILE"),
+    LiveVoice("Pulcherrima", "Pulcherrima", "Decisa e presente", "FEMMINILE"),
+    LiveVoice("Autonoe", "Autonoe", "Brillante", "FEMMINILE"),
+    LiveVoice("Callirrhoe", "Callirrhoe", "Rilassata e naturale", "FEMMINILE"),
+    LiveVoice("Despina", "Despina", "Morbida e fluida", "FEMMINILE"),
+    LiveVoice("Erinome", "Erinome", "Chiara", "FEMMINILE"),
+    LiveVoice("Gacrux", "Gacrux", "Matura", "FEMMINILE"),
+    LiveVoice("Laomedeia", "Laomedeia", "Vivace ed energica", "FEMMINILE"),
+    LiveVoice("Leda", "Leda", "Giovane e fresca", "FEMMINILE"),
+
+    // Voci maschili — catalogo Gemini Live
+    LiveVoice("Achird", "Achird", "Amichevole", "MASCHILE"),
+    LiveVoice("Algenib", "Algenib", "Profonda e roca", "MASCHILE"),
+    LiveVoice("Algieba", "Algieba", "Morbida e fluida", "MASCHILE"),
+    LiveVoice("Alnilam", "Alnilam", "Ferma e decisa", "MASCHILE"),
+    LiveVoice("Charon", "Charon", "Informativa e chiara", "MASCHILE"),
+    LiveVoice("Enceladus", "Enceladus", "Bassa e ariosa", "MASCHILE"),
+    LiveVoice("Fenrir", "Fenrir", "Energica", "MASCHILE"),
+    LiveVoice("Iapetus", "Iapetus", "Chiara", "MASCHILE"),
+    LiveVoice("Orus", "Orus", "Ferma e autorevole", "MASCHILE"),
+    LiveVoice("Puck", "Puck", "Vivace", "MASCHILE"),
+    LiveVoice("Rasalgethi", "Rasalgethi", "Informativa", "MASCHILE"),
+    LiveVoice("Sadachbia", "Sadachbia", "Vivace e dinamica", "MASCHILE"),
+    LiveVoice("Sadaltager", "Sadaltager", "Esperta e sicura", "MASCHILE"),
+    LiveVoice("Schedar", "Schedar", "Neutra ed equilibrata", "MASCHILE"),
+    LiveVoice("Umbriel", "Umbriel", "Rilassata e colloquiale", "MASCHILE"),
+    LiveVoice("Zubenelgenubi", "Zubenelgenubi", "Disinvolta e naturale", "MASCHILE")
 )
 
 private val voiceLanguages = listOf(
@@ -619,7 +650,37 @@ private fun JuanitaApp(
                         }
                         TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
                         DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
-                            liveVoices.forEach { voice ->
+                            Text(
+                                "VOCI FEMMINILI",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = gold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            liveVoices.filter { it.gender == "FEMMINILE" }.forEach { voice ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(voice.label)
+                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedLiveVoice = voice
+                                        onLiveVoiceChanged(voice.id)
+                                        liveVoiceMenuExpanded = false
+                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+                                    }
+                                )
+                            }
+                            Text(
+                                "VOCI MASCHILI",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = gold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
                                 DropdownMenuItem(
                                     text = {
                                         Column {
