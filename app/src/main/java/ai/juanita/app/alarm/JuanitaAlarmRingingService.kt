@@ -29,6 +29,7 @@ class JuanitaAlarmRingingService : Service() {
     private var volumeJob: Job? = null
     private var activeAlarmId: String = JuanitaAlarmStore.LEGACY_ID
     private var volumeNotice: String = "Controllo volume sveglia…"
+    private var testMode: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -42,6 +43,7 @@ class JuanitaAlarmRingingService : Service() {
             ACTION_START -> {
                 activeAlarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
                     ?: JuanitaAlarmStore.LEGACY_ID
+                testMode = intent.getBooleanExtra(EXTRA_TEST_MODE, false)
                 volumeNotice = AlarmVolumeController.ensureAudible(this)
                 startForeground(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
                 if (player == null) startAlarmTone()
@@ -101,6 +103,7 @@ class JuanitaAlarmRingingService : Service() {
         val fullScreen = PendingIntent.getActivity(
             this, 5205, Intent(this, AlarmRingingActivity::class.java)
                 .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId)
+                .putExtra(EXTRA_TEST_MODE, testMode)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
@@ -118,11 +121,12 @@ class JuanitaAlarmRingingService : Service() {
                 .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, activeAlarmId),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val title = JuanitaAlarmStore(this).find(activeAlarmId)?.label?.takeIf { it.isNotBlank() }
-            ?: "È ora di svegliarsi."
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val title = if (testMode) "Prova della sveglia" else
+            JuanitaAlarmStore(this).find(activeAlarmId)?.label?.takeIf { it.isNotBlank() }
+                ?: "È ora di svegliarsi."
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Sveglia · Juanita")
+            .setContentTitle(if (testMode) "Prova · Juanita" else "Sveglia · Juanita")
             .setContentText("$title · $volumeNotice")
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -131,8 +135,8 @@ class JuanitaAlarmRingingService : Service() {
             .setAutoCancel(false)
             .setFullScreenIntent(fullScreen, true)
             .setContentIntent(fullScreen)
-            .addAction(android.R.drawable.ic_lock_idle_alarm, "Posticipa 10 min", snooze)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Spegni", dismiss)
+        if (!testMode) builder.addAction(android.R.drawable.ic_lock_idle_alarm, "Posticipa 10 min", snooze)
+        return builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, if (testMode) "Chiudi prova" else "Spegni", dismiss)
             .build()
     }
 
@@ -174,14 +178,17 @@ class JuanitaAlarmRingingService : Service() {
     companion object {
         const val ACTION_START = "ai.juanita.app.alarm.RING"
         const val ACTION_STOP = "ai.juanita.app.alarm.STOP_RING"
+        const val EXTRA_TEST_MODE = "alarm_test_mode"
         private const val CHANNEL_ID = "juanita_alarm_ringing"
-        fun start(context: Context, alarmId: String = JuanitaAlarmStore.LEGACY_ID) {
+        fun start(context: Context, alarmId: String = JuanitaAlarmStore.LEGACY_ID, testMode: Boolean = false) {
             val intent = Intent(context, JuanitaAlarmRingingService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
+                .putExtra(EXTRA_TEST_MODE, testMode)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
             else context.startService(intent)
         }
+        fun startTest(context: Context) = start(context, JuanitaAlarmStore.LEGACY_ID, testMode = true)
         fun stop(context: Context) {
             context.stopService(Intent(context, JuanitaAlarmRingingService::class.java))
         }
