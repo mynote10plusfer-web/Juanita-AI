@@ -324,7 +324,13 @@ private fun JuanitaApp(
                     context.contentResolver,
                     "enabled_notification_listeners"
                 ).orEmpty()
-                notificationAccessEnabled = enabledListeners.contains(context.packageName)
+                notificationAccessEnabled = enabledListeners
+                    .split(':')
+                    .mapNotNull { ComponentName.unflattenFromString(it) }
+                    .any { component ->
+                        component.packageName == context.packageName &&
+                            component.className == "${context.packageName}.notifications.JuanitaNotificationListener"
+                    }
                 delay(1_500L)
             }
         }
