@@ -4,6 +4,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -20,7 +21,7 @@ class ConversationArchiveFidelityTest {
                 append("Parole accentate: perché, città, più; español: mañana, corazón; čeština: příliš žluťoučký. ")
             }
         }
-        assert(original.length > 1_800)
+        assertTrue(original.length > 1_800)
 
         try {
             EncryptedMemoryStore(context).appendConversationTurn(
