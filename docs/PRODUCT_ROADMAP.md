@@ -1116,3 +1116,34 @@ Candidate branch: `feature/complete-gentle-morning-alarm-0.11.0`.
 ## Familiar-person voice recognition — USER-APPROVED; NOT IMPLEMENTED
 
 Speech-to-text is not speaker identification. Juanita must not claim she recognizes a friend merely because she transcribed their words. The planned behavior remains: at a natural pause, ask who is speaking only when the speaker is genuinely unknown and audio confidence is adequate; request explicit permission before enrolling a local voice profile; associate the confirmed voice with the confirmed name; provide guest/decline, correction, revoke and delete paths. Avoid enrollment from TV/radio, overlapping voices or uncertain audio. Local model feasibility, per-model licensing, Samsung-device performance and GDPR biometric-data review remain mandatory gates. See the speaker identity research section above.
+
+
+## Smart Alarm 0.11.1 — multi-alarm, voice commands and reliable morning greeting
+
+**STATUS: IN PROGRESS — isolated branch `feature/smart-alarm-0.11.1-multi-alarm-voice`; issue #27.** The 0.11.0 user test confirmed that local ringing works, while spoken greeting and natural-language alarm creation do not meet the intended behavior.
+
+### User-observed gaps and source-confirmed findings
+- The current UI persists one `AlarmSchedule` only; it cannot maintain multiple independent alarm records or different times for different weekdays.
+- Morning voice opt-in defaults to OFF. The current permission flow bundles microphone with optional calendar and location requests.
+- The alarm activity attempts to start Gemini Live immediately, rather than after the requested five-second ring interval.
+- Asynchronous Live service/connection failures are not clearly reflected on the alarm screen.
+- The alarm playback service ramps its MediaPlayer output but does not inspect the Android alarm stream's actual device volume.
+- Gemini Live currently has no create/list/update/delete alarm function tools; voice commands cannot reach the local alarm scheduler.
+- The Sunday chip is laid out alone in a four-column second row and wraps its label.
+
+### Required implementation
+1. Replace the single-schedule preference with a backward-compatible local collection of alarm records. Each record has a stable ID, independent time/date or repeat-day set, enabled state and optional label. Allow many alarms at once and different times on different days. Migrate the current alarm without deleting or duplicating it.
+2. Give each alarm its own stable Android PendingIntent identity. Reschedule all alarms after boot, time/time-zone changes, package update and exact-alarm permission changes. Snooze/dismiss must affect only the active occurrence and never cancel another alarm or future recurrence.
+3. Provide Samsung Clock-style list/add/edit/enable-disable/delete controls. Use a seven-day layout with sufficient minimum chip width so `Dom` remains on one line.
+4. Register narrow Gemini Live function tools for alarm creation, listing, editing and deletion. Parse clear spoken requests in the device locale/time zone, persist and schedule before reporting success, and ask one short clarification for ambiguous time/date/day. Do not create alarms from casual conversation. Destructive edits/deletes require confirmation.
+5. Start the greeting after five seconds of local ringing. Reuse only the selected Gemini Live voice. Surface connection, permission, network/quota and service errors in the UI. Keep the local alarm tone until the first assistant audio actually starts, not merely until transcript text arrives. If Android blocks microphone foreground-service startup, retain the alarm and offer a visible user-initiated start; never bypass microphone restrictions or use Android TTS.
+6. Inspect the Android alarm stream before ringing. If muted/too low, raise only that stream to a configurable safe threshold where Android permits; remember the prior level and restore it after the alarm unless the user chooses persistent behavior. Respect DND/OEM restrictions and explain when adjustment is blocked. Do not assume changing the alarm stream also changes Gemini Live's output stream.
+7. Keep all alarms local and free. No billing, paid APIs, TTS substitution, package ID/signing changes, uninstall or data-clear workaround.
+
+### Acceptance and release gates
+- Unit tests for multiple IDs, different per-day times, same-time selected weekdays, one-shot expiry, old-data migration, duplicate delivery, snooze isolation, DST/time-zone changes and disabled records.
+- Verify voice tool arguments/results, durable persistence before success, error reporting and no-network/microphone-denied fallbacks.
+- Verify the five-second delay and stop the alarm only on actual audio-start evidence.
+- Test alarm volume at zero/low/normal, DND, restore behavior and the distinct Gemini audio stream.
+- CI debug/test compilation and signed Release verification must preserve `ai.juanita.app`, monotonic versionCode and the permanent release certificate.
+- Physical tests on Note10+ Android 12 and S22 Ultra are mandatory before claiming the spoken alarm is reliable or distributing the cumulative APK.
