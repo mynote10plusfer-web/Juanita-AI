@@ -39,7 +39,7 @@ fun FirstMeetingOnboarding(onComplete: (List<String>) -> Unit, onSkip: () -> Uni
                     "Non devi compilare nessun questionario. Quando parleremo, ti chiederò soltanto le informazioni fondamentali, una alla volta. Il resto lo scoprirò poco a poco, ascoltandoti e ricordando ciò che conta. Se non vorrai rispondere a qualcosa, andrà bene lo stesso.",
                     color = Color(0xFFB9BBC1), fontSize = 14.sp, lineHeight = 21.sp
                 )
-                Text("Potrai correggere o cancellare in qualsiasi momento le informazioni conservate nel tuo profilo.", color = Color(0xFF8F949D), fontSize = 12.sp)
+                Text("Potrai correggere o chiedere a Juanita di dimenticare un'informazione in qualsiasi momento.", color = Color(0xFF8F949D), fontSize = 12.sp)
                 Button(onClick = { onComplete(emptyList()) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
                     Text("Va bene, iniziamo")
                 }
