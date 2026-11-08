@@ -241,6 +241,10 @@ class JuanitaVoiceService : Service() {
                                     }
                                     if (saved.isEmpty()) "No profile fields were saved."
                                     else "Profile fields updated or removed: " + saved.joinToString(", ") + "."
+                                },
+                                onConnectionState = { status ->
+                                    _state.value = status
+                                    updateNotification(status)
                                 }
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
