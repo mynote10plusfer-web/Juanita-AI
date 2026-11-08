@@ -87,3 +87,12 @@ The microphone is activated only after the user grants permission and starts a L
 - Candidate 0.11.3 (versionCode 42) removes the notification reader from the shipped app while preserving the permanent package/signing identity and existing local data. It must pass a fresh signed Release workflow before distribution.
 - Current tabs: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. Do not remove or redesign these tabs as part of the notification deferral.
 - Next approved product area: Juanita Personal Organizer — validate multi-alarm and spoken morning greeting, then local reminders/tasks and calendar integration. No paid APIs, subscriptions or billing without explicit approval.
+
+
+## 0.11.4 candidate — voice-controlled alarm stop
+
+- VersionCode 43. A user can ask Juanita to stop the currently ringing Juanita alarm immediately, after a number of seconds, after a number of complete ringtone playbacks, or whichever of the two limits is reached first.
+- A plain “stop the alarm” request stops the current occurrence immediately. Timed/count-based stop affects only the currently ringing occurrence; future weekly recurrence remains scheduled.
+- If multiple alarms are ringing, Juanita must ask which one. Supported limits: 1–86,400 seconds and 1–100 complete ringtone playbacks.
+- The count is defined as one full playback of the configured Android alarm tone, not a short beep. Device testing is required to validate this behavior on Samsung hardware.
+- Notification reading remains deferred in the sideload candidate. Do not disable Play Protect.
