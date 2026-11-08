@@ -120,6 +120,7 @@ class AlarmRingingActivity : ComponentActivity() {
                         state.contains("in ascolto", ignoreCase = true) -> "Buongiorno, sono qui. Ti ascolto."
                         state.contains("non riuscita", ignoreCase = true) ||
                             state.contains("impossibile avviare", ignoreCase = true) -> {
+                            voiceStarted = false
                             addRetryButton("Avvia buongiorno")
                             "La voce non è riuscita ad avviarsi: ${state.take(180)}. La sveglia sonora resta attiva."
                         }
