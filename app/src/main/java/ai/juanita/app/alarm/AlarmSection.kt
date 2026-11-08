@@ -2,6 +2,7 @@ package ai.juanita.app.alarm
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -104,6 +105,24 @@ fun AlarmSection(panel: Color, gold: Color) {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
         ) { Text("Verifica / autorizza notifiche") }
 
+        if (Build.VERSION.SDK_INT >= 34 &&
+            !context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+        ) {
+            Text("Per mostrare la sveglia a schermo intero anche con il telefono bloccato, consenti l'avviso a schermo intero.",
+                color = Color(0xFFE4BD69), fontSize = 12.sp)
+            Button(
+                onClick = {
+                    val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    runCatching { context.startActivity(intent) }
+                        .onFailure { status = "Controlla l'autorizzazione Sveglia a schermo intero nelle impostazioni Android." }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+            ) { Text("Consenti sveglia a schermo intero") }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val exactAllowed = context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()
             if (!exactAllowed) {
