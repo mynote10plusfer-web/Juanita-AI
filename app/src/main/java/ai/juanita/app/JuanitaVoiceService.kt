@@ -252,7 +252,11 @@ class JuanitaVoiceService : Service() {
                                     _state.value = status
                                     updateNotification(status)
                                 },
-                                initialPrompt = initialPrompt
+                                initialPrompt = initialPrompt,
+                                onAlarmCommand = { name, arguments ->
+                                    ai.juanita.app.alarm.AlarmVoiceCommandHandler(applicationContext)
+                                        .execute(name, arguments)
+                                }
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
