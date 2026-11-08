@@ -109,7 +109,7 @@ fun AlarmSection(panel: Color, gold: Color) {
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
         Divider(color = Color(0xFF30343B))
         Text("SVEGLIA DI JUANITA", color = gold, fontSize = 13.sp)
-        Text("Imposta un orario e i giorni. La programmazione avviene sul telefono, senza API o abbonamenti.",
+        Text("Imposta una sveglia singola o una ripetizione settimanale. Tutto viene programmato sul telefono.",
             color = Color(0xFFB9BBC1), fontSize = 13.sp)
         Text(String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute),
             color = Color.White, fontSize = 42.sp)
@@ -178,18 +178,6 @@ fun AlarmSection(panel: Color, gold: Color) {
             }
         }
         Button(
-                        onClick = { days = if (selected) days - day else days + day },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selected) gold else Color(0xFF30343B),
-                            contentColor = if (selected) Color.Black else Color.White
-                        )
-                    ) { Text(label, fontSize = 11.sp) }
-                }
-                repeat(4 - group.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
-            }
-        }
-        Button(
             onClick = {
                 if (Build.VERSION.SDK_INT >= 33 &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
@@ -245,7 +233,7 @@ fun AlarmSection(panel: Color, gold: Color) {
 
         Button(
             onClick = {
-                if (days.isEmpty()) {
+                if (!oneTimeMode && days.isEmpty()) {
                     status = "Seleziona almeno un giorno per attivare la sveglia."
                 } else if (Build.VERSION.SDK_INT >= 33 &&
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
