@@ -60,8 +60,7 @@ object JuanitaAlarmScheduler {
         }.getOrDefault(false)
     }
 
-    fun scheduleAll(context: Context): Boolean {
-        // Cancel the legacy 0.11.0 singleton PendingIntents after migrating its record.
+    fun cancelLegacyPending(context: Context) {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         manager.cancel(PendingIntent.getBroadcast(
             context, 5201,
@@ -73,6 +72,10 @@ object JuanitaAlarmScheduler {
             Intent(context, JuanitaAlarmReceiver::class.java).setAction(ACTION_SNOOZE_FIRE),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         ))
+    }
+
+    fun scheduleAll(context: Context): Boolean {
+        cancelLegacyPending(context)
         val alarms = JuanitaAlarmStore(context).all()
         var success = true
         alarms.forEach { alarm ->
