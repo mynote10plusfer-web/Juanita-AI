@@ -22,6 +22,7 @@ class JuanitaAlarmStore(context: Context) {
 
     @Synchronized
     fun all(): List<JuanitaAlarm> {
+        migrateLegacySnooze()
         val raw = prefs.getString(KEY_ALARMS, null)
         if (raw != null) return decode(raw)
         val legacy = loadLegacy()
@@ -88,6 +89,16 @@ class JuanitaAlarmStore(context: Context) {
     @Synchronized
     fun clearSnooze(id: String) {
         prefs.edit().remove(SNOOZE_PREFIX + id).commit()
+    }
+
+    private fun migrateLegacySnooze() {
+        val legacyAt = prefs.getLong("snooze_at", 0L)
+        if (legacyAt > 0L && prefs.getLong(SNOOZE_PREFIX + LEGACY_ID, 0L) == 0L) {
+            prefs.edit()
+                .putLong(SNOOZE_PREFIX + LEGACY_ID, legacyAt)
+                .remove("snooze_at")
+                .commit()
+        }
     }
 
     private fun decode(raw: String): List<JuanitaAlarm> = runCatching {
