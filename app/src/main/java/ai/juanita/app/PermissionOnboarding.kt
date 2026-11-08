@@ -85,14 +85,6 @@ fun PermissionOnboarding(onComplete: () -> Unit) {
                     detail = "Facoltativo: permette di includere gli appuntamenti nel riepilogo del mattino.",
                     action = { calendarLauncher.launch(Manifest.permission.READ_CALENDAR) }
                 )
-                PermissionAction(
-                    title = "Accesso alle notifiche",
-                    detail = "Accesso speciale Android per consentire a Juanita di vedere le notifiche che scegli di farle leggere. I contenuti non vengono inviati a Gemini senza un consenso separato.",
-                    action = {
-                        runCatching { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-                            .onFailure { status = "Apri manualmente Impostazioni Android > Accesso alle notifiche." }
-                    }
-                )
                 if (Build.VERSION.SDK_INT >= 33) {
                     PermissionAction(
                         title = "Avvisi di Juanita",
@@ -134,8 +126,6 @@ fun PermissionOnboarding(onComplete: () -> Unit) {
                     )
                 }
                 Text(status, color = Color(0xFFE4BD69), fontSize = 12.sp)
-                Text("L'accesso alle notifiche è separato dagli avvisi di Juanita e può essere revocato in Android. I contenuti vengono letti solo su tua richiesta e con consenso separato.",
-                    color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 Text("Non chiediamo accesso a SMS, contatti, registro chiamate o microfono sempre attivo.",
                     color = Color(0xFF9A9DA4), fontSize = 11.sp)
             }
