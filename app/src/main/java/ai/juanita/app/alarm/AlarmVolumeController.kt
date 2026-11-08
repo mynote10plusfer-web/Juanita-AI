@@ -3,6 +3,7 @@ package ai.juanita.app.alarm
 import android.content.Context
 import android.media.AudioManager
 import android.app.NotificationManager
+import kotlin.math.ceil
 
 /**
  * Temporarily raises only STREAM_ALARM when it is below the configured safe
@@ -21,7 +22,7 @@ object AlarmVolumeController {
             val maximum = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
             val current = audio.getStreamVolume(AudioManager.STREAM_ALARM)
             if (maximum <= 0) return "Volume sveglia non regolabile su questo dispositivo."
-            val target = ((maximum * TARGET_PERCENT) / 100.0).toInt().coerceIn(1, maximum)
+            val target = ceil(maximum * TARGET_PERCENT / 100.0).toInt().coerceIn(1, maximum)
             if (current >= target) return "Volume sveglia già adeguato."
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             if (!prefs.getBoolean(KEY_ADJUSTED, false)) {
