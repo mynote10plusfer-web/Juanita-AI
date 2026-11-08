@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Juanita AI 0.10.8 (versionCode 37) remains the latest signed Release APK; CI verified APK v2 signature, permanent release certificate, applicationId ai.juanita.app and monotonically increasing version. PR #23 merged the timezone-safe Smart Alarm schedule core (model/tests only). PR #24 adds Gemini Live disconnect recovery and is undergoing CI review; it is not released or device-tested. Do not ask the user to install intermediate builds; deliver one cumulative signed Release APK after CI and signing verification.
+Last updated: 2026-11-08 — Juanita AI 0.10.8 (versionCode 37) remains the latest signed Release APK; CI verified APK v2 signature, permanent release certificate, applicationId ai.juanita.app and monotonically increasing version. PR #23 merged the timezone-safe Smart Alarm schedule core (model/tests only). PR #24 merged after successful CI compilation and instrumentation-test compilation; its recovery implementation is source-integrated but not yet Release-built or tested on physical devices. Do not ask the user to install intermediate builds; deliver one cumulative signed Release APK after CI and signing verification.
 
 ## Progressive personal knowledge — candidate 0.10.8
 
@@ -1051,13 +1051,13 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 - Do not disable Play Protect to test this build. Revisit notification reading only after an acceptable distribution and policy-compliance path is available.
 
 
-## Gemini Live long-conversation stability — USER-REPORTED BUG; PR #24 IN CI REVIEW
+## Gemini Live long-conversation stability — PR #24 MERGED; DEVICE VALIDATION PENDING
 
 **Observed by user (2026-11-08):** during audio-only conversation, after approximately 5–10 minutes the microphone stops accepting speech; closing and reopening the conversation restores it.
 
 **Engineering finding:** Firebase Live connections have an approximate 10-minute connection limit and send a GoAway notice about 60 seconds before disconnect. The existing 0.10.8 code used the SDK-managed audio path without handling that notice or reconnecting. See official Firebase session documentation: https://firebase.google.com/docs/ai-logic/live-api/sessions and Android LiveSession API reference: https://firebase.google.com/docs/reference/kotlin/com/google/firebase/ai/type/LiveSession.
 
-**PR #24 implementation under review:**
+**PR #24 implementation merged (2026-11-08; CI successful):**
 - Handle the SDK-supported GoAway callback.
 - Detect a closed websocket while the audio session is meant to be active.
 - Reopen a fresh SDK-managed audio session with bounded retries.
@@ -1068,7 +1068,7 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 
 **Important limitation:** the Firebase SDK's high-level `startAudioConversation` exposes GoAway but not session-resumption-handle updates. The documented handle-based resumption sample requires consuming `receive()`, which conflicts with the helper's own receive loop. PR #24 therefore reconnects to a fresh Live session and replays recent transcript context; it does not claim exact server-side handle resumption. A custom single-recorder audio pipeline is a separate higher-risk technical project if exact handle-based continuity is later required.
 
-**Release gate:** CI compilation, then real-device testing for at least 10–15 minutes, repeated GoAway cycles, network loss, stop-during-reconnect, no duplicate microphone capture and voice continuity on Note10+ Android 12 and S22 Ultra. Until device testing, do not claim the issue is definitively fixed.
+**Release gate:** real-device testing for at least 10–15 minutes, repeated GoAway cycles, network loss, stop-during-reconnect, no duplicate microphone capture and voice continuity on Note10+ Android 12 and S22 Ultra. Until device testing, do not claim the issue is definitively fixed or publish a Release APK with this change.
 
 ## Smart Alarm — PR #23 MERGED; FOUNDATION ONLY
 
