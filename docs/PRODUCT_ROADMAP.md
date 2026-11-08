@@ -1,10 +1,10 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — 0.10.7 is the latest signed release (versionCode 36); 0.10.8 progressive personal knowledge is in development. Do not ask the user to install intermediate builds; deliver the next cumulative signed Release APK after CI and signing verification.
+Last updated: 2026-11-08 — Juanita AI 0.10.8 (versionCode 37) is built as a signed Release APK; CI verified APK v2 signature, permanent release certificate, applicationId ai.juanita.app and monotonically increasing version. Physical-device behavior remains unverified. Next cumulative development package: Smart Alarm foundation. Do not ask the user to install intermediate builds; deliver one cumulative signed Release APK after CI and signing verification.
 
 ## Progressive personal knowledge — candidate 0.10.8
 
-**STATUS: IMPLEMENTATION IN PROGRESS; CI AND DEVICE VERIFICATION PENDING.**
+**STATUS: IMPLEMENTED IN MAIN; SIGNED RELEASE 0.10.8 BUILD 37 VERIFIED BY CI; PHYSICAL-DEVICE VERIFICATION PENDING.**
 
 The next cumulative release connects the dedicated encrypted PersonalProfile store to Gemini Live:
 - Replace the seven-field manual first-meeting form with a short introduction; the first meeting happens in voice, not in a form.
@@ -19,7 +19,7 @@ The 0.10.8 package is intended as one cumulative install after the 0.10.7 base. 
 
 ## Humanized conversation runtime — candidate 0.10.7
 
-**STATUS: IMPLEMENTED IN SOURCE ON FEATURE BRANCH; CI VERIFICATION PENDING; DEVICE BEHAVIOR NOT YET VERIFIED.**
+**STATUS: MERGED IN PR #20; INCLUDED IN SIGNED RELEASE 0.10.8 BUILD 37; PHYSICAL VOICE-CONVERSATION BEHAVIOR STILL REQUIRES DEVICE TESTING.**
 
 This release slice turns the user's humanization requirements into active Gemini Live system instructions rather than leaving them only in a design document.
 
@@ -159,6 +159,8 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 
 **Expected interaction**
 - The user can say: “Juanita, ti presento Marco.” Juanita asks Marco to confirm how he wants to be called and explains that optional voice enrollment creates a local voice template.
+- When a likely new interlocutor voice is detected during an active user-started conversation, Juanita must not interrupt mid-sentence or announce an identity guess. At a natural pause, she may say that she has heard a voice she does not yet recognize, ask who is speaking, and then ask whether that person explicitly agrees to create a local voice profile associated with the confirmed name. This prompt must be occasional and context-aware, not repeated for background voices, television/radio audio, overlapping speech or every new segment.
+- If the person declines, Juanita continues the conversation as an unregistered guest and does not create or retain a voice template. If the speaker is uncertain or cannot be reliably separated from the room audio, Juanita must say nothing rather than prompt or guess.
 - Enrollment requires the person's explicit, informed opt-in; no voice profile is created merely because a person speaks or is named by someone else.
 - After enrollment, Juanita may match a new speech segment to Marco's profile only above a validated confidence threshold. Otherwise she says she is unsure and asks who is speaking; never guess.
 - If multiple people speak, diarization first separates anonymous speaker segments (Speaker 1, Speaker 2); identity matching is a separate step. The user can confirm or correct each association.
@@ -194,6 +196,13 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 **Verified microphone integration constraint (2026-11-07)**
 
 The current `GeminiLiveAssistant` calls Firebase AI Logic `LiveSession.startAudioConversation()` and receives text transcription callbacks; the app does not currently expose PCM microphone frames to the speaker-recognition layer. Do not add a second `AudioRecord`/microphone reader beside the SDK-managed capture. Firebase's official Live API guide documents that Android apps may instead create their own recorder and handle the stream. The next technical spike is therefore to prototype one app-owned capture pipeline that feeds the same PCM frames to Gemini Live and the local speaker engine, while preserving the existing Live session, output audio, VAD/turn behavior and stop lifecycle. Revert immediately if this regresses the current working voice path. Reference: https://firebase.google.com/docs/ai-logic/live-api (Kotlin section; last updated 2026-11-05 UTC).
+
+**Feasibility research update (2026-11-08):**
+- sherpa-onnx documents Android speaker-identification and speaker-diarization examples, including Kotlin/Android deployment and local inference. This makes it a credible no-cloud prototype candidate, not proof of accuracy or suitability on either Samsung device.
+- The sherpa-onnx code is Apache-2.0, but the selected speaker model and training dataset can have separate licenses; each artifact must be checked before bundling. Model size, CPU/RAM/thermal cost and multilingual performance remain unverified.
+- Official project references: https://github.com/k2-fsa/sherpa-onnx ; https://k2-fsa.github.io/sherpa/onnx/speaker-identification/ ; https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/ ; https://k2-fsa.github.io/sherpa/onnx/speaker-identification/apk.html
+- Voice templates used to uniquely identify a person can constitute special-category biometric data under GDPR Articles 4(14) and 9. Before enabling matching, document the applicable lawful basis and Article 9 condition, provide specific informed consent and an equally usable guest path, and complete a privacy/legal review. Explicit consent in the UI is a safeguard, not by itself a complete compliance assessment.
+- Official legal reference: https://eur-lex.europa.eu/legal-content/EN-ES/TXT/?uri=CELEX:32016R0679 (GDPR Articles 4 and 9).
 
 ### Familiar-person visual profiles and optional camera matching — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
 
@@ -257,9 +266,9 @@ Required next implementation:
 - Treat rigged 3D/GLB/VRM generation as a separate later milestone; a generated 2D portrait must not be described as a rigged, animated avatar.
 - Acceptance: from both a text description and random mode, the app generates and displays a new image, persists it across app restarts, and uses that exact image in the call screen.
 
-### Voice recognition gap — partially implemented
+### Voice recognition gap — speech transcription implemented; speaker identity NOT implemented
 
-Gemini Live uses SDK-managed microphone audio and enables inputAudioTranscription and outputAudioTranscription. User speech is therefore transcribed into text events for the conversation/memory pipeline. The configured language and dialect are included in the persona/system instruction, but the Live session does not expose a verified speaker-identification or voice-biometric system.
+Gemini Live uses SDK-managed microphone audio and enables inputAudioTranscription and outputAudioTranscription. User speech is therefore transcribed into text events for the conversation/memory pipeline. This is speech recognition/transcription only; it does not identify the human speaker. The configured language and dialect are included in the persona/system instruction, but the Live session does not expose a verified speaker-identification or voice-biometric system.
 
 Not implemented:
 - Recognizing who is speaking by their voice (Riccardo vs another person).
@@ -575,7 +584,16 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / NEXT IMPLEMENTATION PACKAGE
 
-**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm. It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
+**Current engineering sequence (2026-11-08):** begin with the app-owned alarm engine and user-facing alarm controls; only after reliable local ringing, snooze/dismiss, reboot/time-zone recovery and permission-denied behavior are verified should Juanita's spoken morning greeting/briefing be connected. Then add local reminders/tasks, followed by optional read-only calendar access. Do not combine the alarm's reliable sound path with Gemini/network availability.
+
+**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm.
+
+**Android platform constraints verified 2026-11-08:**
+- For exact alarm scheduling on Android 12+, declare and check `SCHEDULE_EXACT_ALARM`; it is user-granted and may be revoked. Handle denial with a clear explanation and an honest inexact fallback, not a claim of punctual delivery.
+- Do not use `USE_EXACT_ALARM` casually: it is restricted by Google Play to qualifying core alarm/calendar use cases. The sideload path must also remain safe with Play Protect enabled.
+- On Android 14+, full-screen intent access is restricted to calling/alarm use cases. Check `NotificationManager.canUseFullScreenIntent()` and provide a notification fallback when unavailable; never assume the full-screen activity can always launch.
+- Re-check exact-alarm access after resume and restore schedules after the system's permission-granted broadcast and boot.
+- Official references: https://developer.android.com/develop/background-work/services/alarms ; https://developer.android.com/about/versions/14/changes/schedule-exact-alarms ; https://source.android.com/docs/core/permissions/fsi-limits It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
 
 ### Product areas
 
