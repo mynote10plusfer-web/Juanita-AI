@@ -711,3 +711,62 @@ Replace broad date-range deletion with a local calendar, per-day conversation li
 - Android's Telecom documentation distinguishes a self-managed VoIP calling app (Core-Telecom / `ConnectionService`) from a managed calling integration. Core-Telecom can manage audio routing/focus for the app's own call, which makes an app-controlled VoIP conversation a more coherent candidate for Juanita's spoken introduction and subsequent same-session conversation. It does not by itself provide a free carrier-SIM call bridge. Reference: https://developer.android.com/develop/connectivity/telecom
 - The official API pages reviewed do not document a general third-party API that lets an ordinary app inject arbitrary generated speech into the outgoing audio stream of an existing carrier/SIM call. Treat that capability as unproven; do not design around hidden APIs, accessibility hacks, audio loopback or OEM-specific assumptions.
 - Research conclusion: prioritize a controlled VoIP prototype if the user later approves its connectivity/provider architecture and any costs. In parallel, investigate whether a default-dialer implementation plus carrier conference calling can meet the exact same-call experience without external services. No route is yet validated on the two target Samsung phones or the user's carrier.
+
+
+### Comparative technical research — SIM cellular calls vs WhatsApp Business calls (2026-11-08)
+
+This section records a feasibility investigation requested by Riccardo. Target behavior remains: Juanita originates the call, introduces herself, explains the reason, asks the recipient to wait, then Riccardo joins the same live conversation hands-free, with speakerphone/audio routed by Juanita. No handoff to the system dialer or a separate calling app is acceptable as the secretary-mode success path.
+
+#### A. Ordinary cellular / SIM call from the Android phone
+
+**What Android publicly supports**
+- `TelecomManager.placeCall(Uri, Bundle)` can request an outgoing cellular call, and Android documents `EXTRA_START_CALL_WITH_SPEAKERPHONE` to request speakerphone at call start. This proves call initiation and initial speaker routing are exposed under the relevant permissions/role; it does not expose a public API to inject arbitrary generated assistant audio into the carrier call's uplink.
+- Android's `InCallService` is the interface for an app that replaces the in-call UI. To become the default phone app, Juanita would have to request `ROLE_DIALER` and implement the complete dialer/in-call experience, including ACTION_DIAL, incoming-call UI and ongoing-call UI. It is not a narrow permission that can be added just to control one call.
+- The Telecom framework routes calls supplied by calling services and manages audio focus/routing. The documented self-managed `ConnectionService` route is for Juanita's own VoIP calls, not a general mechanism for taking over the SIM modem's uplink audio.
+- Official references:
+  - https://developer.android.com/reference/android/telecom/TelecomManager
+  - https://developer.android.com/reference/android/telecom/InCallService
+  - https://developer.android.com/reference/android/telecom/package-summary
+
+**Feasibility conclusion**
+- Juanita can potentially place a SIM call and request speakerphone, subject to permissions, role, Samsung/Android behavior and carrier configuration.
+- The critical secretary step — Juanita speaking into the remote party's cellular call and then transferring the same call's audio to Riccardo — is **not supported by a documented public Android API for an ordinary third-party app**. Playing audio on the phone speaker and hoping the microphone captures it is an acoustic workaround, not an acceptable reliable architecture; echo cancellation, noise suppression, microphone routing and handset placement make it unsuitable.
+- A carrier three-way/conference feature may let a human join a SIM call, but does not itself give Juanita a supported way to be an AI audio participant in the SIM uplink. Any carrier-specific solution would need direct operator confirmation and physical tests.
+- A viable but materially different alternative is to originate/host the call through a telephony/VoIP backend with a PSTN gateway: Juanita speaks as one conference participant, and Riccardo joins as another participant from Juanita's in-app WebRTC audio. This can create the desired single conference conversation, but it is not a call placed directly from Riccardo's SIM and likely entails paid telephony, server and media costs. No such provider or cost may be adopted without explicit approval.
+
+#### B. WhatsApp
+
+**Personal WhatsApp application**
+- The normal consumer WhatsApp flow documented by WhatsApp is user-operated: open a one-to-one chat or Calls tab and tap the voice-call control. The public consumer instructions do not provide a supported Android third-party API for an app to silently originate a personal WhatsApp voice call, inject its own voice into it, or take over its audio session.
+- Do not automate WhatsApp's private UI with Accessibility, reverse-engineered protocols, unofficial libraries or hidden intents. Such approaches are fragile, can violate platform terms and risk the user's account.
+- Official user-facing reference: https://faq.whatsapp.com/1153602608602452/
+
+**WhatsApp Business Calling API — a real, documented route**
+- Meta's WhatsApp Business Calling platform supports business-initiated outbound calls to a consumer's WhatsApp number in supported regions, but the consumer must first explicitly grant call permission. This is not the user's personal WhatsApp account placing an ordinary call; the caller is a registered WhatsApp Business sender.
+- A concrete documented integration exists in LiveKit's WhatsApp Connector. It bridges WhatsApp calls into a LiveKit room with bidirectional audio/media processing and can dispatch a LiveKit Agent into that room. For outbound calls it uses `DialWhatsAppCall`, receives a Meta call-connect webhook/SDP answer, then completes the connection with `ConnectWhatsAppCall`.
+- Riccardo could, in principle, join that same LiveKit room from the Juanita Android app as a second participant after Juanita has introduced herself. This is the closest researched design to the requested experience: the contact stays on their WhatsApp call; Juanita speaks first; Riccardo then joins the same audio room from within Juanita's app, without switching to the WhatsApp app. Juanita's app can request its own speakerphone/audio route for the in-app WebRTC session. This is a same-conversation bridge, not a native WhatsApp call takeover on the phone.
+- Important dependency: LiveKit's WhatsApp Connector is documented as available only on LiveKit Cloud; self-hosted LiveKit servers are not supported for this connector. It also requires a WhatsApp Business account/number, Meta Cloud API token, Meta developer app, webhooks, supported region and explicit outbound call permission. Therefore this is not a zero-service/local-only feature and must undergo cost, availability, privacy and data-processing review before approval.
+- A provider example (Twilio WhatsApp Business Calling) also documents outbound calls with prior consumer permission and states WhatsApp call endpoints cannot be connected to PSTN endpoints. Do not assume a WhatsApp call can be bridged to a normal SIM/PSTN endpoint.
+- References:
+  - https://docs.livekit.io/telephony/connectors/whatsapp/
+  - https://www.twilio.com/docs/voice/whatsapp-business-calling
+  - https://www.whatsapp.com/calling
+  - https://faq.whatsapp.com/1153602608602452/
+
+#### Comparative outcome and next prototype
+
+| Route | Juanita can call first | Juanita can speak first | Riccardo joins same conversation in Juanita app | Main blocker |
+| --- | --- | --- | --- | --- |
+| Personal WhatsApp app automation | No supported public API found | No supported public audio path | No supported takeover | Consumer app offers user-operated calls, not a public automation SDK |
+| WhatsApp Business + LiveKit Connector | Yes, where region/account/permission allow | Yes, via agent/media in LiveKit room | Architecturally plausible by joining the same room from Juanita Android app | LiveKit Cloud only, Business onboarding, Meta permission and service costs; prototype required |
+| SIM call placed directly by Juanita on handset | Potentially, via Telecom APIs and permissions | No supported public API found for injecting generated speech into SIM uplink | Not reliably through documented APIs | Default-dialer/Telecom role is extensive; no documented SIM uplink injection |
+| Hosted PSTN/VoIP conference with AI + Riccardo | Yes, via provider | Yes | Yes, if Riccardo joins via Juanita app/WebRTC | Paid telephony/media infrastructure; not a direct personal-SIM call |
+
+**Recommended order**
+1. Keep both SIM and WhatsApp as requested research targets, but do not promise native SIM secretary mode until a carrier/OEM-supported mechanism is demonstrated.
+2. If Riccardo later accepts an external service and its costs, prototype WhatsApp Business + LiveKit first: confirm outbound availability for the relevant Spanish/European business sender, call-permission onboarding, LiveKit Cloud pricing, privacy/data processing, and same-room mobile join/audio routing. Use a test number and consenting recipient only.
+3. In parallel, evaluate the hosted PSTN conference alternative if Riccardo wants calls to ordinary telephone numbers that do not use WhatsApp.
+4. No implementation, provider account, API token, billing activation or recurring cost is authorized by this research request alone.
+5. Acceptance test: Juanita speaks the introduction, the recipient hears it clearly, Riccardo joins from inside Juanita on the same phone without launching the system dialer or WhatsApp, audio switches cleanly to speakerphone, and all three can converse without dropping the recipient's call.
+
+**Status: RESEARCH COMPLETED — ROUTES IDENTIFIED; PROTOTYPE NOT IMPLEMENTED; NO DEVICE/CARRIER TESTS PERFORMED.**
