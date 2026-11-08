@@ -132,7 +132,11 @@ object JuanitaAlarmScheduler {
     }
 
     internal fun dismiss(context: Context, alarmId: String) {
-        cancel(context, alarmId)
+        // Dismiss only this ringing occurrence. The weekly alarm was already
+        // re-armed when it fired and must remain scheduled for its next week.
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        manager.cancel(alarmPendingIntent(context, alarmId, true))
+        JuanitaAlarmStore(context).clearSnooze(alarmId)
         JuanitaAlarmRingingService.stop(context)
     }
 
