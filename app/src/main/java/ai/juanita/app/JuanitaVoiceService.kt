@@ -49,6 +49,7 @@ class JuanitaVoiceService : Service() {
     private var memoryWorkChannel: Channel<Unit>? = null
     private var memoryWorker: Job? = null
     private val videoFrameInFlight = AtomicBoolean(false)
+    @Volatile private var lastUserTranscriptForNotificationSelection: String = ""
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -197,6 +198,9 @@ class JuanitaVoiceService : Service() {
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
+                                    if (role.equals("USER", ignoreCase = true)) {
+                                        lastUserTranscriptForNotificationSelection = text.takeLast(300)
+                                    }
                                     val sent = transcriptQueue.trySend(role to text)
                                     if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
                                         _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
@@ -220,10 +224,17 @@ class JuanitaVoiceService : Service() {
                                         .ifBlank { "No notifications are currently available." }
                                 },
                                 onReadNotifications = { packageName, requestedLimit ->
+                                    val currentInbox = NotificationInbox.entries.value
+                                    val selectedAppLabel = currentInbox.firstOrNull { it.packageName == packageName }?.appName
+                                    val userSelection = lastUserTranscriptForNotificationSelection
                                     if (!AssistantPreferences(applicationContext).allowNotificationContentToGemini) {
                                         "Consent is disabled in Juanita settings. No notification content was shared."
+                                    } else if (selectedAppLabel.isNullOrBlank() ||
+                                        (!userSelection.contains(selectedAppLabel, ignoreCase = true) &&
+                                            !userSelection.contains(packageName, ignoreCase = true))) {
+                                        "Blocked: the user has not explicitly named this app in the latest spoken request. Ask which app they want before trying again."
                                     } else {
-                                        val selected = NotificationInbox.entries.value
+                                        val selected = currentInbox
                                             .filter { it.packageName == packageName }
                                             .sortedByDescending { it.postedAt }
                                             .take(requestedLimit.coerceIn(1, 5))
