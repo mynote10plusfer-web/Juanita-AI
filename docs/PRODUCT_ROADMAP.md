@@ -1214,6 +1214,14 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 - No test is skipped, no failure is masked, and API 35 remains a mandatory release gate.
 
 
+## 0.11.4 — voice-controlled alarm stop extension (2026-11-08)
+
+- Added structured Gemini Live command parameters for stopping the currently ringing Juanita alarm immediately, after a specified number of seconds, after a specified number of complete ringtone playbacks, or whichever limit occurs first.
+- A plain stop command remains immediate. Future recurrence is preserved; only the active ringing occurrence is dismissed.
+- If multiple alarms are active, Juanita must ask which one before acting. Supported bounds are 1–86,400 seconds and 1–100 complete tone playbacks.
+- The ringing service counts complete playbacks of the configured alarm tone; it does not count individual oscillations/beeps within a tone file.
+- This is source implementation only until CI succeeds and both Samsung devices are tested. Do not claim reliable voice recognition or physical alarm behavior before testing.
+
 ## Current release and engineering status — 2026-11-08
 
 - The signed 0.11.2 / versionCode 41 workflow completed successfully, including restoration of the permanent keystore, Release build, APK signature verification and comparison against the known production certificate. The APK was blocked by Google Play Protect during sideload installation; CI success is not proof of installation or physical-device behavior.
