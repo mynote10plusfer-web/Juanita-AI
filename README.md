@@ -14,7 +14,7 @@ This candidate adds opt-in Android notification reading, increments versionCode,
 - Separate language and regional profile selectors.
 - Experimental regional profiles: Sicilian (Palermo area), Canarian Spanish, and Colombian Paisa (Antioquia/Medellin).
 - Regional instructions are included in the Gemini Live system prompt. This guides language and vocabulary but does not guarantee a native regional voice.
-- Android system TTS sample playback; the device's installed voice is used and regional authenticity is not guaranteed.
+- No Android system TextToSpeech playback is used. The configured Gemini Live voice is used for live conversations; standalone voice preview and notification read-aloud remain deferred until they can use that same voice path.
 - Gemini Live response voice selector with seven documented female voices; selection is saved locally and applied when a new Live session starts.
 - Android speech-recognition intent remains available as a separate microphone test.
 - Android requests foreground location permission on first launch (precise GPS or approximate location). It reads a fresh device location automatically on app launch and again before each Gemini Live session, then includes the locality and coordinates in that session context. No weather screen/provider, background tracking, or persistent coordinate history.
