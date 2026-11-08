@@ -1147,3 +1147,15 @@ Speech-to-text is not speaker identification. Juanita must not claim she recogni
 - Test alarm volume at zero/low/normal, DND, restore behavior and the distinct Gemini audio stream.
 - CI debug/test compilation and signed Release verification must preserve `ai.juanita.app`, monotonic versionCode and the permanent release certificate.
 - Physical tests on Note10+ Android 12 and S22 Ultra are mandatory before claiming the spoken alarm is reliable or distributing the cumulative APK.
+
+
+### First-launch permission onboarding — added 2026-11-08 (user requested)
+
+- On first launch, show a clear permission setup/welcome flow that audits current grants and explains each access in plain Italian.
+- Request microphone for Live voice and alarm greeting; location only for local weather/location features; calendar only for agenda reading; notifications for alarm/reminder alerts; camera only when the user enters a visual feature.
+- Include alarm-specific special access checks: exact-alarm scheduling and full-screen alarm intent where the Android version/device requires them. Explain and open the appropriate Android Settings page; these are not ordinary runtime permission dialogs.
+- Explain that Android does not provide a single "grant everything" switch. Request permissions in understandable contextual groups, one system flow at a time, and let the user skip optional permissions.
+- Provide a persistent "Permessi e accessi" screen with granted / missing / optional status, a reason, a "configure" action, and a re-check button. Re-check on every app resume because permissions can be revoked in Android Settings.
+- Never block the whole app because an optional permission is denied. Disable only the affected feature and explain what will not work; keep local alarm sound and other independent features working.
+- Do not request contacts, SMS, call logs, background location, accessibility, notification-listener, or broad storage access unless a separately approved, implemented feature genuinely requires it. No hidden microphone/camera/background collection.
+- First-launch flow must be compatible with Android 12 (Note10+) and newer Android releases, and must not reset existing app data or signing/package identity.
