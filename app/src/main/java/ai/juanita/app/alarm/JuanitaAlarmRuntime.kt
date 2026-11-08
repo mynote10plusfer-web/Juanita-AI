@@ -1,5 +1,6 @@
 package ai.juanita.app.alarm
 
+import ai.juanita.app.JuanitaVoiceService
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -121,6 +122,9 @@ object JuanitaAlarmScheduler {
         val pending = alarmPendingIntent(context, alarmId, true)
         manager.cancel(pending)
         JuanitaAlarmStore(context).setSnooze(alarmId, triggerAt)
+        if (JuanitaVoiceService.state.value.contains("in ascolto", ignoreCase = true)) {
+            runCatching { JuanitaVoiceService.stop(context) }
+        }
         runCatching {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
                 manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
