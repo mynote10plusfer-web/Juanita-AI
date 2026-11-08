@@ -199,7 +199,6 @@ class AlarmVoiceCommandHandler(private val context: Context) {
             JuanitaAlarmScheduler.dismiss(context, id)
             return "Ho spento la suoneria corrente${alarm?.let { ": ${describe(it)}" }.orEmpty()}. Le eventuali ripetizioni future restano programmate."
         }
-        if (seconds == 0 && rings == 0) return "Dimmi dopo quanti secondi o quanti squilli vuoi che la spenga."
         JuanitaAlarmRingingService.stopAfter(context, id, seconds, rings)
         val details = buildList {
             if (seconds > 0) add("tra $seconds secondi")
