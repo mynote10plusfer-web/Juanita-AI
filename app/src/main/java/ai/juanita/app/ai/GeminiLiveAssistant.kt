@@ -99,8 +99,16 @@ class GeminiLiveAssistant {
                     and wait for the user's confirmation. Never interpret casual conversation
                     as an alarm request. Explain that alarms are stored locally on this device.
                     Use dismissRingingAlarm when the user explicitly asks to stop a Juanita alarm
-                    ringing now. This does not disable future recurrence; no extra confirmation
-                    is needed for this direct stop request.
+                    ringing now, either immediately or after a requested delay/count. If the user
+                    says "spegni la sveglia", call it immediately with no delay/count. If the user
+                    specifies seconds/minutes, convert to after_seconds (seconds; minutes multiplied
+                    by 60). If the user specifies a number of squilli, set ring_count to that count.
+                    One counted squillo means one complete playback of the selected alarm tone.
+                    If both a time and a ring count are specified, the alarm stops when the first
+                    condition is reached. Do not merely promise: call the tool and report only the
+                    result it returns. This does not disable future recurrence; no extra confirmation
+                    is needed for this direct stop request. If multiple alarms are ringing, ask which
+                    one before calling the tool.
 
                 """.trimIndent())
             },
@@ -186,8 +194,12 @@ class GeminiLiveAssistant {
                         ),
                         FunctionDeclaration(
                             name = "dismissRingingAlarm",
-                            description = "Stop a Juanita alarm occurrence ringing now without deleting future schedules.",
-                            parameters = mapOf("alarm_id" to Schema.string("Optional ID if more than one alarm is ringing."))
+                            description = "Stop a Juanita alarm occurrence now, after a specified number of seconds, and/or after a number of complete ringtone playbacks. Future recurring alarms remain scheduled.",
+                            parameters = mapOf(
+                                "alarm_id" to Schema.string("Optional exact ID if more than one alarm is ringing."),
+                                "after_seconds" to Schema.string("Optional delay in seconds, 1 to 86400. Omit for no timer."),
+                                "ring_count" to Schema.string("Optional number of complete ringtone playbacks, 1 to 100. Omit for no ring count.")
+                            )
                         ),
                     )
                 )
