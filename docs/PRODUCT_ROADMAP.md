@@ -284,7 +284,7 @@ Next steps:
 
 ## Notification access and personal inbox — candidate 0.10.4
 
-**STATUS: DEFERRED — NOT INCLUDED IN THE SIDeload RELEASE.** The earlier implementation is retained only as historical/reference source and must not be declared or registered in the app manifest, exposed in onboarding/settings, or offered as Gemini Live tools until a distribution and policy path is approved.
+**STATUS: DEFERRED — NOT INCLUDED IN THE SIDELOAD RELEASE.** The earlier implementation is retained only as historical/reference source and must not be declared or registered in the app manifest, exposed in onboarding/settings, or offered as Gemini Live tools until a distribution and policy path is approved. The detailed requirements below are historical design notes only, not authorization to ship this feature now.
 - Register an Android `NotificationListenerService` protected by `BIND_NOTIFICATION_LISTENER_SERVICE`; do not request notification access automatically. The user opens Android's notification-listener settings and enables Juanita explicitly.
 - Receive posted notifications, identify the source application and extract only text Android makes available in notification extras. Do not bypass lock-screen privacy or recover hidden previews.
 - Show the latest 30 notification entries in the Altro tab and provide an explicit clear action. Voice read-aloud is deferred until it can use Juanita's configured Gemini Live voice path; Android TextToSpeech must not be used as a fallback.
@@ -327,7 +327,7 @@ Next steps:
 
 ### A.1 User-controlled memory management — high priority
 
-- [IN PROGRESS — PR #6 FOLLOW-UP; CI/DEVICE VERIFICATION PENDING] Replace the single long scrolling home screen with persistent bottom navigation: Home (voice session), Avatar (Avatar Studio and camera), Impostazioni (identity, language, voice and personality), Memoria (personal memories and conversation archive), Altro (project status and debug tools). Keep the navigation visible while each section's content scrolls independently.
+- [IMPLEMENTED IN CURRENT APP SOURCE — DEVICE LAYOUT REVIEW PENDING] Persistent bottom navigation has six sections: Home (voice session), Avatar (Avatar Studio and camera), Sveglia (local alarm manager), Settaggi (identity, language, voice, personality and permissions), Memoria (personal memories and conversation archive), Altro (Improvement Lab and project/debug tools). Keep navigation visible while each section's content scrolls independently.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Show each curated memory with its category and exact local creation date/time; keep the underlying timestamp as epoch milliseconds.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Support selecting one memory or multiple memories and deleting the selected group after a confirmation that states the number of records to be removed.
 - [FUTURE] Add filters by category and date range for curated personal memories, plus group actions such as deleting all memories from a selected day/category.
@@ -580,7 +580,7 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 5. **Camera and video-call correction:** verify the PR #6 orientation fix on actual devices and confirm Gemini receives upright frames without memory leaks or dropped audio.
 6. **Avatar creation:** investigate and implement genuine on-device 2D portrait generation first; test hardware compatibility, storage, thermals and quality. Then add persistent avatar asset workflow. Rigged 3D, expressions and lip sync follow as a distinct phase.
 7. **Phone-call support:** research Android Telecom/default-dialer feasibility, then implement an opt-in incoming-call companion. Investigate two-way cellular audio only where officially supported; evaluate separate VoIP mode for full AI conversation. Third-party app calls such as WhatsApp remain separate.
-8. **Daily assistant capabilities:** reminders, calendar, travel, notifications and other integrations with explicit permissions and confirmations.
+8. **Daily assistant capabilities:** local reminders/tasks and calendar integration first; notifications remain deferred until an approved distribution/policy path exists. Travel and other integrations require explicit permissions and confirmations.
 
 ## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / NEXT IMPLEMENTATION PACKAGE
 
