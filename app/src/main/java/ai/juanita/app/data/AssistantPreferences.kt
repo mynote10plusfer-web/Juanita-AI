@@ -34,10 +34,6 @@ class AssistantPreferences(context: Context) {
         set(value) { storage.edit().putString(KEY_ASSISTANT_NAME, value.trim()).apply() }
 
     /** Separate opt-in: notification message bodies may be sent to Gemini only on explicit request. */
-    var allowNotificationContentToGemini: Boolean
-        get() = storage.getBoolean(KEY_NOTIFICATION_CLOUD_CONSENT, false)
-        set(value) { storage.edit().putBoolean(KEY_NOTIFICATION_CLOUD_CONSENT, value).apply() }
-
     var irony: Float get() = getTrait(KEY_IRONY, 0.75f); set(value) = setTrait(KEY_IRONY, value)
     var sweetness: Float get() = getTrait(KEY_SWEETNESS, 0.90f); set(value) = setTrait(KEY_SWEETNESS, value)
     var sensuality: Float get() = getTrait(KEY_SENSUALITY, 0.65f); set(value) = setTrait(KEY_SENSUALITY, value)
