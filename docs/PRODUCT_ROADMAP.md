@@ -1204,3 +1204,11 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 - Stale stop requests are guarded so a late notification action after service teardown does not crash the caller.
 - This is a source-level correction, not yet a proven device behavior. CI compilation/instrumentation and physical overlapping-alarm tests are still required. The SDK callback limitation remains: transcript arrival is not proof of first audible audio.
 - Commits: `a7fd047`, `04f3b4b`, `7b56f25`, `cbfc582`, `81879b7`.
+
+### API 35 CI follow-up — explicit ADB server initialization (2026-11-08)
+
+- The latest run (42524003792, commit 600608e) confirmed that the shell conditional is now parsed and the API 31 instrumentation job passes; the debug build and instrumentation APK compilation also pass.
+- API 35 still fails before the custom test script and before Gradle starts. Its emulator-runner log reports `Unable to connect to adb daemon on port: 5037`, followed by repeated failures of the runner's own `adb -s emulator-5554 shell getprop sys.boot_completed`. No Juanita instrumentation test ran on API 35.
+- Inspection of the pinned upstream action source (ReactiveCircus/android-emulator-runner v2) shows that `launchEmulator()` immediately polls ADB and does not explicitly start the ADB server. The action exposes `pre-emulator-launch-script`, executed after AVD creation and before emulator launch.
+- Workflow change on this branch: `pre-emulator-launch-script: adb start-server`, so the ADB daemon is initialized before the action begins boot polling. This is a targeted CI infrastructure correction; its effectiveness is pending the next run.
+- No test is skipped, no failure is masked, and API 35 remains a mandatory release gate.
