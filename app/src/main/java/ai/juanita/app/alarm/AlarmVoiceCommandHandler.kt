@@ -128,7 +128,7 @@ class AlarmVoiceCommandHandler(private val context: Context) {
             ?: return "Data non valida. Usa YYYY-MM-DD." else null
         val days = if (daysRaw.isNotBlank()) {
             val parsed = daysRaw.split(",").mapNotNull { raw ->
-                runCatching { DayOfWeek.valueOf(raw.trim().uppercase(Locale.ROOT)) }.getOrNull()
+                parseDay(raw)
             }.toSet()
             if (parsed.isEmpty() || parsed.size != daysRaw.split(",").size) return "Giorni di ripetizione non validi."
             parsed
