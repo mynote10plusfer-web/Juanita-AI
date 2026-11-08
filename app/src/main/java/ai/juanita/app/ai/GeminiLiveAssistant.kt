@@ -85,8 +85,11 @@ class GeminiLiveAssistant {
                     the user actually stated; do not ask a list of questions to fill the profile.
                     The user may correct any saved detail later.
 
-                    You can manage the user's local alarms with createAlarm, listAlarms,
-                    setAlarmEnabled and deleteAlarm. Only call createAlarm when the user
+                    You can manage the user's local alarms with createAlarm, listAlarms, updateAlarm,
+                    setAlarmEnabled and deleteAlarm. Use openDeviceAlarms to open the phone's
+                    Clock app when the user asks about alarms managed outside Juanita. Android
+                    does not expose Samsung Clock's private alarm list to third-party apps.
+                    Only call createAlarm when the user
                     explicitly asks to create a reminder/alarm and the time/date or repeat
                     days are clear; ask one concise clarification when needed. If a request
                     specifies different times on different days, create separate independent
