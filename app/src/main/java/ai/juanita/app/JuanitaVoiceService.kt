@@ -17,8 +17,6 @@ import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
-import ai.juanita.app.data.AssistantPreferences
-import ai.juanita.app.notifications.NotificationInbox
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -49,7 +47,6 @@ class JuanitaVoiceService : Service() {
     private var memoryWorkChannel: Channel<Unit>? = null
     private var memoryWorker: Job? = null
     private val videoFrameInFlight = AtomicBoolean(false)
-    @Volatile private var lastUserTranscriptForNotificationSelection: String = ""
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -198,9 +195,6 @@ class JuanitaVoiceService : Service() {
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
-                                    if (role.equals("USER", ignoreCase = true)) {
-                                        lastUserTranscriptForNotificationSelection = text.takeLast(300)
-                                    }
                                     val sent = transcriptQueue.trySend(role to text)
                                     if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
                                         _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
@@ -212,41 +206,7 @@ class JuanitaVoiceService : Service() {
                                         excludeSessionId = conversationId
                                     )
                                 },
-                                onNotificationInventory = {
-                                    NotificationInbox.entries.value
-                                        .groupBy { it.packageName }
-                                        .map { (packageName, items) ->
-                                            val label = items.firstOrNull()?.appName ?: packageName
-                                            "$label ($packageName): ${items.size}"
-                                        }
-                                        .sorted()
-                                        .joinToString("\n")
-                                        .ifBlank { "No notifications are currently available." }
-                                },
-                                onReadNotifications = { packageName, requestedLimit ->
-                                    val currentInbox = NotificationInbox.entries.value
-                                    val selectedAppLabel = currentInbox.firstOrNull { it.packageName == packageName }?.appName
-                                    val userSelection = lastUserTranscriptForNotificationSelection
-                                    if (!AssistantPreferences(applicationContext).allowNotificationContentToGemini) {
-                                        "Consent is disabled in Juanita settings. No notification content was shared."
-                                    } else if (selectedAppLabel.isNullOrBlank() ||
-                                        (!userSelection.contains(selectedAppLabel, ignoreCase = true) &&
-                                            !userSelection.contains(packageName, ignoreCase = true))) {
-                                        "Blocked: the user has not explicitly named this app in the latest spoken request. Ask which app they want before trying again."
-                                    } else {
-                                        val selected = currentInbox
-                                            .filter { it.packageName == packageName }
-                                            .sortedByDescending { it.postedAt }
-                                            .take(requestedLimit.coerceIn(1, 5))
-                                        if (selected.isEmpty()) {
-                                            "No current notifications are available for the selected app."
-                                        } else {
-                                            selected.joinToString("\n\n") { entry ->
-                                                "App: ${entry.appName}\nTitle: ${entry.title.take(200)}\nMessage: ${entry.text.take(1200)}"
-                                            }.take(4800)
-                                        }
-                                    }
-                                }
+
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
