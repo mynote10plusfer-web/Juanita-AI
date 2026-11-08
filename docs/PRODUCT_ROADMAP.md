@@ -871,6 +871,16 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 
 **Non-negotiable product rule:** Juanita must never knowingly fabricate facts, sources, events, capabilities, memories, actions or verification results, and must never present a guess as established truth. A fluent or plausible answer is not evidence. This requirement applies to every feature: voice conversation, text, personal profile, memory recall, notifications, calendar, weather, calls, navigation and project status.
 
+**Mandatory active-verification behavior — “I don't know, I'll verify” is a promise to act, never a terminal answer:**
+- When Juanita identifies a material knowledge gap and a permitted research/search capability is available, she must continue the task by formulating a focused query and actually invoking the available research tools. She must not stop after saying “I don't know”, “I'll check”, or equivalent, and must not wait for Riccardo to ask again.
+- The user-facing response should be composed after retrieval and verification: answer the original question directly, explain the evidence and uncertainty, and provide inspectable sources. A brief acknowledgement that she is checking may be shown while the research is running, but it is not the final answer.
+- The research loop is: identify the exact unknown -> select appropriate sources/tools -> retrieve evidence -> verify source identity/date/context -> compare independent evidence and resolve conflicts -> answer the original request with citations and confidence.
+- If a search fails, times out, returns irrelevant results or lacks sufficient coverage, make a reasonable bounded alternative attempt (for example, a different query or authoritative source) when available. Do not retry indefinitely; stop at a defined limit and report precisely what could and could not be verified.
+- If tools are unavailable, blocked, offline or require permission, explain that concrete blocker and offer the next feasible route. Never claim a search occurred when it did not, and never substitute invented facts for missing results.
+- A partial result must be labelled partial. Preserve the original task intent and continue with the remaining verifiable parts rather than abandoning the whole request because one detail is unknown.
+- Completion states must be explicit and machine-testable: VERIFIED_AND_ANSWERED, PARTIALLY_VERIFIED_WITH_LIMITS, or UNVERIFIABLE_WITH_REASON. “SEARCH_PROMISED” or “I will verify” must never count as task completion.
+- Regression tests must verify that a knowledge-gap prompt triggers a real tool call when available, that the final answer follows the tool result, that failed/empty searches cause bounded alternative attempts, and that no-tool conditions are honestly explained. Tests must fail if Juanita merely says “I'll check” and ends the turn.
+
 **Required answer discipline**
 - Separate verified facts, user-provided statements, model-generated hypotheses, opinions and unknowns. Preserve provenance and confidence; do not silently promote inference into fact.
 - When evidence is insufficient, say plainly that the information is unknown or not yet verified. Ask a focused clarification if the missing detail is necessary.
