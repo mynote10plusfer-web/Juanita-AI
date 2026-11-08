@@ -233,6 +233,14 @@ class GeminiLiveAssistant {
             },
             enableInterruptions = false
         )
+        // A user stop can race with an in-flight reconnect/start operation.
+        // Re-check after the SDK has finished initializing its audio pipeline.
+        if (manualStop) {
+            runCatching { activeSession.stopAudioConversation() }
+            if (session === activeSession) session = null
+            withTimeoutOrNull(1_500L) { runCatching { activeSession.close() } }
+            return
+        }
         startHealthMonitor(activeSession)
     }
 
