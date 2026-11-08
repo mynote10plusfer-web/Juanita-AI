@@ -94,14 +94,10 @@ class AlarmVoiceCommandHandler(private val context: Context) {
 
     private fun openDeviceAlarms(): String {
         val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return if (intent.resolveActivity(context.packageManager) != null) {
-            runCatching {
-                context.startActivity(intent)
-                "Ho aperto l'app Orologio del telefono. Android non consente alle app di terze parti di leggere direttamente l'elenco privato delle sveglie Samsung."
-            }.getOrElse { "Non sono riuscita ad aprire l'app Orologio: ${it.localizedMessage ?: "errore"}" }
-        } else {
-            "Non è disponibile un'app Orologio compatibile sul dispositivo."
-        }
+        return runCatching {
+            context.startActivity(intent)
+            "Ho aperto l'app Orologio del telefono. Android non consente alle app di terze parti di leggere direttamente l'elenco privato delle sveglie Samsung."
+        }.getOrElse { "Non sono riuscita ad aprire un'app Orologio compatibile: ${it.localizedMessage ?: "non disponibile"}" }
     }
 
     private fun list(): String {
