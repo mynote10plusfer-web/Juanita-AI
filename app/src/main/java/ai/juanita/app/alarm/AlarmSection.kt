@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Divider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +49,25 @@ fun AlarmSection(panel: Color, gold: Color) {
     var days by remember { mutableStateOf(initial.repeatDays) }
     var enabled by remember { mutableStateOf(initial.enabled) }
     var status by remember { mutableStateOf("Sveglia locale · nessun servizio a pagamento") }
+    var morningVoiceEnabled by remember {
+        mutableStateOf(context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).getBoolean("morning_voice_enabled", false))
+    }
+    val morningPermissions = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        val mic = grants[Manifest.permission.RECORD_AUDIO] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val calendar = grants[Manifest.permission.READ_CALENDAR] == true ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
+        morningVoiceEnabled = mic
+        context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).edit()
+            .putBoolean("morning_voice_enabled", mic).apply()
+        status = when {
+            !mic -> "Microfono non autorizzato: resta attiva solo la sveglia sonora."
+            !calendar -> "Buongiorno vocale attivo. Calendario non autorizzato: Juanita lo segnalerà senza presumere che sia vuoto."
+            else -> "Buongiorno vocale attivo: voce Live, calendario e riepilogo del mattino."
+        }
+    }
     val notificationPermission = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -55,6 +76,29 @@ fun AlarmSection(panel: Color, gold: Color) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("BUONGIORNO VOCALE DI JUANITA", color = gold, fontSize = 13.sp)
+        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Parlami al risveglio", color = Color.White, fontSize = 14.sp)
+                Text("Usa la voce Gemini Live configurata. Nessun TTS Android.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+            }
+            Switch(
+                checked = morningVoiceEnabled,
+                onCheckedChange = { checked ->
+                    if (checked) {
+                        morningPermissions.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.READ_CALENDAR))
+                    } else {
+                        morningVoiceEnabled = false
+                        context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).edit()
+                            .putBoolean("morning_voice_enabled", false).apply()
+                        status = "Buongiorno vocale disattivato. La sveglia sonora continua a funzionare."
+                    }
+                }
+            )
+        }
+        Text("Il microfono serve per poter rispondere a Juanita dopo il buongiorno. Il calendario è facoltativo; se non autorizzato, non verrà dichiarato che la giornata è libera.",
+            color = Color(0xFF9A9DA4), fontSize = 11.sp)
+        Divider(color = Color(0xFF30343B))
         Text("SVEGLIA DI JUANITA", color = gold, fontSize = 13.sp)
         Text("Imposta un orario e i giorni. La programmazione avviene sul telefono, senza API o abbonamenti.",
             color = Color(0xFFB9BBC1), fontSize = 13.sp)
@@ -178,7 +222,7 @@ fun AlarmSection(panel: Color, gold: Color) {
 
         Text(if (enabled) "STATO: ATTIVA" else "STATO: NON ATTIVA", color = if (enabled) gold else Color(0xFF9A9DA4), fontSize = 12.sp)
         Text(status, color = Color.White, fontSize = 13.sp)
-        Text("Questa prima versione genera un avviso sonoro Android. La voce Live personalizzata di Juanita, la dissolvenza graduale, il tasto snooze e la schermata di risveglio saranno collegati solo dopo aver verificato in modo affidabile la riproduzione della voce già configurata: non verrà usata una voce TTS sostitutiva.",
+        Text("La sveglia locale funziona anche senza rete. Il buongiorno vocale richiede connessione a Gemini Live; se manca rete o il microfono non è autorizzato, resta disponibile l’avviso sonoro. La prossima sveglia Android esterna viene letta quando il sistema la rende disponibile.",
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
     }
 }
