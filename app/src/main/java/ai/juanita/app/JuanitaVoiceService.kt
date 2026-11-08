@@ -268,9 +268,6 @@ class JuanitaVoiceService : Service() {
                                 onAlarmCommand = { name, arguments ->
                                     ai.juanita.app.alarm.AlarmVoiceCommandHandler(applicationContext).execute(name, arguments)
                                 },
-                                onNotificationCommand = { name, arguments ->
-                                    ai.juanita.app.notifications.NotificationCommandHandler(applicationContext).execute(name, arguments)
-                                }
                             )
                             if (profilePromptKey != null) {
                                 getSharedPreferences("juanita_profile_guidance", MODE_PRIVATE).edit()
