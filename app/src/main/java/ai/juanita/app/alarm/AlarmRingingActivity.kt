@@ -84,7 +84,7 @@ class AlarmRingingActivity : ComponentActivity() {
             sendAlarmAction(JuanitaAlarmScheduler.ACTION_SNOOZE)
         }
         root.addView(snoozeButton)
-        root.addView(makeButton("SPEGNI LA SVEGLIA") {
+        root.addView(makeButton(if (testMode) "CHIUDI PROVA" else "SPEGNI LA SVEGLIA") {
             sendAlarmAction(JuanitaAlarmScheduler.ACTION_DISMISS)
         })
         root.addView(TextView(this).apply {
