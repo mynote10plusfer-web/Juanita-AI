@@ -178,7 +178,7 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 **Technical research and staged implementation**
 1. Evaluate sherpa-onnx Android speaker-identification (embedding extraction/matching) and speaker-diarization APIs as a local-first candidate. Its documentation lists Android/Kotlin support and separate speaker identification and diarization examples; the license of each selected model/dataset must be checked independently. Do not assume that one model supports all of Riccardo's languages or performs well on either Samsung phone.
 2. Prototype capture from the same microphone path without breaking Gemini Live. Confirm whether SDK-managed audio can be safely mirrored to a local recognizer; if not, design a single audio-capture pipeline rather than opening competing microphone streams.
-3. Benchmark latency, RAM, battery, thermal impact and false-accept/false-reject rates on Note10+ (Android 12) and S22 Ultra. Evaluate Italian, Spanish (including Canarian speech), Czech and English separately.
+3. Benchmark latency, RAM, battery, thermal impact and false-accept/false-reject rates on Note10+ (Android 12) and S22 Ultra. Evaluate Italian, Spanish (including Canarian speech) and English separately; other currently supported languages are not language-addition tasks.
 4. Implement a local encrypted speaker registry, explicit enrollment/consent UI, matching thresholds, unknown fallback, correction, re-enrollment and deletion.
 5. Connect confirmed speaker identity to the existing person/profile memory so a later introduction can recall the person's name and user-approved facts, without merging one person's statements into another person's profile.
 
@@ -275,7 +275,7 @@ Not implemented:
 - Speaker diarization for multiple people in the same conversation.
 - Enrolled voice profiles/voiceprints.
 - An independent on-device speech-recognition provider; SpeechRecognitionProvider is only an interface contract.
-- A validated accuracy test suite across Italian, Spanish/Canarian, Czech and English on the target Samsung devices.
+- A validated accuracy test suite across Italian, Spanish/Canarian and English on the target Samsung devices; existing additional language support is not a language-addition task.
 
 Next steps:
 - Clarify language detection vs speaker identity; do not confuse transcription with identifying a person.
@@ -573,7 +573,7 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Delivery plan
 
-1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian and Spanish; test correction, deletion, retention and failure recovery.
 2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records. The Phase 1 Improvement Lab is separate: it records software capability state and engineering reports, not personal biography.
 3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
 4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
