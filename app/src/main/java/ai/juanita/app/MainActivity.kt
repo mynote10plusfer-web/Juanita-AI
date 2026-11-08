@@ -667,9 +667,12 @@ private fun JuanitaApp(
                         }
                     }
                     Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
+                        enabled = !liveState.contains("in ascolto", ignoreCase = true) &&
+                            !liveState.contains("connessione", ignoreCase = true),
                         colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
                     ) { Text("Ascolta un campione della voce") }
                     Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Text(liveStartError ?: liveState, color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 

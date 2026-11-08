@@ -223,9 +223,11 @@ class JuanitaVoiceService : Service() {
                                         // Keep the local alarm sounding until Gemini's first spoken response transcript.
                                         JuanitaAlarmRingingService.stop(this@JuanitaVoiceService, alarmId)
                                     }
-                                    val sent = transcriptQueue.trySend(role to text)
-                                    if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
-                                        _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                                    if (previewDurationMillis == 0L) {
+                                        val sent = transcriptQueue.trySend(role to text)
+                                        if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
+                                            _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                                        }
                                     }
                                 },
                                 onArchiveSearch = { query ->
@@ -309,6 +311,7 @@ class JuanitaVoiceService : Service() {
      */
     private fun requestStop() {
         sessionJob?.cancel()
+        voicePreviewJob?.cancel()
         // Synchronously stop SDK audio capture before launching any asynchronous cleanup.
         assistant.stopAudioCapture()
         _state.value = "Microfono disattivato · chiusura sessione…"
