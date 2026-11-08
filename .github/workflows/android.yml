@@ -36,6 +36,9 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Compile Android instrumentation tests
+        run: gradle --no-daemon :app:assembleDebugAndroidTest
+
       - name: Verify debug APK package identity
         shell: bash
         run: |
