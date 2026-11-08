@@ -537,6 +537,19 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
    - If Juanita's voice cannot be started safely/available, the alarm tone and controls must still work; clearly indicate that the spoken briefing is unavailable. Never silently switch to a different voice.
    - Avatar lip-sync remains a later enhancement and is not a dependency for the first working alarm.
 
+### Scheduled calls and secretary-style call handoff — USER-REQUESTED / FEASIBILITY RESEARCH
+
+**User request (2026-11-08):** When creating a reminder to phone someone, let the user choose either (a) remind me and let me call, or (b) Juanita calls the contact first and then connects/passes the call to the user after the contact answers.
+
+- Add a per-reminder call action: `REMIND_ME_TO_CALL` (default) or `JUANITA_CALLS_FIRST`. The reminder must identify a contact and confirm the exact phone number before any call is placed. Never infer a number from an ambiguous contact match.
+- `REMIND_ME_TO_CALL`: at the scheduled time, show a notification and open the system dialer with the confirmed number. The user explicitly taps Call; this is the reliable first implementation and does not require Juanita to become the default dialer.
+- `JUANITA_CALLS_FIRST`: research only until feasibility is proven. The desired experience is an assistant/secretary that calls the contact, detects answer/busy/no-answer, and connects the user only after the contact answers. The user must explicitly approve the call and any bridge/transfer before it happens.
+- **Important Android/SIM limitation:** `TelecomManager.placeCall` can place a call with the required permission, but the ordinary cellular call APIs do not provide a universal third-party-app operation to take an answered SIM call and seamlessly transfer its audio to the device owner. Android `ConnectionService`/Telecom handover is intended for compatible calling services and does not guarantee handoff of a carrier-managed SIM call. A carrier-supported three-way/conference call may be a possible device/operator-dependent route, but it must be tested and cannot be assumed.
+- Investigate a self-managed VoIP `ConnectionService` as an alternative architecture: Juanita could originate a VoIP leg to the contact and bridge it with a second leg to the user, subject to a real VoIP/SIP provider, backend/media infrastructure, account credentials, reliable connectivity, privacy and regulatory review. Do not introduce a paid provider, subscription, API key, server or recurring cost without the user's explicit approval. A fully on-device bridge is not assumed feasible.
+- Before any call, present contact name, exact number, call purpose and chosen mode for explicit confirmation. Provide cancel/stop controls; do not call emergency numbers automatically; do not record or transcribe the other party by default. If the contact does not answer, is busy, or the call state cannot be reliably detected, end safely and notify the user rather than pretending the call was connected.
+- First deliver the reliable reminder + dialer handoff. Only implement `JUANITA_CALLS_FIRST` after a technical prototype passes real tests on the Note10+ Android 12 and S22 Ultra, and after any carrier/VoIP dependencies and costs are disclosed and approved.
+- Status: **REQUESTED — FEASIBILITY RESEARCH; NOT IMPLEMENTED.** No automatic calling, SIM call transfer, conference bridge or VoIP bridge exists in the app today.
+
 ### Android architecture and safeguards
 
 - Use Android `AlarmManager` for precise user-facing alarm/reminder triggers where exact timing is required. For target Android 12+, request the appropriate “Alarms & reminders” special access (`SCHEDULE_EXACT_ALARM`) with an explanation and a live permission check; do not silently claim punctuality if access is denied. Review whether `USE_EXACT_ALARM` is policy-eligible before considering it.
