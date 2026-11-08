@@ -549,3 +549,44 @@ Acceptance before sharing an APK: CI build succeeds; APK package ID matches; ver
 ## Conversation archive calendar — IN PROGRESS
 
 Replace broad date-range deletion with a local calendar, per-day conversation lists, transcript preview with timestamps, per-conversation time-window deletion, whole-day deletion and multi-day selection. Transcript deletion must preserve curated personal memories. The home screen should foreground the avatar, show device date/time and use distinct navigation icons. Exact-head CI and device verification are pending.
+
+
+## Smart alarm and personalized morning briefing — PROPOSED
+
+**User-approved feature request (2026-11-08).** Juanita should include her own integrated alarm clock and a warm, configurable morning wake-up experience. This is a separate alarm feature, not an assumption that Juanita can control or dismiss alarms created by another clock application.
+
+### Intended experience
+- The user can create, edit, enable/disable and delete alarms; configure time, repeat days, alarm sound, volume/ramp behavior, voice style and optional morning briefing.
+- At the scheduled time, the alarm must reliably sound even if the app UI is closed or the screen is off. Juanita then delivers a natural, gentle and positive greeting, with varied user-approved wording rather than a repetitive fixed phrase.
+- The user can dismiss or snooze the alarm using clear on-screen controls and, where technically reliable, a voice command. Do not assume speech recognition is available while the device is locked or before the user grants microphone access.
+- The greeting may include a concise weather briefing: current conditions and useful forecast for the user's current area. Use location only with explicit permission; otherwise use a manually selected home/locality. If location or network/weather data is unavailable, Juanita should say so naturally and never invent conditions.
+- Morning content is configurable: greeting only, weather, calendar/reminders (future integration), or a short user-selected motivational message. Do not force a long monologue or unexpectedly expose private calendar details aloud.
+
+### Android architecture and reliability
+1. Build an app-owned alarm manager backed by Android AlarmManager, with exact-alarm capability and the required Android-version-specific permission/settings flow. Evaluate exact-alarm eligibility and Google Play/device policy before implementation; do not silently fall back to an unreliable inexact alarm while claiming punctual delivery.
+2. Persist alarm definitions locally and reschedule them after device reboot, app update and time-zone/time changes. Handle daylight-saving changes and duplicate/missed alarm edge cases.
+3. Use a dedicated alarm playback/session component with explicit start, dismiss and snooze lifecycle. Respect Android foreground-service and background-execution restrictions; keep the alarm functional if speech synthesis or weather retrieval fails.
+4. Design a lock-screen-friendly alarm screen using supported Android APIs and permissions. Do not request broad full-screen-intent privileges without confirming eligibility and necessity.
+5. Use Android TextToSpeech for the spoken greeting initially, with language/voice selection and graceful fallback. Keep voice/avatar lip-sync as a later enhancement; do not imply it exists in the first alarm release.
+6. Weather provider selection is a separate research task: prioritize a no-cost option compatible with the project's free/no-billing requirement, verify terms, quotas, attribution and location-data handling. Cache only short-lived weather data and show its observation/forecast time.
+7. Location must be optional and minimized. Prefer a user-selected locality or a fresh foreground-permission location; do not request background location solely for the alarm. If a reliable current location cannot be obtained at wake-up, use the configured locality or omit weather.
+
+### Privacy, user control and failure behavior
+- No alarm, microphone or location permission is enabled silently. Explain each permission at the point it is needed and provide settings to revoke it.
+- Alarm tone and dismiss/snooze controls must work independently of Gemini, Internet access, weather services and avatar rendering.
+- No cloud upload of alarm schedules, location history or calendar content by default.
+- Provide a test-alarm action and a clear status for the next scheduled alarm.
+- Do not speak sensitive notification or calendar content aloud unless the user explicitly enables that behavior.
+
+### Acceptance criteria
+- A repeating alarm fires at the configured local time with the screen off and app UI closed on both Note10+ (Android 12) and S22 Ultra; test reboot, app update, time-zone and daylight-saving transitions.
+- Dismiss and snooze work reliably; stopping an alarm does not cancel future repeats.
+- Alarm tone still sounds if Gemini, TTS, network, weather or location fails.
+- Greeting is spoken in the selected language and can be configured or disabled.
+- Weather is grounded in a timestamped provider response and permitted location/locality; when unavailable, Juanita clearly omits it.
+- Battery use, duplicate firing, missed alarms, permission revocation and process death are tested. CI success is not a substitute for physical-device alarm tests.
+
+### Priority and dependencies
+- Priority: HIGH product value; implementation should follow stabilization and device verification of the notification-reader release rather than being mixed into that release.
+- Dependencies: Android alarm/foreground-service compatibility research; local alarm persistence and reboot rescheduling; TTS; optional location; a vetted no-cost weather source.
+- Status: PROPOSED — no alarm code implemented, no weather provider selected, no device verification.
