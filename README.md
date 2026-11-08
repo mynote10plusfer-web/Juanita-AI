@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current signed release: 0.10.7 (versionCode 36)
+## Current signed release: 0.10.8 (versionCode 37)
 
-Candidate 0.10.8 adds progressive personal knowledge: a voice-led first meeting, optional name and birth date gathered naturally, a dedicated encrypted profile store connected to Gemini Live, and gradual learning from ordinary conversation. The next cumulative signed release is the next user installation target; intermediate builds are not for installation.
+Signed Release 0.10.8 adds progressive personal knowledge: a voice-led first meeting, optional name and birth date gathered naturally, a dedicated encrypted profile store connected to Gemini Live, and gradual learning from ordinary conversation. PR #23 has merged the timezone-safe Smart Alarm schedule model (not yet a working alarm). PR #24 is under CI review for automatic recovery after Gemini Live disconnects; it is not yet released or physically tested. Intermediate builds are not for installation.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
@@ -70,3 +70,11 @@ The release workflow uses the existing permanent GitHub Actions signing secrets.
 ## Privacy
 
 The microphone is activated only after the user grants permission and starts a Live session. Audio is streamed to Gemini for real-time conversation and is not stored by this app. Conversation text archiving is on by default and encrypted on-device with Android Keystore AES-GCM; raw audio is never stored. Users can pause or clear the archive in the privacy panel. Manual memories are also encrypted on-device.
+
+
+## Current engineering work (2026-11-08)
+
+- Smart Alarm schedule model: merged in PR #23. This is only the recurrence/time-zone calculation core; Android alarm delivery, persistence, controls and spoken greeting are still planned.
+- Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks, bounded reconnection and recent transcript context replay. It must pass CI and real-device testing before being called fixed or included in a Release APK.
+- Familiar-person speaker identification remains unimplemented. Voice transcription is not speaker recognition; local enrollment requires explicit consent and privacy/legal review.
+- Notification reading remains deferred; do not disable Play Protect.
