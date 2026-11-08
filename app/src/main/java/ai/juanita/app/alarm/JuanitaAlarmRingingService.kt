@@ -53,7 +53,13 @@ class JuanitaAlarmRingingService : Service() {
     private fun startAlarmTone() {
         val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-            ?: return
+            ?: run {
+                AlarmVolumeController.restore(this)
+                volumeNotice = "Nessun tono di allarme disponibile."
+                getSystemService(NotificationManager::class.java)
+                    .notify(JuanitaAlarmScheduler.NOTIFICATION_ID, buildNotification())
+                return
+            }
         runCatching {
             val media = MediaPlayer()
             media.setAudioAttributes(
