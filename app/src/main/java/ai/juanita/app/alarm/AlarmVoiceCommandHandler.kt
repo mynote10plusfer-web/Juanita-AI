@@ -33,6 +33,17 @@ class AlarmVoiceCommandHandler(private val context: Context) {
         else -> "Comando sveglia non riconosciuto."
     }
 
+    private fun parseDay(raw: String): DayOfWeek? = when (raw.trim().uppercase(Locale.ROOT)) {
+        "MONDAY", "LUNEDI", "LUNEDÌ", "LUN" -> DayOfWeek.MONDAY
+        "TUESDAY", "MARTEDI", "MARTEDÌ", "MAR" -> DayOfWeek.TUESDAY
+        "WEDNESDAY", "MERCOLEDI", "MERCOLEDÌ", "MER" -> DayOfWeek.WEDNESDAY
+        "THURSDAY", "GIOVEDI", "GIOVEDÌ", "GIO" -> DayOfWeek.THURSDAY
+        "FRIDAY", "VENERDI", "VENERDÌ", "VEN" -> DayOfWeek.FRIDAY
+        "SATURDAY", "SABATO", "SAB" -> DayOfWeek.SATURDAY
+        "SUNDAY", "DOMENICA", "DOM" -> DayOfWeek.SUNDAY
+        else -> null
+    }
+
     private fun create(args: Map<String, String>): String {
         val timeRaw = args["time"].orEmpty().trim()
         val time = runCatching { LocalTime.parse(timeRaw, DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)) }.getOrNull()
@@ -48,7 +59,7 @@ class AlarmVoiceCommandHandler(private val context: Context) {
         } else null
         val days = if (daysRaw.isNotBlank()) {
             val parsed = daysRaw.split(",").mapNotNull { raw ->
-                runCatching { DayOfWeek.valueOf(raw.trim().uppercase(Locale.ROOT)) }.getOrNull()
+                parseDay(raw)
             }.toSet()
             if (parsed.isEmpty() || parsed.size != daysRaw.split(",").size) {
                 return "Giorni non riconosciuti. Specifica i giorni della settimana in modo chiaro."
