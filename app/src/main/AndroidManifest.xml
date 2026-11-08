@@ -8,6 +8,8 @@
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
@@ -30,6 +32,8 @@
             android:name=".JuanitaVoiceService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <service android:name=".alarm.JuanitaAlarmRingingService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
+        <activity android:name=".alarm.AlarmRingingActivity" android:exported="false" android:excludeFromRecents="true" />
         <receiver android:name=".alarm.JuanitaAlarmReceiver" android:enabled="true" android:exported="false" />
         <receiver android:name=".alarm.JuanitaAlarmBootReceiver" android:enabled="true" android:exported="true">
             <intent-filter>
