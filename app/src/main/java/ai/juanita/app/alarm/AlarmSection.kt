@@ -10,6 +10,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.provider.AlarmClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -215,6 +216,18 @@ fun AlarmSection(panel: Color, gold: Color) {
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
         ) { Text("+ Aggiungi sveglia") }
+        Button(
+            onClick = {
+                val intent = Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }
+                    .onSuccess { status = "Aperta l'app Orologio del telefono. Le sveglie Samsung restano gestite da quell'app." }
+                    .onFailure { status = "Non è disponibile un'app Orologio compatibile." }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+        ) { Text("Apri anche le sveglie del telefono") }
+        Text("Android non permette a Juanita di leggere direttamente l'elenco privato delle sveglie Samsung. Può però aprire l'app Orologio; le sveglie create qui restano gestite da Juanita.",
+            color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         Text("ACCESSI ANDROID", color = gold, fontSize = 13.sp)
         Button(
