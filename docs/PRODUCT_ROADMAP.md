@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Subsequent roadmap/architecture and capability-catalogue commits were added after that run; the latest branch head therefore still needs a fresh CI run. Signed-release verification and physical-device verification remain pending.
+Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #12 is the open 0.10.4 (versionCode 33) notification-reader candidate; CI, permanent-signature verification and physical-device verification remain pending. The integrated Smart Alarm, Agenda and Reminders package is now user-approved and specified below; implementation has not yet begun.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -214,6 +214,30 @@ Next steps:
 - Keep multilingual transcription through Gemini Live as the default. Test language switching and mixed-language turns on device.
 - If the user later wants speaker identity, design an opt-in, privacy-preserving local speaker-recognition feature; never infer or identify a person from a voice without explicit enrollment and consent.
 
+## Notification access and personal inbox — candidate 0.10.4
+
+**Stage 1 — opt-in notification reader (implemented in feature branch; CI/device verification pending)**
+- Register an Android `NotificationListenerService` protected by `BIND_NOTIFICATION_LISTENER_SERVICE`; do not request notification access automatically. The user opens Android's notification-listener settings and enables Juanita explicitly.
+- Receive posted notifications, identify the source application and extract only text Android makes available in notification extras. Do not bypass lock-screen privacy or recover hidden previews.
+- Show the latest 30 notification entries in the Altro tab and provide an explicit clear action. Voice read-aloud is deferred until it can use Juanita's configured Gemini Live voice path; Android TextToSpeech must not be used as a fallback.
+- First implementation is volatile/in-memory only: no notification text is written to transcript archive, personal memory, logs or cloud services; do not send notifications to Gemini. App-process recreation clears the temporary inbox.
+- Ignore ongoing notifications and group-summary notifications. The user can revoke notification access at any time in Android settings.
+- Initial version does not access WhatsApp's private database, fetch historical chats, send messages, mark messages read or reply. WhatsApp support depends on the message preview exposed by Android and the sender/app's notification format.
+
+**Acceptance tests**
+- Verify access remains disabled until the user grants it, and revoking it stops new capture.
+- Verify notifications from WhatsApp and at least two other apps appear with correct app label/title/body where Android exposes them.
+- Verify hidden previews remain unavailable and no content is retained after process death.
+- Verify clear action empties the inbox. Verify any future read-aloud uses the configured Juanita voice and never Android TextToSpeech.
+- Verify no notification body is present in Gemini requests, encrypted conversation archive, curated memories or application logs.
+- Physical-device tests required on Note10+ (Android 12) and S22 Ultra. CI compilation is not proof of OEM notification delivery.
+
+**Later stages**
+- Per-app allow/block list, notification categories and quiet hours.
+- User-controlled encrypted persistence/retention only if explicitly approved.
+- Contextual voice summaries and optional Gemini-based prioritization only after a separate opt-in and privacy review.
+- Quick actions/replies only where Android's public notification actions safely support them; no scraping or WhatsApp private APIs.
+
 ## Functional requirements
 
 ### A. Automatic memory, archive retrieval and evolving digital biography — highest priority
@@ -257,6 +281,12 @@ Next steps:
 - Keep Android Keystore-backed encryption and bounded prompt/retrieval payloads. Never upload the full personal archive to a cloud service for indexing.
 - Sensitive or intimate data requires explicit confirmation before long-term retention.
 - Test app restart, force-stop, device reboot, retention expiry, corrupt archive files, memory correction and deletion.
+
+**Open issues reported during real-phone testing — 2026-11-06/07; not yet verified as fixed**
+- Video-call view: user reported a black local-camera preview and a static Juanita portrait. Re-test front-camera preview, camera switching, video frame delivery and avatar animation separately; the portrait is currently static by design/code, so do not mark animation complete.
+- Memory: user reported that conversations opened from the archive were not displayed. Re-test archive persistence, date/day navigation, transcript retrieval, and automatic-memory recall after app restart.
+- Session lifecycle: user reported that closing/leaving the app could leave the microphone conversation active. Re-test stop behavior for close, back navigation, process lifecycle and explicit terminate; no hidden/hot microphone is acceptable.
+- These are user-observed defects requiring reproducible tests on Note10+ Android 12 and S22 Ultra. A successful CI build alone does not close them.
 
 ### C. Knowledge research and learning
 
@@ -469,6 +499,92 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 7. **Phone-call support:** research Android Telecom/default-dialer feasibility, then implement an opt-in incoming-call companion. Investigate two-way cellular audio only where officially supported; evaluate separate VoIP mode for full AI conversation. Third-party app calls such as WhatsApp remain separate.
 8. **Daily assistant capabilities:** reminders, calendar, travel, notifications and other integrations with explicit permissions and confirmations.
 
+## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / NEXT IMPLEMENTATION PACKAGE
+
+**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm. It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
+
+### Product areas
+
+1. **Smart alarm**
+   - Create, edit, enable/disable and delete alarms; one-time and repeating schedules; selected weekdays; snooze and dismiss; test alarm; next-alarm status.
+   - Configurable alarm sound, gradual volume where device support permits, greeting style and briefing options.
+   - Alarm tone and dismiss/snooze controls must work independently of Internet, Gemini, weather and avatar rendering.
+   - Fire reliably with the app UI closed and screen off. Restore schedules after reboot, app update, time-zone change and daylight-saving transitions. Handle duplicate, missed and past-due alarms explicitly.
+   - Do not claim Juanita can stop or control alarms owned by third-party clock apps.
+
+2. **Juanita reminders and tasks**
+   - Natural-language creation (for example, “ricordami domani alle dieci di chiamare Marco”), with date/time/time-zone parsing and a confirmation question when the request is ambiguous.
+   - One-time and recurring reminders, task/checklist items, due dates, optional advance alerts, completion/snooze/reschedule and deletion.
+   - Keep Juanita-created reminders in a dedicated local encrypted store, separate from calendar-provider events and personal memories. Never silently turn casual conversation into a scheduled reminder.
+   - Provide a clear list of upcoming, overdue and completed items; avoid duplicate reminders after restart or rescheduling.
+
+3. **Calendar and events**
+   - Stage 1: optional read-only access through Android Calendar Provider, allowing Juanita to show today's agenda and upcoming events from calendars already present/synced on the device (for example Google or Exchange calendars). Ask for `READ_CALENDAR` only when the user enables this feature; let the user choose which calendars are included where feasible.
+   - Stage 2: create events using the Android Calendar insert intent or, if a direct write workflow is justified, request `WRITE_CALENDAR` separately and confirm title, date, time, calendar and attendees before writing. Never edit/delete an existing event without a separate explicit confirmation.
+   - Distinguish imported calendar events from Juanita's own reminders in the UI and data model. Preserve source calendar/event IDs and time-zone semantics; do not duplicate imported events into the local reminder store.
+   - Do not assume that Google Calendar's cloud API or a Google OAuth integration is required: prefer the on-device provider first, which can expose calendars synchronized by Android. A dedicated cloud connector can be considered later only if the user asks for cross-device access beyond device-synced calendars.
+
+4. **Morning briefing**
+   - Optional short greeting in the user's selected language, today's calendar agenda, Juanita reminders due today/overdue, and optional weather.
+   - User controls which categories may be spoken aloud, briefing length, quiet/private mode and whether sensitive event titles are hidden while the phone is locked.
+   - Weather is optional, based on an explicitly permitted fresh foreground location or a manually selected locality; no background tracking solely for the briefing. If weather/location/network data is unavailable, omit it without inventing conditions.
+   - Avoid long unsolicited monologues; allow greeting-only mode and a configurable briefing time.
+
+5. **Voice identity — non-negotiable**
+   - Spoken greetings and briefings must use the same selected voice identity/configuration and audio-generation path used by Juanita's normal Gemini Live conversations. Reuse the existing saved Live voice preference; do not add a second voice selector.
+   - No Android system TextToSpeech or generic substitute voice for Juanita's greeting, briefing or notification read-aloud.
+   - Research whether the configured Gemini Live output can safely produce a short utterance from a scheduled background alarm flow. Verify session lifecycle, foreground-service rules, network availability, quotas and device lock state. Do not assume the current interactive Live API can be invoked as a fire-and-forget speech synthesizer.
+   - If Juanita's voice cannot be started safely/available, the alarm tone and controls must still work; clearly indicate that the spoken briefing is unavailable. Never silently switch to a different voice.
+   - Avatar lip-sync remains a later enhancement and is not a dependency for the first working alarm.
+
+### Scheduled calls and secretary-style call handoff — USER-REQUESTED / FEASIBILITY RESEARCH
+
+**User request (2026-11-08):** When creating a reminder to phone someone, let the user choose either (a) remind me and let me call, or (b) Juanita calls the contact first and then connects/passes the call to the user after the contact answers.
+
+- Add a per-reminder call action: `REMIND_ME_TO_CALL` (default) or `JUANITA_CALLS_FIRST`. The reminder must identify a contact and confirm the exact phone number before any call is placed. Never infer a number from an ambiguous contact match.
+- `REMIND_ME_TO_CALL`: at the scheduled time, show a notification and open the system dialer with the confirmed number. The user explicitly taps Call; this is the reliable first implementation and does not require Juanita to become the default dialer.
+- `JUANITA_CALLS_FIRST`: research only until feasibility is proven. The desired experience is an assistant/secretary that calls the contact, detects answer/busy/no-answer, and connects the user only after the contact answers. The user must explicitly approve the call and any bridge/transfer before it happens.
+- **Important Android/SIM limitation:** `TelecomManager.placeCall` can place a call with the required permission, but the ordinary cellular call APIs do not provide a universal third-party-app operation to take an answered SIM call and seamlessly transfer its audio to the device owner. Android `ConnectionService`/Telecom handover is intended for compatible calling services and does not guarantee handoff of a carrier-managed SIM call. A carrier-supported three-way/conference call may be a possible device/operator-dependent route, but it must be tested and cannot be assumed.
+- Investigate a self-managed VoIP `ConnectionService` as an alternative architecture: Juanita could originate a VoIP leg to the contact and bridge it with a second leg to the user, subject to a real VoIP/SIP provider, backend/media infrastructure, account credentials, reliable connectivity, privacy and regulatory review. Do not introduce a paid provider, subscription, API key, server or recurring cost without the user's explicit approval. A fully on-device bridge is not assumed feasible.
+- Before any call, present contact name, exact number, call purpose and chosen mode for explicit confirmation. Provide cancel/stop controls; do not call emergency numbers automatically; do not record or transcribe the other party by default. If the contact does not answer, is busy, or the call state cannot be reliably detected, end safely and notify the user rather than pretending the call was connected.
+- First deliver the reliable reminder + dialer handoff. Only implement `JUANITA_CALLS_FIRST` after a technical prototype passes real tests on the Note10+ Android 12 and S22 Ultra, and after any carrier/VoIP dependencies and costs are disclosed and approved.
+- Status: **REQUESTED — FEASIBILITY RESEARCH; NOT IMPLEMENTED.** No automatic calling, SIM call transfer, conference bridge or VoIP bridge exists in the app today.
+
+### Android architecture and safeguards
+
+- Use Android `AlarmManager` for precise user-facing alarm/reminder triggers where exact timing is required. For target Android 12+, request the appropriate “Alarms & reminders” special access (`SCHEDULE_EXACT_ALARM`) with an explanation and a live permission check; do not silently claim punctuality if access is denied. Review whether `USE_EXACT_ALARM` is policy-eligible before considering it.
+- Use a dedicated alarm receiver/playback component and a lock-screen-aware alarm activity/notification. Full-screen intent access is conditional on Android version and policy; check availability and provide a graceful notification fallback. Do not request broad privileges without need.
+- Persist local definitions transactionally and re-schedule after boot, package replacement, time/time-zone changes and exact-alarm permission changes. Respect Android 12+ background execution and foreground-service restrictions.
+- Store local reminders encrypted on-device; do not upload schedules, calendar contents or location history by default. Calendar read/write permissions are separate, optional and revocable.
+- Calendar Provider permissions: `READ_CALENDAR` for reading; `WRITE_CALENDAR` for direct inserts/updates/deletes. Prefer Android calendar intents for user-mediated event creation/editing where practical, avoiding unnecessary write permission.
+- Keep this package independent of the existing notification listener. Reading a notification is not the same as importing a calendar event or creating a reminder.
+
+### Delivery phases
+
+A. **Research and foundation:** verify Android exact-alarm/full-screen-intent behavior for targetSdk 35 and minSdk 26; design encrypted reminder schema, receiver lifecycle and reboot/time-change recovery; prototype use of Juanita's saved Gemini Live voice without Android TTS.
+B. **First usable release:** local alarms + local reminders, alarm tone/snooze/dismiss, agenda UI and morning greeting only when the real configured voice path is proven safe. Add unit tests for recurrence, time zones, daylight saving, duplicate delivery and persistence.
+C. **Calendar integration:** read-only Android Calendar Provider with calendar selection and today's/upcoming agenda; then confirmed event creation via Calendar intents. Direct calendar writes remain a later opt-in.
+D. **Morning briefing enhancements:** optional weather, quiet/private mode, per-category spoken controls and configurable briefing.
+E. **Voice command integration:** parse natural-language reminder/alarm/event requests from Gemini Live and ask for confirmation before committing changes; distinguish a draft from a successfully saved item.
+
+### Acceptance criteria
+
+- Alarms and reminders trigger at the intended local time with the UI closed/screen off on Note10+ (Android 12) and S22 Ultra; reboot, app update, time-zone and daylight-saving tests pass.
+- Exact-alarm permission denial/revocation is detected and communicated honestly; no silent inexact fallback is presented as punctual.
+- Dismiss/snooze do not cancel future repeats; repeated broadcasts do not create duplicate alerts.
+- Juanita-created reminders survive process death/reboot and can be inspected, edited, completed and deleted independently of personal memories.
+- Calendar events are read only after consent; imported events are clearly distinguished from Juanita-created reminders. No existing event is modified or deleted without explicit confirmation.
+- The morning briefing speaks only categories the user enabled and hides sensitive content in lock-screen/private mode.
+- Juanita's configured Gemini Live voice is used when available; Android system TTS is never used as a substitute. Alarm tone/controls remain functional when voice/network/provider is unavailable.
+- Weather is sourced from a timestamped response and permitted locality; if unavailable, it is omitted.
+- Automated tests cover schedule calculations, persistence, rescheduling, privacy and permissions; physical-device tests cover both Samsung devices. CI alone is not evidence of reliable alarm delivery.
+
+### Dependencies and status
+
+- Depends on stabilization of notification-reader candidate 0.10.4 and review of the TTS mismatch in that PR.
+- Android alarm/permission/lock-screen research and a Gemini Live short-output feasibility spike are required before committing to background speech.
+- Status: **USER-APPROVED — SPECIFIED; NOT IMPLEMENTED.** No alarm, reminder scheduler, Calendar Provider integration or morning-briefing code is present yet.
+
 ## Roadmap maintenance rule
 
 - Add every new feature idea, user requirement, correction, limitation or agreed design decision to this roadmap as soon as it is raised in project conversations.
@@ -519,3 +635,296 @@ Acceptance before sharing an APK: CI build succeeds; APK package ID matches; ver
 ## Conversation archive calendar — IN PROGRESS
 
 Replace broad date-range deletion with a local calendar, per-day conversation lists, transcript preview with timestamps, per-conversation time-window deletion, whole-day deletion and multi-day selection. Transcript deletion must preserve curated personal memories. The home screen should foreground the avatar, show device date/time and use distinct navigation icons. Exact-head CI and device verification are pending.
+
+
+## Smart alarm and personalized morning briefing — PROPOSED
+
+**User-approved feature request (2026-11-08).** Juanita should include her own integrated alarm clock and a warm, configurable morning wake-up experience. This is a separate alarm feature, not an assumption that Juanita can control or dismiss alarms created by another clock application.
+
+### Intended experience
+- The user can create, edit, enable/disable and delete alarms; configure time, repeat days, alarm sound, volume/ramp behavior, voice style and optional morning briefing.
+- At the scheduled time, the alarm must reliably sound even if the app UI is closed or the screen is off. Juanita then delivers a natural, gentle and positive greeting, with varied user-approved wording rather than a repetitive fixed phrase.
+- The user can dismiss or snooze the alarm using clear on-screen controls and, where technically reliable, a voice command. Do not assume speech recognition is available while the device is locked or before the user grants microphone access.
+- The greeting may include a concise weather briefing: current conditions and useful forecast for the user's current area. Use location only with explicit permission; otherwise use a manually selected home/locality. If location or network/weather data is unavailable, Juanita should say so naturally and never invent conditions.
+- Morning content is configurable: greeting only, weather, calendar/reminders (future integration), or a short user-selected motivational message. Do not force a long monologue or unexpectedly expose private calendar details aloud.
+
+### Android architecture and reliability
+1. Build an app-owned alarm manager backed by Android AlarmManager, with exact-alarm capability and the required Android-version-specific permission/settings flow. Evaluate exact-alarm eligibility and Google Play/device policy before implementation; do not silently fall back to an unreliable inexact alarm while claiming punctual delivery.
+2. Persist alarm definitions locally and reschedule them after device reboot, app update and time-zone/time changes. Handle daylight-saving changes and duplicate/missed alarm edge cases.
+3. Use a dedicated alarm playback/session component with explicit start, dismiss and snooze lifecycle. Respect Android foreground-service and background-execution restrictions; keep the alarm functional if speech synthesis or weather retrieval fails.
+4. Design a lock-screen-friendly alarm screen using supported Android APIs and permissions. Do not request broad full-screen-intent privileges without confirming eligibility and necessity.
+5. **Use Juanita's configured assistant voice — mandatory.** The alarm greeting and morning briefing must use the same voice identity, voice configuration and audio-generation path already selected for Juanita's normal conversations (the existing Gemini Live voice/output path), not Android system TextToSpeech or a separate generic TTS voice. Reuse the existing voice settings; do not introduce a second voice selector that can drift out of sync. Research a reliable way to generate a short spoken greeting/briefing outside an interactive Live session while preserving the configured voice. If the current voice provider requires network access or cannot be started safely from the alarm flow, keep the alarm tone and dismiss/snooze controls fully functional and report that spoken briefing is temporarily unavailable; never silently substitute a different TTS voice. Do not assume Gemini Live can be invoked as a background alarm speaker without checking its session, network, quota, lifecycle and Android foreground-service constraints. Keep voice/avatar lip-sync as a later enhancement; do not imply it exists in the first alarm release.
+6. Weather provider selection is a separate research task: prioritize a no-cost option compatible with the project's free/no-billing requirement, verify terms, quotas, attribution and location-data handling. Cache only short-lived weather data and show its observation/forecast time.
+7. Location must be optional and minimized. Prefer a user-selected locality or a fresh foreground-permission location; do not request background location solely for the alarm. If a reliable current location cannot be obtained at wake-up, use the configured locality or omit weather.
+
+### Privacy, user control and failure behavior
+- No alarm, microphone or location permission is enabled silently. Explain each permission at the point it is needed and provide settings to revoke it.
+- Alarm tone and dismiss/snooze controls must work independently of Gemini, Internet access, weather services and avatar rendering.
+- No cloud upload of alarm schedules, location history or calendar content by default.
+- Provide a test-alarm action and a clear status for the next scheduled alarm.
+- Do not speak sensitive notification or calendar content aloud unless the user explicitly enables that behavior.
+
+### Acceptance criteria
+- A repeating alarm fires at the configured local time with the screen off and app UI closed on both Note10+ (Android 12) and S22 Ultra; test reboot, app update, time-zone and daylight-saving transitions.
+- Dismiss and snooze work reliably; stopping an alarm does not cancel future repeats.
+- Alarm tone still sounds if Gemini, TTS, network, weather or location fails.
+- Greeting is spoken in the selected language and can be configured or disabled.
+- Weather is grounded in a timestamped provider response and permitted location/locality; when unavailable, Juanita clearly omits it.
+- Battery use, duplicate firing, missed alarms, permission revocation and process death are tested. CI success is not a substitute for physical-device alarm tests.
+
+### Priority and dependencies
+- Priority: HIGH product value; implementation should follow stabilization and device verification of the notification-reader release rather than being mixed into that release.
+- Dependencies: Android alarm/foreground-service compatibility research; local alarm persistence and reboot rescheduling; research and integration of Juanita's already configured Gemini Live voice/output path (no Android TextToSpeech or substitute voice); optional location; a vetted no-cost weather source.
+- Status: PROPOSED — no alarm code implemented, no weather provider selected, no device verification.
+
+
+### Clarification — Juanita originates and hosts the call, then brings Riccardo into the same call — USER-REQUESTED / FEASIBILITY RESEARCH
+
+**This clarification supersedes the earlier interpretation of `JUANITA_CALLS_FIRST` as a generic call transfer or handoff to another app.** The user does not want Juanita to open the system dialer, switch to another calling app, or merely notify him to take over.
+
+**Required experience**
+1. Riccardo schedules or requests a call to a confirmed contact and exact telephone number, choosing the secretary mode. This is intended for hands-busy situations (for example, while he is doing repair or workshop work).
+2. Juanita herself originates the outgoing call to the contact.
+3. When the contact answers, Juanita speaks first, identifies herself truthfully as Riccardo's assistant, and explains the reason for the call using a user-approved script. Example: “Buongiorno, sono Juanita, l'assistente di Riccardo. La chiamo per conto suo. Potrebbe attendere un momento? Le passo Riccardo.”
+4. Juanita then brings Riccardo into that same live conversation and enables the phone's speakerphone (vivavoce), so he can speak hands-free without opening or switching to another application. The desired outcome is a continuous conversation on the same device/call, not a second app or a blind transfer.
+5. If the contact does not answer, is busy, declines, or the bridge/handover cannot be established, Juanita must end or recover safely and tell Riccardo the actual result. Never claim that the call was passed successfully when it was not.
+
+**Technical feasibility — important boundary**
+- This is more demanding than placing a call and toggling speakerphone. A normal Android app can request an outgoing cellular call only under applicable permissions/roles and platform rules; it does not automatically gain control of the carrier call's media path or a universal API for inserting its own spoken introduction and then handing the same call to the user.
+- Investigate whether a supported Android Telecom integration can own/manage the call and provide a reliable assistant-to-user transition on both target Samsung devices and with the user's mobile operator. Verify speakerphone routing and audio focus/ownership; do not assume a third-party app can force speakerphone for every carrier call.
+- Investigate carrier-supported conference/three-way calling as a possible same-call route, but do not assume the operator, SIM plan or device supports it.
+- A VoIP implementation could potentially originate the contact leg, play Juanita's introduction and bridge a second audio leg to Riccardo within one Juanita-controlled call session. However, it requires a VoIP/SIP service or equivalent backend/media infrastructure, connectivity, credentials and likely ongoing provider costs. No paid provider, subscription, hosted service, billing or API secret may be introduced without Riccardo's explicit approval.
+- The implementation must not quietly fall back to opening the system dialer or another app: if the requested same-call experience is unavailable, explain the limitation and offer the separate manual-call mode only as an explicitly chosen alternative.
+- Before every outgoing call, confirm the contact, exact number, purpose and selected call mode. Provide a clear cancel/stop control. Do not record or transcribe the other party by default; any recording or transcription would require a separate explicit design and consent review.
+
+**Prototype and acceptance gates**
+- First produce a documented feasibility matrix for Android 12 / Note10+, S22 Ultra, carrier SIM calls, supported conference features, Telecom roles/permissions, speakerphone control and a possible VoIP route with transparent cost/privacy implications.
+- Build a minimal prototype only after choosing a lawful, supported route. Test the exact sequence: outbound call → contact answers → Juanita greeting → “please wait” → Riccardo joins the same call → speakerphone active → two-way conversation → clean hang-up.
+- Test no-answer, busy, decline, loss of connectivity, permission denial, audio-route failure, app process death and user cancellation.
+- No implementation may be labelled complete until the same-call sequence is physically demonstrated on the target devices; CI alone is insufficient.
+- **Status: USER-CLARIFIED REQUIREMENT — FEASIBILITY RESEARCH; NOT IMPLEMENTED.** This is a core hands-busy secretary use case, not a simple reminder-to-dialer feature.
+
+
+**Initial Android API findings (2026-11-08; official documentation reviewed)**
+- `TelecomManager.placeCall(Uri, Bundle)` supports the `EXTRA_START_CALL_WITH_SPEAKERPHONE` extra for starting an outgoing call on speakerphone. This is a starting-route request, not proof that Juanita can inject her generated greeting into the uplink of a carrier/SIM call or later take over its media. Reference: https://developer.android.com/reference/android/telecom/TelecomManager
+- Android's `InCallService` is the supported interface for an app that manages calls and their in-call UI, but becoming the default phone app requires the user to grant `ROLE_DIALER` and the app to implement a complete dialer/in-call experience, including outgoing dial UI and incoming/ongoing call UI. This is a significant product/permission decision, not a small background feature. Reference: https://developer.android.com/reference/android/telecom/InCallService
+- Android's Telecom documentation distinguishes a self-managed VoIP calling app (Core-Telecom / `ConnectionService`) from a managed calling integration. Core-Telecom can manage audio routing/focus for the app's own call, which makes an app-controlled VoIP conversation a more coherent candidate for Juanita's spoken introduction and subsequent same-session conversation. It does not by itself provide a free carrier-SIM call bridge. Reference: https://developer.android.com/develop/connectivity/telecom
+- The official API pages reviewed do not document a general third-party API that lets an ordinary app inject arbitrary generated speech into the outgoing audio stream of an existing carrier/SIM call. Treat that capability as unproven; do not design around hidden APIs, accessibility hacks, audio loopback or OEM-specific assumptions.
+- Research conclusion: prioritize a controlled VoIP prototype if the user later approves its connectivity/provider architecture and any costs. In parallel, investigate whether a default-dialer implementation plus carrier conference calling can meet the exact same-call experience without external services. No route is yet validated on the two target Samsung phones or the user's carrier.
+
+
+### Comparative technical research — SIM cellular calls vs WhatsApp Business calls (2026-11-08)
+
+This section records a feasibility investigation requested by Riccardo. Target behavior remains: Juanita originates the call, introduces herself, explains the reason, asks the recipient to wait, then Riccardo joins the same live conversation hands-free, with speakerphone/audio routed by Juanita. No handoff to the system dialer or a separate calling app is acceptable as the secretary-mode success path.
+
+#### A. Ordinary cellular / SIM call from the Android phone
+
+**What Android publicly supports**
+- `TelecomManager.placeCall(Uri, Bundle)` can request an outgoing cellular call, and Android documents `EXTRA_START_CALL_WITH_SPEAKERPHONE` to request speakerphone at call start. This proves call initiation and initial speaker routing are exposed under the relevant permissions/role; it does not expose a public API to inject arbitrary generated assistant audio into the carrier call's uplink.
+- Android's `InCallService` is the interface for an app that replaces the in-call UI. To become the default phone app, Juanita would have to request `ROLE_DIALER` and implement the complete dialer/in-call experience, including ACTION_DIAL, incoming-call UI and ongoing-call UI. It is not a narrow permission that can be added just to control one call.
+- The Telecom framework routes calls supplied by calling services and manages audio focus/routing. The documented self-managed `ConnectionService` route is for Juanita's own VoIP calls, not a general mechanism for taking over the SIM modem's uplink audio.
+- Official references:
+  - https://developer.android.com/reference/android/telecom/TelecomManager
+  - https://developer.android.com/reference/android/telecom/InCallService
+  - https://developer.android.com/reference/android/telecom/package-summary
+
+**Feasibility conclusion**
+- Juanita can potentially place a SIM call and request speakerphone, subject to permissions, role, Samsung/Android behavior and carrier configuration.
+- The critical secretary step — Juanita speaking into the remote party's cellular call and then transferring the same call's audio to Riccardo — is **not supported by a documented public Android API for an ordinary third-party app**. Playing audio on the phone speaker and hoping the microphone captures it is an acoustic workaround, not an acceptable reliable architecture; echo cancellation, noise suppression, microphone routing and handset placement make it unsuitable.
+- A carrier three-way/conference feature may let a human join a SIM call, but does not itself give Juanita a supported way to be an AI audio participant in the SIM uplink. Any carrier-specific solution would need direct operator confirmation and physical tests.
+- A viable but materially different alternative is to originate/host the call through a telephony/VoIP backend with a PSTN gateway: Juanita speaks as one conference participant, and Riccardo joins as another participant from Juanita's in-app WebRTC audio. This can create the desired single conference conversation, but it is not a call placed directly from Riccardo's SIM and likely entails paid telephony, server and media costs. No such provider or cost may be adopted without explicit approval.
+
+#### B. WhatsApp
+
+**Personal WhatsApp application**
+- The normal consumer WhatsApp flow documented by WhatsApp is user-operated: open a one-to-one chat or Calls tab and tap the voice-call control. The public consumer instructions do not provide a supported Android third-party API for an app to silently originate a personal WhatsApp voice call, inject its own voice into it, or take over its audio session.
+- Do not automate WhatsApp's private UI with Accessibility, reverse-engineered protocols, unofficial libraries or hidden intents. Such approaches are fragile, can violate platform terms and risk the user's account.
+- Official user-facing reference: https://faq.whatsapp.com/1153602608602452/
+
+**WhatsApp Business Calling API — a real, documented route**
+- Meta's WhatsApp Business Calling platform supports business-initiated outbound calls to a consumer's WhatsApp number in supported regions, but the consumer must first explicitly grant call permission. This is not the user's personal WhatsApp account placing an ordinary call; the caller is a registered WhatsApp Business sender.
+- A concrete documented integration exists in LiveKit's WhatsApp Connector. It bridges WhatsApp calls into a LiveKit room with bidirectional audio/media processing and can dispatch a LiveKit Agent into that room. For outbound calls it uses `DialWhatsAppCall`, receives a Meta call-connect webhook/SDP answer, then completes the connection with `ConnectWhatsAppCall`.
+- Riccardo could, in principle, join that same LiveKit room from the Juanita Android app as a second participant after Juanita has introduced herself. This is the closest researched design to the requested experience: the contact stays on their WhatsApp call; Juanita speaks first; Riccardo then joins the same audio room from within Juanita's app, without switching to the WhatsApp app. Juanita's app can request its own speakerphone/audio route for the in-app WebRTC session. This is a same-conversation bridge, not a native WhatsApp call takeover on the phone.
+- Important dependency: LiveKit's WhatsApp Connector is documented as available only on LiveKit Cloud; self-hosted LiveKit servers are not supported for this connector. It also requires a WhatsApp Business account/number, Meta Cloud API token, Meta developer app, webhooks, supported region and explicit outbound call permission. Therefore this is not a zero-service/local-only feature and must undergo cost, availability, privacy and data-processing review before approval.
+- A provider example (Twilio WhatsApp Business Calling) also documents outbound calls with prior consumer permission and states WhatsApp call endpoints cannot be connected to PSTN endpoints. Do not assume a WhatsApp call can be bridged to a normal SIM/PSTN endpoint.
+- References:
+  - https://docs.livekit.io/telephony/connectors/whatsapp/
+  - https://www.twilio.com/docs/voice/whatsapp-business-calling
+  - https://www.whatsapp.com/calling
+  - https://faq.whatsapp.com/1153602608602452/
+
+#### Comparative outcome and next prototype
+
+| Route | Juanita can call first | Juanita can speak first | Riccardo joins same conversation in Juanita app | Main blocker |
+| --- | --- | --- | --- | --- |
+| Personal WhatsApp app automation | No supported public API found | No supported public audio path | No supported takeover | Consumer app offers user-operated calls, not a public automation SDK |
+| WhatsApp Business + LiveKit Connector | Yes, where region/account/permission allow | Yes, via agent/media in LiveKit room | Architecturally plausible by joining the same room from Juanita Android app | LiveKit Cloud only, Business onboarding, Meta permission and service costs; prototype required |
+| SIM call placed directly by Juanita on handset | Potentially, via Telecom APIs and permissions | No supported public API found for injecting generated speech into SIM uplink | Not reliably through documented APIs | Default-dialer/Telecom role is extensive; no documented SIM uplink injection |
+| Hosted PSTN/VoIP conference with AI + Riccardo | Yes, via provider | Yes | Yes, if Riccardo joins via Juanita app/WebRTC | Paid telephony/media infrastructure; not a direct personal-SIM call |
+
+**Recommended order**
+1. Keep both SIM and WhatsApp as requested research targets, but do not promise native SIM secretary mode until a carrier/OEM-supported mechanism is demonstrated.
+2. If Riccardo later accepts an external service and its costs, prototype WhatsApp Business + LiveKit first: confirm outbound availability for the relevant Spanish/European business sender, call-permission onboarding, LiveKit Cloud pricing, privacy/data processing, and same-room mobile join/audio routing. Use a test number and consenting recipient only.
+3. In parallel, evaluate the hosted PSTN conference alternative if Riccardo wants calls to ordinary telephone numbers that do not use WhatsApp.
+4. No implementation, provider account, API token, billing activation or recurring cost is authorized by this research request alone.
+5. Acceptance test: Juanita speaks the introduction, the recipient hears it clearly, Riccardo joins from inside Juanita on the same phone without launching the system dialer or WhatsApp, audio switches cleanly to speakerphone, and all three can converse without dropping the recipient's call.
+
+**Status: RESEARCH COMPLETED — ROUTES IDENTIFIED; PROTOTYPE NOT IMPLEMENTED; NO DEVICE/CARRIER TESTS PERFORMED.**
+
+
+### Hands-free acoustic participation by Juanita during an existing phone/WhatsApp call — USER IDEA / FEASIBILITY SPIKE
+
+**User's proposed simpler approach (2026-11-08):** rather than transferring a call into another app or bridging carrier audio, put the active SIM or WhatsApp call on the phone's speakerphone and let Juanita speak aloud through the same phone speaker. The caller's microphone might pick Juanita acoustically, so the remote participant hears her. Juanita would then listen and respond conversationally while Riccardo keeps working hands-free.
+
+This is a distinct approach from the secretary-originated call/bridge above and must be tested before choosing an architecture.
+
+**Android audio policy findings**
+- Android's official concurrent-audio-input policy states that during a voice call (MODE_IN_CALL or MODE_IN_COMMUNICATION) the call always receives the microphone input. An ordinary app cannot concurrently capture that same microphone; call audio capture is restricted to privileged/pre-installed components with system-only CAPTURE_AUDIO_OUTPUT. Accessibility services have a narrowly defined concurrent-capture exception, but must only be used for genuine accessibility functionality and must not be abused as a workaround to bypass call-audio protections. References: https://developer.android.com/media/platform/sharing-audio-input and https://developer.android.com/reference/android/media/MediaRecorder.AudioSource
+- Therefore the acoustic idea may allow the remote party to hear sound from the loudspeaker in some device/audio-route conditions, but it does not by itself give Juanita a reliable way to hear the remote participant and sustain a two-way conversation. Acoustic echo cancellation, noise suppression, call uplink processing, speaker volume, proximity and device firmware may further alter or suppress the sound.
+- Android documents MODE_IN_CALL for cellular telephony and MODE_IN_COMMUNICATION for VoIP; the latter applies to audio/video chat applications such as WhatsApp. Both are covered by the concurrent-capture restriction. Reference: https://developer.android.com/reference/android/media/AudioManager
+- Do not assume that merely playing Gemini Live output from Juanita while another app owns the call's audio session will be routed into the call uplink. Nor assume that the call's mic can be shared with Juanita. Both directions must be demonstrated on hardware.
+
+**WhatsApp distinction**
+- The ordinary consumer WhatsApp Android app does not expose a supported public API for a third-party assistant to originate/manage a personal voice call or inject generated speech into it. Do not use UI automation, accessibility tapping or reverse-engineered private interfaces.
+- Meta's WhatsApp Business Calling APIs are a separate business product, not a free personal-account calling interface. They require an eligible WhatsApp Business Platform sender, recipient permission/opt-in and business/API setup; business-initiated calls can incur per-call/per-minute charges and provider costs. References to investigate current rules/pricing: https://docs.aws.amazon.com/end-user-messaging/latest/userguide/nx-features-whatsapp-voice.html and https://www.twilio.com/docs/voice/whatsapp-business-calling
+- Thus Business Calling is not a free shortcut for Riccardo's personal WhatsApp calls. Do not migrate his personal number or add a paid provider without explicit approval.
+
+**Required low-risk prototype**
+1. On Note10+ (Android 12) and S22 Ultra, place a normal SIM call with speakerphone enabled. Keep Juanita foregrounded only if Android allows it without disrupting the call; verify whether her app can play a short generated audio greeting while the call remains active and whether the remote party actually hears it.
+2. Verify whether Juanita can simultaneously receive intelligible live microphone audio while the call remains active. Record only local test tones/consenting test participants; do not record real calls or third parties without consent. Check audio mode, input silence, audio focus, routing and echo cancellation. Repeat separately for WhatsApp voice calls.
+3. Test both sides of the loop: remote participant hears Juanita; Juanita hears and responds to the remote participant; Riccardo can speak hands-free; no feedback loop or severe echo; call remains connected. A one-way greeting is not a successful conversational assistant.
+4. If Android blocks Juanita's microphone, stop this approach rather than trying hidden APIs, call recording permissions, accessibility workarounds or privileged permissions unavailable to ordinary apps. Evaluate a Juanita-owned VoIP call/session or a supported Telecom integration instead.
+5. Do not add always-on listening, call recording or transcription. Show an explicit active-call assistant state, user-controlled mute/stop, visible microphone indication, and announce to the other participant that an automated assistant is participating where appropriate.
+
+**Status: USER-PROPOSED — RESEARCH / PROTOTYPE REQUIRED; NOT IMPLEMENTED.** Test separately for SIM and WhatsApp; do not claim feasibility until the full two-way conversation succeeds on both target devices.
+
+
+## Engineering priorities — next implementation sequence (updated 2026-11-08)
+
+This sequence is the working plan; a roadmap entry is not evidence that a feature has shipped.
+
+### Priority 1 — make learning reliable before making it broader
+1. Audit the existing automatic-memory path end to end: Live transcript callback → durable encrypted pending queue → extraction → validation/deduplication → encrypted memory store → retrieval in a later Live session.
+2. Add explicit provenance to every candidate: source turn/session, timestamp, user-confirmed vs model-inferred, confidence, category, sensitivity and optional expiry. Do not promote guesses, jokes, role-play, hypothetical statements or temporary details into durable facts.
+3. Add correction handling: when the user corrects a fact, replace or supersede the old item, invalidate dependent summaries and preserve the correction's provenance. If two claims cannot safely be reconciled, retain the conflict and ask rather than silently choosing.
+4. Improve retrieval beyond simple keyword overlap in a bounded, local-first way. Evaluate multilingual embeddings only after checking model size, licence, offline operation, latency, RAM and battery on both target phones. Keep lexical fallback.
+5. Build a visible memory audit: what was learned, why it was saved, when it was last confirmed, where it came from, and controls to correct/delete/pause. Separate user facts, preferences, project state, people, reminders and external knowledge.
+6. Add repeatable tests for extraction failures, offline recovery, queue overflow, duplicate facts, contradiction, correction, deletion, expiry and cross-session recall. A successful build is not proof of correct learning.
+
+**Definition of done:** after a normal eligible conversation, Juanita can recall a useful durable fact in a later session, explain its source/status, accept a correction, and stop using the superseded fact. No sensitive detail is silently promoted.
+
+### Priority 2 — notification reader candidate 0.10.4
+- Keep notification access opt-in and revocable. Display only information exposed by Android notification extras; no private WhatsApp database, historical chat scraping or automatic replies.
+- Keep notification contents volatile and local in the first release. Do not send them to Gemini or save them as memories.
+- Voice read-aloud is deliberately deferred until it can use Juanita's configured Gemini Live voice path. Android TextToSpeech is not an acceptable fallback for Riccardo.
+- Before release: pass CI, verify the production package/version and permanent signing certificate, then have the user test permission grant/revocation and WhatsApp/other-app previews on both Samsung devices.
+
+### Priority 3 — smart alarm and morning briefing
+- Implement the app-owned alarm first: one-time/repeating schedule, exact-alarm permission handling, snooze/dismiss, reboot/time-zone/DST recovery, lock-screen behavior and duplicate-fire prevention.
+- Only after alarm reliability is established, integrate the morning greeting, today's agenda/reminders and optional weather.
+- Speech must use the already selected Juanita voice through a technically supported Gemini audio-generation path. No Android TTS or silent voice substitution. If speech cannot be generated, the alarm must still ring and offer normal controls.
+- Keep the alarm, reminders and calendar data local and encrypted where appropriate; request only the permissions needed for each feature.
+
+### Release and test discipline
+- Never replace the production install with a debug package. Keep applicationId `ai.juanita.app`, monotonically increasing versionCode and the permanent release certificate.
+- Do not merge or deliver a candidate APK without successful CI and explicit package/version/signature checks.
+- CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra, including battery, background behavior, permissions and lifecycle.
+- No paid APIs, billing upgrades, cloud hosting or recurring service costs without fresh explicit approval.
+
+### Permanent personal identity profile and gradual getting-to-know-you dialogue — USER-REQUESTED / APPROVED SPECIFICATION (2026-11-08)
+
+**Product concept:** create a separate, durable memory branch called **Personal Profile** (Italian UI label: “Profilo personale”). It is distinct from daily/conversational memory, conversation archive, project memory, reminders and transient notification inbox.
+
+**Profile lifecycle and controls**
+- Profile facts persist across ordinary daily-memory cleanup and conversation-archive cleanup.
+- The profile is editable at any time through a dedicated screen and conversational corrections.
+- It is not silently erased by “clear daily memory”. Provide a separate, clearly explained profile-reset/delete action only after explicit confirmation; do not make the profile technically undeletable, because the user must retain control over personal data and applicable privacy rights.
+- Store facts with provenance, timestamp, confidence/status and whether the user explicitly confirmed them or they were inferred. Prefer explicit confirmation for identity facts.
+- Corrections update the active value and mark the old value as superseded rather than allowing conflicting values to coexist as current.
+- Keep the profile encrypted locally using the app's existing secure storage approach; do not send profile data to third parties except when a feature clearly requires it and the user has consented.
+
+**First-run spoken introduction**
+- The initial profile setup should be a natural voice conversation, not a long form or interrogation.
+- Ask only a few foundational questions, one at a time: preferred/name to use; current locality; age (optional); date of birth (optional).
+- Do not ask both age and date of birth as mandatory fields. If date of birth is supplied, calculate age when needed rather than storing inconsistent values; if age alone is supplied, store it as age-at-date with a timestamp and do not pretend it remains current.
+- Location: request Android location permission only when needed and explain why. If granted, resolve a human-readable locality from device location; if denied/unavailable, ask naturally or allow “later”. Never treat approximate location as a verified home address. Keep current location distinct from home/permanent residence.
+- Allow skipping any question and continue the conversation without pressure. Do not block app use on completion.
+
+**Gradual discovery over later conversations**
+- Juanita should learn interests, hobbies, occupation, routines, preferences, important relationships and life context gradually, by asking at most one relevant question at a suitable conversational moment.
+- Examples: “Cosa ti piace fare nel tempo libero?”, “Di cosa ti occupi?”, “Hai qualche passione che ti prende particolarmente?”
+- No fixed barrage or repeated onboarding questionnaire. Use context and conversation flow; skip questions when irrelevant, sensitive, or already answered.
+- Track topics already asked, answered, declined or deferred, so Juanita avoids repetition and respects “non voglio parlarne”.
+- Treat answers as candidate profile facts; distinguish direct statements from guesses. For potentially sensitive information, do not infer or persist it without clear user intent/consent.
+- Ask for confirmation when a fact is ambiguous, contradictory, unusually consequential or inferred. Let the user say “ricordatelo” or correct it naturally.
+- The profile is gradually enriched from eligible conversations, but daily episodic memories remain separate and may link to profile facts without duplicating or overwriting them.
+
+**Architecture and acceptance tests**
+- Separate data model/repository for PersonalProfile and its entries, with independent lifecycle and dedicated UI/audit.
+- Conversation orchestrator receives only the small relevant profile context needed for the current exchange; do not inject the entire profile indiscriminately into every prompt.
+- Add tests for independent profile persistence when daily memory is cleared, edits/corrections, skipped/declined questions, one-question-at-a-time pacing, location permission denied, approximate vs confirmed location, age/date-of-birth consistency, duplicate-question avoidance, offline operation and explicit profile reset confirmation.
+- This is a specification, not evidence of implementation. First audit the existing onboarding/profile and memory storage before changing code, then implement migration-safe separation.
+
+**Status: USER-APPROVED SPECIFICATION — NOT IMPLEMENTED / EXISTING PROFILE ARCHITECTURE TO BE AUDITED.**
+
+### Truthfulness, evidence and anti-hallucination protocol — USER-REQUIRED CORE PRINCIPLE (2026-11-08)
+
+**Non-negotiable product rule:** Juanita must never knowingly fabricate facts, sources, events, capabilities, memories, actions or verification results, and must never present a guess as established truth. A fluent or plausible answer is not evidence. This requirement applies to every feature: voice conversation, text, personal profile, memory recall, notifications, calendar, weather, calls, navigation and project status.
+
+**Required answer discipline**
+- Separate verified facts, user-provided statements, model-generated hypotheses, opinions and unknowns. Preserve provenance and confidence; do not silently promote inference into fact.
+- When evidence is insufficient, say plainly that the information is unknown or not yet verified. Ask a focused clarification if the missing detail is necessary.
+- When current or external information is needed and a permitted search/source is available, retrieve it before answering; prefer primary/official sources for technical, legal, safety and product claims. Check source identity, date, relevance and whether it actually supports the claim.
+- Cite or identify the sources used in a way the user can inspect. Never invent a citation, URL, quote, search result or source attribution.
+- If no reliable source can be found, say so. Do not manufacture a confident answer to satisfy conversational pressure. Explain uncertainty and what would be needed to verify it.
+- If sources conflict, report the conflict and distinguish what each source says; do not conceal disagreement or arbitrarily select one.
+- For time-sensitive facts, check freshness and state the date/time or age of the information where relevant.
+- Never claim an action was completed, a file was built, a device was tested, a permission was granted, a message was read, a call was placed or a result was verified unless the corresponding tool/device evidence confirms it.
+- For personal memory, distinguish what the user explicitly said from what Juanita inferred. Do not fill missing profile fields with guesses. When corrected, accept the correction, update the active record and mark the superseded fact accordingly.
+- For conversational naturalness, Juanita may express uncertainty warmly and naturally, but must not conceal it behind confident language. Example: “Non lo so ancora; verifico e ti dico cosa riesco a confermare.”
+
+**Implementation controls**
+- Add structured epistemic status/provenance to memory and retrieved facts: user-stated, externally verified, inferred, model-generated or unknown; include source/session, timestamp and confidence where meaningful.
+- Retrieval and response composition must preserve those labels. Inferred/model-generated content must not be rendered as a verified fact without independent evidence or explicit user confirmation.
+- Add a verification step for claims involving current facts, named entities, technical instructions, prices, laws, medical/safety matters and project/build status. If tools are unavailable, disclose the limitation rather than simulate a search.
+- Add regression tests with deliberately false premises, nonexistent people/products/features/sources, ambiguous names, conflicting sources, stale facts, unavailable search, fabricated-memory traps and false claims of completed actions. Expected behavior: challenge or qualify the premise, verify where possible, otherwise admit uncertainty.
+- Evaluate hallucination rate and unsupported-claim rate in a repeatable test suite. A successful compile or a prompt-only instruction is not proof that hallucinations are eliminated.
+- Provide a user-visible correction/report flow and ensure a correction can update both the answer context and any affected stored memory.
+
+**Honest limitation:** no generative AI system can guarantee zero errors. The engineering goal is to reduce unsupported claims, detect uncertainty, verify important facts, expose provenance and correct mistakes transparently. Never advertise Juanita as infallible.
+
+**Status: USER-REQUIRED CORE PRODUCT PRINCIPLE — SPECIFIED; IMPLEMENTATION AND TESTS REQUIRED.**
+
+### Multi-source verification and consensus for weather and other external information — USER-REQUIRED (2026-11-08)
+
+**User requirement:** When Riccardo asks for today's weather or another current/external fact, Juanita must not rely on a single source when multiple independent sources are available. She must compare the evidence, identify agreement and disagreement, and communicate a best-supported answer without pretending that a simple average guarantees truth.
+
+**Weather workflow**
+- Query at least three genuinely independent, reputable weather providers/models when available and practical. Do not count different websites that merely re-publish the same underlying forecast as independent sources.
+- Check that the forecasts refer to the same location, local time zone, forecast period and comparable variables. Prefer fresh updates and record each source's update/issue time.
+- Compare temperature, precipitation probability and amount, wind speed/gusts, cloud cover and expected timing where supplied.
+- For comparable numeric variables, calculate a transparent consensus (for example median and/or mean) and retain the source range/spread. Use robust statistics such as a median when one forecast is an outlier; do not hide the outlier.
+- Do not blindly average categorical or timing-sensitive predictions. For rain start/end times, storm risk, wind gusts and rapidly changing conditions, report the range, scenarios or majority agreement, as appropriate.
+- Weight sources only when there is a defensible reason (provider reliability for the region, model skill, update freshness, local observation quality); explain material weighting. Never invent provider rankings or accuracy scores.
+- If only one or two usable independent sources are available, say so and lower the confidence; do not manufacture a three-source consensus.
+- If sources strongly disagree, clearly state the disagreement, show the plausible range and confidence, and avoid presenting a falsely precise single number.
+- Distinguish observed current conditions from forecasts. Use official local meteorological alerts (for the Canary Islands, AEMET and relevant official authorities) as safety-critical evidence; never dilute or average away an official warning because other providers disagree.
+- Present a concise practical conclusion first, followed by source names, update times, key agreements/disagreements and the consensus method when useful. Keep the source evidence inspectable.
+
+**General external-information rule**
+- Apply the same multi-source principle to other current facts when the consequences or uncertainty justify it: compare independent sources, prioritize primary sources, verify dates and context, and distinguish corroboration from copied/repeated claims.
+- Use two or three concordant independent sources as corroboration where available, but do not treat majority vote as proof. A single authoritative primary source may be decisive for a specific official fact; explain why rather than forcing an artificial average.
+- Never average unlike measurements, incompatible definitions, different time windows or conflicting claims that cannot meaningfully be combined.
+- If independent evidence is insufficient, disclose the limitation and say what remains unverified.
+
+**Acceptance tests**
+- Weather providers agree closely: report a clear consensus and identify sources/update times.
+- One forecast is a numerical outlier: robust consensus does not let it distort the estimate; its difference remains visible.
+- Forecasts disagree on rain timing or wind gusts: report a range/scenarios rather than a misleading arithmetic average.
+- Only one/two independent sources are available: explicitly disclose source scarcity.
+- Multiple sites re-publish one model: count them as one underlying source, not independent corroboration.
+- Official severe-weather alert conflicts with benign app forecasts: preserve and clearly surface the official alert.
+- Stale forecast versus fresh forecast: disclose update times and do not silently combine incomparable periods.
+- Search/source service unavailable: say that current conditions could not be verified; never simulate a lookup or invent weather.
+
+**Status: USER-REQUIRED SPECIFICATION — NOT IMPLEMENTED OR TESTED.**
