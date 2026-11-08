@@ -238,6 +238,14 @@ fun AlarmSection(panel: Color, gold: Color) {
         Text("PROVA AUDIO", color = gold, fontSize = 13.sp)
         Button(
             onClick = {
+                JuanitaAlarmRingingService.startTest(context)
+                status = "Prova sveglia avviata: controlla suono, volume e schermata di blocco. Nessun buongiorno vocale verrà avviato."
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+        ) { Text("Prova sveglia completa") }
+        Button(
+            onClick = {
                 val volumeMessage = AlarmVolumeController.ensureAudible(context)
                 val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
                     ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
