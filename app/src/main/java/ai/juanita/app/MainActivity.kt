@@ -66,6 +66,7 @@ import ai.juanita.app.avatar.AvatarProfileStore
 import ai.juanita.app.avatar.AvatarStudioSection
 import ai.juanita.app.avatar.AvatarCallScreen
 import ai.juanita.app.data.AssistantPreferences
+import ai.juanita.app.alarm.AlarmSection
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import ai.juanita.app.memory.ImprovementReport
@@ -678,6 +679,12 @@ private fun JuanitaApp(
 
                 }
 
+                if (selectedSection == "ALARM") {
+                    SettingsCard(panel, gold, "SVEGLIA") {
+                        AlarmSection(panel = panel, gold = gold)
+                    }
+                }
+
                 if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
@@ -746,11 +753,11 @@ private fun JuanitaApp(
                   )
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
-                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
+                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "ALARM" to "Sveglia", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
                       NavigationBarItem(
                           selected = selectedSection == key,
                           onClick = { selectedSection = key },
-                          icon = { Text(when (key) { "HOME" -> "🏠"; "AVATAR" -> "👩🏻"; "SETTINGS" -> "⚙️"; "MEMORY" -> "🧠"; else -> "⋯" }, fontSize = 16.sp) },
+                          icon = { Text(when (key) { "HOME" -> "🏠"; "AVATAR" -> "👩🏻"; "SETTINGS" -> "⚙️"; "MEMORY" -> "🧠"; "ALARM" -> "⏰"; else -> "⋯" }, fontSize = 16.sp) },
                           label = {
                               Text(
                                   label,
