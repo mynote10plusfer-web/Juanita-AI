@@ -74,6 +74,57 @@ class JuanitaAlarmStoreTest {
     }
 
     @Test
+    fun snoozeStateIsIsolatedPerAlarm() {
+        val store = JuanitaAlarmStore(context)
+        store.setSnooze("first", 1_800_000_000_000L)
+        store.setSnooze("second", 1_800_000_060_000L)
+
+        store.clearSnooze("first")
+
+        assertEquals(0L, store.snoozeAt("first"))
+        assertEquals(1_800_000_060_000L, store.snoozeAt("second"))
+    }
+
+    @Test
+    fun consumingOneShotDisablesOnlyThatAlarm() {
+        val store = JuanitaAlarmStore(context)
+        val first = JuanitaAlarm(
+            id = "one-shot-a",
+            schedule = AlarmSchedule(7, 0, emptySet(), System.currentTimeMillis() + 60_000L)
+        )
+        val second = JuanitaAlarm(
+            id = "one-shot-b",
+            schedule = AlarmSchedule(7, 30, emptySet(), System.currentTimeMillis() + 120_000L)
+        )
+        assertTrue(store.upsert(first))
+        assertTrue(store.upsert(second))
+
+        store.consumeOneShot(first.id)
+
+        assertFalse(store.find(first.id)!!.schedule.enabled)
+        assertTrue(store.find(second.id)!!.schedule.enabled)
+    }
+
+    @Test
+    fun migratesLegacySnoozeAlongsideLegacyAlarm() {
+        val legacySnooze = System.currentTimeMillis() + 300_000L
+        prefs.edit()
+            .putBoolean("configured", true)
+            .putInt("hour", 7)
+            .putInt("minute", 0)
+            .putString("days", "1")
+            .putBoolean("enabled", true)
+            .putLong("snooze_at", legacySnooze)
+            .commit()
+
+        val store = JuanitaAlarmStore(context)
+        store.all()
+
+        assertEquals(legacySnooze, store.snoozeAt(JuanitaAlarmStore.LEGACY_ID))
+        assertEquals(0L, prefs.getLong("snooze_at", 0L))
+    }
+
+    @Test
     fun migratesExistingSingleAlarmWithoutLosingItsSettings() {
         prefs.edit()
             .putBoolean("configured", true)
