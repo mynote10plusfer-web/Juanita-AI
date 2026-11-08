@@ -59,7 +59,7 @@ fun AlarmSection(panel: Color, gold: Color) {
     val context = LocalContext.current
     val store = remember { JuanitaAlarmStore(context) }
     var alarms by remember {
-        JuanitaAlarmScheduler.cancelLegacyPending(context)
+        JuanitaAlarmScheduler.scheduleAll(context)
         mutableStateOf(store.all().sortedBy { it.schedule.hour * 60 + it.schedule.minute })
     }
     var status by remember { mutableStateOf("Sveglie indipendenti salvate sul dispositivo · nessun servizio a pagamento.") }
