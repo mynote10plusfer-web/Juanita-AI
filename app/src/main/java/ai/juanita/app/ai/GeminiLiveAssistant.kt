@@ -103,7 +103,7 @@ class GeminiLiveAssistant {
                             name = "readRecentNotifications",
                             description = "Read a small number of recent notifications from exactly one app explicitly selected by the user. This tool requires separate user consent in Juanita settings and returns no content if consent is disabled. Never call before the user selects an app.",
                             parameters = mapOf(
-                                "app_name" to Schema.string("Exact app name returned by listNotificationApps and selected by the user."),
+                                "app_id" to Schema.string("Exact package identifier shown next to the selected app by listNotificationApps."),
                                 "limit" to Schema.string("Number of notifications, from 1 to 5.")
                             )
                         )
@@ -140,9 +140,9 @@ class GeminiLiveAssistant {
                         functionCall.id
                     )
                 } else if (functionCall.name == "readRecentNotifications") {
-                    val appName = functionCall.args["app_name"]?.jsonPrimitive?.content.orEmpty().take(100)
+                    val appId = functionCall.args["app_id"]?.jsonPrimitive?.content.orEmpty().take(200)
                     val limit = functionCall.args["limit"]?.jsonPrimitive?.content?.toIntOrNull()?.coerceIn(1, 5) ?: 3
-                    val result = runCatching { onReadNotifications(appName, limit) }
+                    val result = runCatching { onReadNotifications(appId, limit) }
                         .getOrElse { "Notification reading unavailable. No notification content was shared." }
                     FunctionResponsePart(
                         functionCall.name,
