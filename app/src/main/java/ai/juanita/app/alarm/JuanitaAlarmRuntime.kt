@@ -80,7 +80,7 @@ object JuanitaAlarmScheduler {
         val alarms = JuanitaAlarmStore(context).all()
         var success = true
         alarms.forEach { alarm ->
-            if (alarm.schedule.enabled && !schedule(context, alarm)) success = false
+            if (!schedule(context, alarm)) success = false
             val snoozeAt = JuanitaAlarmStore(context).snoozeAt(alarm.id)
             if (snoozeAt > System.currentTimeMillis()) {
                 val pendingSnooze = alarmPendingIntent(context, alarm.id, true)
