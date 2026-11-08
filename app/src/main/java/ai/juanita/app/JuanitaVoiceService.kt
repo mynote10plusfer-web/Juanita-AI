@@ -318,6 +318,7 @@ class JuanitaVoiceService : Service() {
         voicePreviewJob?.cancel()
         // Synchronously stop SDK audio capture before launching any asynchronous cleanup.
         assistant.stopAudioCapture()
+        releaseCpuWakeLock()
         _state.value = "Microfono disattivato · chiusura sessione…"
         if (stopJob?.isActive == true) return
         stopJob = serviceScope.launch {
