@@ -12,6 +12,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
@@ -54,6 +55,7 @@ class JuanitaVoiceService : Service() {
     private var memoryWorkChannel: Channel<Unit>? = null
     private var memoryWorker: Job? = null
     private val videoFrameInFlight = AtomicBoolean(false)
+    @Volatile private var cpuWakeLock: PowerManager.WakeLock? = null
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -108,6 +110,7 @@ class JuanitaVoiceService : Service() {
                     return START_NOT_STICKY
                 }
                 if (!startRequested) {
+                    acquireCpuWakeLock()
                     startRequested = true
                     sessionJob = serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
@@ -291,6 +294,7 @@ class JuanitaVoiceService : Service() {
                             runCatching { assistant.stop() }
                             withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                             startRequested = false
+                            releaseCpuWakeLock()
                             stopForeground(STOP_FOREGROUND_REMOVE)
                             stopSelf(startId)
                         }
@@ -338,6 +342,7 @@ class JuanitaVoiceService : Service() {
                     _memoryState.value = "Memoria in attesa: riprenderà al prossimo collegamento."
                 }
                 startRequested = false
+                releaseCpuWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 _state.value = "Conversazione terminata"
                 stopSelf()
@@ -428,6 +433,25 @@ class JuanitaVoiceService : Service() {
         super.onTaskRemoved(rootIntent)
     }
 
+    /** Keep the CPU awake for the lifetime of an explicitly started Live audio session.
+     * This is required on devices that suspend background CPU work when the display turns off.
+     */
+    @Suppress("WakelockTimeout")
+    private fun acquireCpuWakeLock() {
+        if (cpuWakeLock?.isHeld == true) return
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        cpuWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:JuanitaLiveAudio").apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    private fun releaseCpuWakeLock() {
+        val lock = cpuWakeLock ?: return
+        if (lock.isHeld) runCatching { lock.release() }
+        cpuWakeLock = null
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -477,6 +501,7 @@ class JuanitaVoiceService : Service() {
         voicePreviewJob?.cancel()
         // Stop capture synchronously even if Android is tearing down the service.
         assistant.stopAudioCapture()
+        releaseCpuWakeLock()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
         memoryWorkChannel?.close()
