@@ -30,17 +30,27 @@ object NotificationInbox {
             .take(30)
     }
 
-    internal fun remove(key: String) {
-        mutableEntries.value = mutableEntries.value.filterNot { it.key == key }
-    }
-
     fun clear() {
         mutableEntries.value = emptyList()
     }
 }
 
 class JuanitaNotificationListener : NotificationListenerService() {
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        // Populate the temporary inbox with notifications already active
+        // when the user grants access or Android reconnects the listener.
+        runCatching {
+            activeNotifications.orEmpty().forEach(::captureNotification)
+        }
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        captureNotification(sbn)
+    }
+
+    private fun captureNotification(sbn: StatusBarNotification) {
         val notification = sbn.notification ?: return
         if ((notification.flags and Notification.FLAG_GROUP_SUMMARY) != 0) return
         if ((notification.flags and Notification.FLAG_ONGOING_EVENT) != 0) return
@@ -54,6 +64,7 @@ class JuanitaNotificationListener : NotificationListenerService() {
             )?.toString()?.trim().orEmpty()
 
         // Some messaging apps expose individual messages in the MessagingStyle bundle.
+        @Suppress("DEPRECATION")
         val messages = extras.getParcelableArray(Notification.EXTRA_MESSAGES)
         val latestMessage = messages?.lastOrNull()?.let { parcelable ->
             runCatching {
@@ -80,9 +91,5 @@ class JuanitaNotificationListener : NotificationListenerService() {
                 postedAt = sbn.postTime
             )
         )
-    }
-
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        NotificationInbox.remove(sbn.key)
     }
 }
