@@ -4,6 +4,10 @@ import android.Manifest
 import android.app.DatePickerDialog
 import android.app.NotificationManager
 import android.app.TimePickerDialog
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.os.Handler
+import android.os.Looper
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -228,6 +232,38 @@ fun AlarmSection(panel: Color, gold: Color) {
         ) { Text("Apri anche le sveglie del telefono") }
         Text("Android non permette a Juanita di leggere direttamente l'elenco privato delle sveglie Samsung. Può però aprire l'app Orologio; le sveglie create qui restano gestite da Juanita.",
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
+
+        Text("PROVA AUDIO", color = gold, fontSize = 13.sp)
+        Button(
+            onClick = {
+                val volumeMessage = AlarmVolumeController.ensureAudible(context)
+                val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                    ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+                val ringtone = uri?.let { RingtoneManager.getRingtone(context, it) }
+                if (ringtone == null) {
+                    AlarmVolumeController.restore(context)
+                    status = "Non è disponibile un tono di allarme sul dispositivo."
+                } else {
+                    runCatching {
+                        ringtone.audioAttributes = AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                        ringtone.play()
+                        status = "Prova audio per 3 secondi. $volumeMessage"
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            runCatching { ringtone.stop() }
+                            AlarmVolumeController.restore(context)
+                        }, 3_000L)
+                    }.onFailure {
+                        AlarmVolumeController.restore(context)
+                        status = "Prova audio non riuscita: ${it.localizedMessage ?: "errore"}"
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+        ) { Text("Prova suono e volume · 3 secondi") }
 
         Text("ACCESSI ANDROID", color = gold, fontSize = 13.sp)
         Button(
