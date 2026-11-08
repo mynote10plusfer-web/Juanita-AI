@@ -19,6 +19,10 @@ import java.util.UUID
 class AlarmVoiceCommandHandler(private val context: Context) {
     private val store = JuanitaAlarmStore(context.applicationContext)
 
+    init {
+        JuanitaAlarmScheduler.cancelLegacyPending(context.applicationContext)
+    }
+
     fun execute(name: String, args: Map<String, String>): String = when (name) {
         "createAlarm" -> create(args)
         "listAlarms" -> list()
