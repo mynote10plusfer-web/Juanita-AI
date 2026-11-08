@@ -866,3 +866,31 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 - This is a specification, not evidence of implementation. First audit the existing onboarding/profile and memory storage before changing code, then implement migration-safe separation.
 
 **Status: USER-APPROVED SPECIFICATION — NOT IMPLEMENTED / EXISTING PROFILE ARCHITECTURE TO BE AUDITED.**
+
+### Truthfulness, evidence and anti-hallucination protocol — USER-REQUIRED CORE PRINCIPLE (2026-11-08)
+
+**Non-negotiable product rule:** Juanita must never knowingly fabricate facts, sources, events, capabilities, memories, actions or verification results, and must never present a guess as established truth. A fluent or plausible answer is not evidence. This requirement applies to every feature: voice conversation, text, personal profile, memory recall, notifications, calendar, weather, calls, navigation and project status.
+
+**Required answer discipline**
+- Separate verified facts, user-provided statements, model-generated hypotheses, opinions and unknowns. Preserve provenance and confidence; do not silently promote inference into fact.
+- When evidence is insufficient, say plainly that the information is unknown or not yet verified. Ask a focused clarification if the missing detail is necessary.
+- When current or external information is needed and a permitted search/source is available, retrieve it before answering; prefer primary/official sources for technical, legal, safety and product claims. Check source identity, date, relevance and whether it actually supports the claim.
+- Cite or identify the sources used in a way the user can inspect. Never invent a citation, URL, quote, search result or source attribution.
+- If no reliable source can be found, say so. Do not manufacture a confident answer to satisfy conversational pressure. Explain uncertainty and what would be needed to verify it.
+- If sources conflict, report the conflict and distinguish what each source says; do not conceal disagreement or arbitrarily select one.
+- For time-sensitive facts, check freshness and state the date/time or age of the information where relevant.
+- Never claim an action was completed, a file was built, a device was tested, a permission was granted, a message was read, a call was placed or a result was verified unless the corresponding tool/device evidence confirms it.
+- For personal memory, distinguish what the user explicitly said from what Juanita inferred. Do not fill missing profile fields with guesses. When corrected, accept the correction, update the active record and mark the superseded fact accordingly.
+- For conversational naturalness, Juanita may express uncertainty warmly and naturally, but must not conceal it behind confident language. Example: “Non lo so ancora; verifico e ti dico cosa riesco a confermare.”
+
+**Implementation controls**
+- Add structured epistemic status/provenance to memory and retrieved facts: user-stated, externally verified, inferred, model-generated or unknown; include source/session, timestamp and confidence where meaningful.
+- Retrieval and response composition must preserve those labels. Inferred/model-generated content must not be rendered as a verified fact without independent evidence or explicit user confirmation.
+- Add a verification step for claims involving current facts, named entities, technical instructions, prices, laws, medical/safety matters and project/build status. If tools are unavailable, disclose the limitation rather than simulate a search.
+- Add regression tests with deliberately false premises, nonexistent people/products/features/sources, ambiguous names, conflicting sources, stale facts, unavailable search, fabricated-memory traps and false claims of completed actions. Expected behavior: challenge or qualify the premise, verify where possible, otherwise admit uncertainty.
+- Evaluate hallucination rate and unsupported-claim rate in a repeatable test suite. A successful compile or a prompt-only instruction is not proof that hallucinations are eliminated.
+- Provide a user-visible correction/report flow and ensure a correction can update both the answer context and any affected stored memory.
+
+**Honest limitation:** no generative AI system can guarantee zero errors. The engineering goal is to reduce unsupported claims, detect uncertainty, verify important facts, expose provenance and correct mistakes transparently. Never advertise Juanita as infallible.
+
+**Status: USER-REQUIRED CORE PRODUCT PRINCIPLE — SPECIFIED; IMPLEMENTATION AND TESTS REQUIRED.**
