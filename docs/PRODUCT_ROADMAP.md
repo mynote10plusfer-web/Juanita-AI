@@ -219,7 +219,7 @@ Next steps:
 **Stage 1 — opt-in notification reader (implemented in feature branch; CI/device verification pending)**
 - Register an Android `NotificationListenerService` protected by `BIND_NOTIFICATION_LISTENER_SERVICE`; do not request notification access automatically. The user opens Android's notification-listener settings and enables Juanita explicitly.
 - Receive posted notifications, identify the source application and extract only text Android makes available in notification extras. Do not bypass lock-screen privacy or recover hidden previews.
-- Show the latest 30 notification entries in the Altro tab; provide an explicit clear action and a per-entry read-aloud action using the already configured Android TTS engine.
+- Show the latest 30 notification entries in the Altro tab and provide an explicit clear action. Voice read-aloud is deferred until it can use Juanita's configured Gemini Live voice path; Android TextToSpeech must not be used as a fallback.
 - First implementation is volatile/in-memory only: no notification text is written to transcript archive, personal memory, logs or cloud services; do not send notifications to Gemini. App-process recreation clears the temporary inbox.
 - Ignore ongoing notifications and group-summary notifications. The user can revoke notification access at any time in Android settings.
 - Initial version does not access WhatsApp's private database, fetch historical chats, send messages, mark messages read or reply. WhatsApp support depends on the message preview exposed by Android and the sender/app's notification format.
@@ -228,7 +228,7 @@ Next steps:
 - Verify access remains disabled until the user grants it, and revoking it stops new capture.
 - Verify notifications from WhatsApp and at least two other apps appear with correct app label/title/body where Android exposes them.
 - Verify hidden previews remain unavailable and no content is retained after process death.
-- Verify clear action empties the inbox and read-aloud uses the selected language.
+- Verify clear action empties the inbox. Verify any future read-aloud uses the configured Juanita voice and never Android TextToSpeech.
 - Verify no notification body is present in Gemini requests, encrypted conversation archive, curated memories or application logs.
 - Physical-device tests required on Note10+ (Android 12) and S22 Ultra. CI compilation is not proof of OEM notification delivery.
 
