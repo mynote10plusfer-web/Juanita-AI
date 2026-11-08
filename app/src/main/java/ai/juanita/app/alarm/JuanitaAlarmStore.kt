@@ -51,21 +51,26 @@ class JuanitaAlarmStore(context: Context) {
         return prefs.edit().putString(KEY_ALARMS, json.toString()).commit()
     }
 
+    @Synchronized
     fun upsert(alarm: JuanitaAlarm): Boolean {
         val next = all().filterNot { it.id == alarm.id } + alarm
         return saveAll(next)
     }
 
+    @Synchronized
     fun find(id: String): JuanitaAlarm? = all().firstOrNull { it.id == id }
 
+    @Synchronized
     fun delete(id: String): Boolean = saveAll(all().filterNot { it.id == id })
 
+    @Synchronized
     fun setEnabled(id: String, enabled: Boolean): JuanitaAlarm? {
         val current = find(id) ?: return null
         val updated = current.copy(schedule = current.schedule.copy(enabled = enabled))
         return updated.takeIf { upsert(it) }
     }
 
+    @Synchronized
     fun consumeOneShot(id: String) {
         val current = find(id) ?: return
         if (current.schedule.oneShotAtEpochMillis != null) {
@@ -73,12 +78,14 @@ class JuanitaAlarmStore(context: Context) {
         }
     }
 
+    @Synchronized
     fun setSnooze(id: String, atMillis: Long) {
         prefs.edit().putLong(SNOOZE_PREFIX + id, atMillis).commit()
     }
 
     fun snoozeAt(id: String): Long = prefs.getLong(SNOOZE_PREFIX + id, 0L)
 
+    @Synchronized
     fun clearSnooze(id: String) {
         prefs.edit().remove(SNOOZE_PREFIX + id).commit()
     }
