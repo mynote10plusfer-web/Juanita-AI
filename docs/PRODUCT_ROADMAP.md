@@ -588,5 +588,5 @@ Replace broad date-range deletion with a local calendar, per-day conversation li
 
 ### Priority and dependencies
 - Priority: HIGH product value; implementation should follow stabilization and device verification of the notification-reader release rather than being mixed into that release.
-- Dependencies: Android alarm/foreground-service compatibility research; local alarm persistence and reboot rescheduling; TTS; optional location; a vetted no-cost weather source.
+- Dependencies: Android alarm/foreground-service compatibility research; local alarm persistence and reboot rescheduling; research and integration of Juanita's already configured Gemini Live voice/output path (no Android TextToSpeech or substitute voice); optional location; a vetted no-cost weather source.
 - Status: PROPOSED — no alarm code implemented, no weather provider selected, no device verification.
