@@ -8,6 +8,7 @@ import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
@@ -71,6 +72,7 @@ import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import ai.juanita.app.memory.ImprovementReport
+import ai.juanita.app.notifications.NotificationInbox
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -311,10 +313,30 @@ private fun JuanitaApp(
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
+    val context = LocalContext.current
     var selectedSection by remember { mutableStateOf("HOME") }
+    val notificationEntries by NotificationInbox.entries.collectAsState()
+    var notificationAccessEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(selectedSection) {
+        if (selectedSection == "MORE") {
+            while (true) {
+                val enabledListeners = Settings.Secure.getString(
+                    context.contentResolver,
+                    "enabled_notification_listeners"
+                ).orEmpty()
+                notificationAccessEnabled = enabledListeners
+                    .split(':')
+                    .mapNotNull { ComponentName.unflattenFromString(it) }
+                    .any { component ->
+                        component.packageName == context.packageName &&
+                            component.className == "${context.packageName}.notifications.JuanitaNotificationListener"
+                    }
+                delay(1_500L)
+            }
+        }
+    }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
-    val context = LocalContext.current
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
         object : ServiceConnection {
@@ -713,6 +735,55 @@ private fun JuanitaApp(
                 if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
+                SettingsCard(panel, gold, "NOTIFICHE DEL TELEFONO") {
+                    Text(
+                        if (notificationAccessEnabled)
+                            "Accesso autorizzato. Juanita riceve le notifiche pubblicate da Android."
+                        else
+                            "Per leggere le notifiche, autorizza Juanita nelle impostazioni Android.",
+                        color = if (notificationAccessEnabled) gold else Color(0xFFB9BBC1),
+                        fontSize = 13.sp
+                    )
+                    Button(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            }.onFailure {
+                                status = "Impossibile aprire le impostazioni delle notifiche."
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                    ) {
+                        Text(if (notificationAccessEnabled) "Gestisci accesso notifiche" else "Autorizza lettura notifiche")
+                    }
+                    Text(
+                        "Le notifiche vengono lette solo dopo il tuo consenso Android. Per questa prima versione, gli ultimi 30 avvisi restano soltanto in memoria temporanea dell'app: non vengono salvati nell'archivio delle conversazioni né inviati a Gemini.",
+                        color = Color(0xFF9A9DA4),
+                        fontSize = 11.sp
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Notifiche recenti (${notificationEntries.size})", color = Color.White, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { NotificationInbox.clear() }) { Text("Svuota", color = gold) }
+                    }
+                    if (notificationEntries.isEmpty()) {
+                        Text("Nessuna notifica ricevuta finora. Dopo aver autorizzato l'accesso, attendi un nuovo messaggio o avviso.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                    } else {
+                        notificationEntries.take(15).forEach { entry ->
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text(entry.appName + " · " + entry.title, color = gold, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                if (entry.text.isNotBlank()) Text(entry.text.take(400), color = Color.White, fontSize = 13.sp)
+                                Text(
+                                    "Lettura con la voce configurata di Juanita: in preparazione. Nessuna voce TTS di sistema verrà usata.",
+                                    color = Color(0xFF9A9DA4),
+                                    fontSize = 10.sp
+                                )
+                            }
+                            androidx.compose.material3.HorizontalDivider(color = Color(0xFF30343B))
+                        }
+                    }
+                }
+
                 ImprovementLabSection(
                     panel = panel,
                     gold = gold,
@@ -774,12 +845,19 @@ private fun JuanitaApp(
                   )
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
-                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Impostazioni", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
+                  listOf("HOME" to "Home", "AVATAR" to "Avatar", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
                       NavigationBarItem(
                           selected = selectedSection == key,
                           onClick = { selectedSection = key },
                           icon = { Text(when (key) { "HOME" -> "🏠"; "AVATAR" -> "👩🏻"; "SETTINGS" -> "⚙️"; "MEMORY" -> "🧠"; else -> "⋯" }, fontSize = 16.sp) },
-                          label = { Text(label, fontSize = 10.sp) }
+                          label = {
+                              Text(
+                                  label,
+                                  fontSize = 9.sp,
+                                  maxLines = 1,
+                                  softWrap = false
+                              )
+                          }
                       )
                   }
               }
