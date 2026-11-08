@@ -770,3 +770,30 @@ This section records a feasibility investigation requested by Riccardo. Target b
 5. Acceptance test: Juanita speaks the introduction, the recipient hears it clearly, Riccardo joins from inside Juanita on the same phone without launching the system dialer or WhatsApp, audio switches cleanly to speakerphone, and all three can converse without dropping the recipient's call.
 
 **Status: RESEARCH COMPLETED — ROUTES IDENTIFIED; PROTOTYPE NOT IMPLEMENTED; NO DEVICE/CARRIER TESTS PERFORMED.**
+
+
+### Hands-free acoustic participation by Juanita during an existing phone/WhatsApp call — USER IDEA / FEASIBILITY SPIKE
+
+**User's proposed simpler approach (2026-11-08):** rather than transferring a call into another app or bridging carrier audio, put the active SIM or WhatsApp call on the phone's speakerphone and let Juanita speak aloud through the same phone speaker. The caller's microphone might pick Juanita acoustically, so the remote participant hears her. Juanita would then listen and respond conversationally while Riccardo keeps working hands-free.
+
+This is a distinct approach from the secretary-originated call/bridge above and must be tested before choosing an architecture.
+
+**Android audio policy findings**
+- Android's official concurrent-audio-input policy states that during a voice call (MODE_IN_CALL or MODE_IN_COMMUNICATION) the call always receives the microphone input. An ordinary app cannot concurrently capture that same microphone; call audio capture is restricted to privileged/pre-installed components with system-only CAPTURE_AUDIO_OUTPUT. Accessibility services have a narrowly defined concurrent-capture exception, but must only be used for genuine accessibility functionality and must not be abused as a workaround to bypass call-audio protections. References: https://developer.android.com/media/platform/sharing-audio-input and https://developer.android.com/reference/android/media/MediaRecorder.AudioSource
+- Therefore the acoustic idea may allow the remote party to hear sound from the loudspeaker in some device/audio-route conditions, but it does not by itself give Juanita a reliable way to hear the remote participant and sustain a two-way conversation. Acoustic echo cancellation, noise suppression, call uplink processing, speaker volume, proximity and device firmware may further alter or suppress the sound.
+- Android documents MODE_IN_CALL for cellular telephony and MODE_IN_COMMUNICATION for VoIP; the latter applies to audio/video chat applications such as WhatsApp. Both are covered by the concurrent-capture restriction. Reference: https://developer.android.com/reference/android/media/AudioManager
+- Do not assume that merely playing Gemini Live output from Juanita while another app owns the call's audio session will be routed into the call uplink. Nor assume that the call's mic can be shared with Juanita. Both directions must be demonstrated on hardware.
+
+**WhatsApp distinction**
+- The ordinary consumer WhatsApp Android app does not expose a supported public API for a third-party assistant to originate/manage a personal voice call or inject generated speech into it. Do not use UI automation, accessibility tapping or reverse-engineered private interfaces.
+- Meta's WhatsApp Business Calling APIs are a separate business product, not a free personal-account calling interface. They require an eligible WhatsApp Business Platform sender, recipient permission/opt-in and business/API setup; business-initiated calls can incur per-call/per-minute charges and provider costs. References to investigate current rules/pricing: https://docs.aws.amazon.com/end-user-messaging/latest/userguide/nx-features-whatsapp-voice.html and https://www.twilio.com/docs/voice/whatsapp-business-calling
+- Thus Business Calling is not a free shortcut for Riccardo's personal WhatsApp calls. Do not migrate his personal number or add a paid provider without explicit approval.
+
+**Required low-risk prototype**
+1. On Note10+ (Android 12) and S22 Ultra, place a normal SIM call with speakerphone enabled. Keep Juanita foregrounded only if Android allows it without disrupting the call; verify whether her app can play a short generated audio greeting while the call remains active and whether the remote party actually hears it.
+2. Verify whether Juanita can simultaneously receive intelligible live microphone audio while the call remains active. Record only local test tones/consenting test participants; do not record real calls or third parties without consent. Check audio mode, input silence, audio focus, routing and echo cancellation. Repeat separately for WhatsApp voice calls.
+3. Test both sides of the loop: remote participant hears Juanita; Juanita hears and responds to the remote participant; Riccardo can speak hands-free; no feedback loop or severe echo; call remains connected. A one-way greeting is not a successful conversational assistant.
+4. If Android blocks Juanita's microphone, stop this approach rather than trying hidden APIs, call recording permissions, accessibility workarounds or privileged permissions unavailable to ordinary apps. Evaluate a Juanita-owned VoIP call/session or a supported Telecom integration instead.
+5. Do not add always-on listening, call recording or transcription. Show an explicit active-call assistant state, user-controlled mute/stop, visible microphone indication, and announce to the other participant that an automated assistant is participating where appropriate.
+
+**Status: USER-PROPOSED — RESEARCH / PROTOTYPE REQUIRED; NOT IMPLEMENTED.** Test separately for SIM and WhatsApp; do not claim feasibility until the full two-way conversation succeeds on both target devices.
