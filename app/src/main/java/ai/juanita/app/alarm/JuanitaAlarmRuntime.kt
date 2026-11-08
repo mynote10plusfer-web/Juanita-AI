@@ -122,7 +122,8 @@ object JuanitaAlarmScheduler {
         val pending = alarmPendingIntent(context, alarmId, true)
         manager.cancel(pending)
         JuanitaAlarmStore(context).setSnooze(alarmId, triggerAt)
-        if (JuanitaVoiceService.state.value.contains("in ascolto", ignoreCase = true)) {
+        val voiceState = JuanitaVoiceService.state.value
+        if (voiceState != "Non connessa" && voiceState != "Conversazione terminata") {
             runCatching { JuanitaVoiceService.stop(context) }
         }
         runCatching {
