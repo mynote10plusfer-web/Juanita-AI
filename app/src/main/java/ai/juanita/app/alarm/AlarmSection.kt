@@ -2,6 +2,7 @@ package ai.juanita.app.alarm
 
 import android.Manifest
 import android.app.TimePickerDialog
+import android.app.DatePickerDialog
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
@@ -33,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.ZoneId
 
 @Composable
 fun AlarmSection(panel: Color, gold: Color) {
@@ -48,6 +51,12 @@ fun AlarmSection(panel: Color, gold: Color) {
     var minute by remember { mutableStateOf(initial.minute) }
     var days by remember { mutableStateOf(initial.repeatDays) }
     var enabled by remember { mutableStateOf(initial.enabled) }
+    var oneTimeMode by remember { mutableStateOf(initial.oneShotAtEpochMillis != null) }
+    var oneTimeDate by remember {
+        mutableStateOf(initial.oneShotAtEpochMillis?.let {
+            java.time.Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).toLocalDate()
+        } ?: LocalDate.now())
+    }
     var status by remember { mutableStateOf("Sveglia locale · nessun servizio a pagamento") }
     var morningVoiceEnabled by remember {
         mutableStateOf(context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).getBoolean("morning_voice_enabled", false))
@@ -112,18 +121,63 @@ fun AlarmSection(panel: Color, gold: Color) {
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
         ) { Text("Scegli orario") }
 
-        Text("Ripeti", color = gold, fontSize = 13.sp)
-        val dayLabels = listOf(
-            DayOfWeek.MONDAY to "Lun", DayOfWeek.TUESDAY to "Mar",
-            DayOfWeek.WEDNESDAY to "Mer", DayOfWeek.THURSDAY to "Gio",
-            DayOfWeek.FRIDAY to "Ven", DayOfWeek.SATURDAY to "Sab",
-            DayOfWeek.SUNDAY to "Dom"
-        )
-        dayLabels.chunked(4).forEach { group ->
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
-                group.forEach { (day, label) ->
-                    val selected = day in days
-                    Button(
+        Text("TIPO DI SVEGLIA", color = gold, fontSize = 13.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = { oneTimeMode = true },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (oneTimeMode) gold else Color(0xFF30343B),
+                    contentColor = if (oneTimeMode) Color.Black else Color.White
+                )
+            ) { Text("Una volta") }
+            Button(
+                onClick = { oneTimeMode = false },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (!oneTimeMode) gold else Color(0xFF30343B),
+                    contentColor = if (!oneTimeMode) Color.Black else Color.White
+                )
+            ) { Text("Ogni settimana") }
+        }
+        if (oneTimeMode) {
+            Button(
+                onClick = {
+                    DatePickerDialog(
+                        context,
+                        { _, year, month, day -> oneTimeDate = LocalDate.of(year, month + 1, day) },
+                        oneTimeDate.year, oneTimeDate.monthValue - 1, oneTimeDate.dayOfMonth
+                    ).show()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+            ) { Text("Data: ${oneTimeDate.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))}") }
+        } else {
+            Text("Ripeti", color = gold, fontSize = 13.sp)
+            val dayLabels = listOf(
+                DayOfWeek.MONDAY to "Lun", DayOfWeek.TUESDAY to "Mar",
+                DayOfWeek.WEDNESDAY to "Mer", DayOfWeek.THURSDAY to "Gio",
+                DayOfWeek.FRIDAY to "Ven", DayOfWeek.SATURDAY to "Sab",
+                DayOfWeek.SUNDAY to "Dom"
+            )
+            dayLabels.chunked(4).forEach { group ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    group.forEach { (day, label) ->
+                        val selected = day in days
+                        Button(
+                            onClick = { days = if (selected) days - day else days + day },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (selected) gold else Color(0xFF30343B),
+                                contentColor = if (selected) Color.Black else Color.White
+                            )
+                        ) { Text(label, fontSize = 11.sp) }
+                    }
+                    repeat(4 - group.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+        Button(
                         onClick = { days = if (selected) days - day else days + day },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
@@ -199,7 +253,7 @@ fun AlarmSection(panel: Color, gold: Color) {
                     status = "Concedi prima il permesso notifiche, poi premi di nuovo Salva e attiva."
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
-                    val schedule = AlarmSchedule(hour, minute, days, enabled = true)
+                    val oneShotAt = if (oneTimeMode) oneTimeDate.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null\n                    val schedule = AlarmSchedule(hour, minute, if (oneTimeMode) emptySet() else days, oneShotAt, enabled = true)
                     val ok = JuanitaAlarmScheduler.schedule(context, schedule)
                     enabled = ok
                     status = if (ok) "Sveglia salvata e programmata sul dispositivo."
