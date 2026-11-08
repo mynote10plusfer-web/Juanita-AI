@@ -46,6 +46,12 @@ class JuanitaNotificationListener : NotificationListenerService() {
         }
     }
 
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        // Do not keep stale private notification content after Android revokes/disconnects access.
+        NotificationInbox.clear()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         captureNotification(sbn)
     }
