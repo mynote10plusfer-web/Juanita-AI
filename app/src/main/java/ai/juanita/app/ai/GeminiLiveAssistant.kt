@@ -150,6 +150,17 @@ class GeminiLiveAssistant {
                             parameters = emptyMap()
                         ),
                         FunctionDeclaration(
+                            name = "updateAlarm",
+                            description = "Edit one existing alarm by exact ID. Supply only changed fields: time HH:mm, date YYYY-MM-DD to make it one-off, repeat_days to make it weekly, and/or label. Preserve all unspecified fields.",
+                            parameters = mapOf(
+                                "alarm_id" to Schema.string("Exact ID returned by listAlarms."),
+                                "time" to Schema.string("Optional new local 24-hour time HH:mm."),
+                                "date" to Schema.string("Optional date YYYY-MM-DD; converts to a one-time alarm."),
+                                "repeat_days" to Schema.string("Optional comma-separated weekdays MONDAY..SUNDAY; converts to weekly recurrence."),
+                                "label" to Schema.string("Optional new label.")
+                            )
+                        ),
+                        FunctionDeclaration(
                             name = "setAlarmEnabled",
                             description = "Enable or disable one existing alarm by its exact ID. Before disabling, obtain explicit confirmation from the user.",
                             parameters = mapOf(
@@ -209,7 +220,7 @@ class GeminiLiveAssistant {
                         JsonObject(mapOf("profile_update" to JsonPrimitive(result.take(1200)))),
                         functionCall.id
                     )
-                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "setAlarmEnabled", "deleteAlarm")) {
+                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "updateAlarm", "setAlarmEnabled", "deleteAlarm")) {
                     val args = functionCall.args.mapValues { (_, value) ->
                         runCatching { value.jsonPrimitive.content }.getOrDefault("")
                     }
