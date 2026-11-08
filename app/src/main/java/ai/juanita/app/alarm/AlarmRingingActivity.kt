@@ -103,7 +103,7 @@ class AlarmRingingActivity : ComponentActivity() {
             observeVoiceStatus()
         }
         val alarmPrefs = getSharedPreferences("juanita_alarm", MODE_PRIVATE)
-        val voiceEnabled = alarmPrefs.getBoolean("morning_voice_enabled", false)
+        val voiceEnabled = alarmPrefs.getBoolean("morning_voice_enabled", true)
         val microphoneGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (!testMode && voiceEnabled && microphoneGranted) {
             statusText?.text = "Buongiorno in preparazione…"
