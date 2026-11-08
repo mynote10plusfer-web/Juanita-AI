@@ -39,6 +39,7 @@ class JuanitaAlarmRingingService : Service() {
             ACTION_STOP -> {
                 val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
                 if (alarmId.isNullOrBlank()) activeAlarmIds.clear() else activeAlarmIds.remove(alarmId)
+                persistActiveAlarmIds()
                 if (activeAlarmIds.isNotEmpty()) {
                     activeAlarmId = activeAlarmIds.first()
                     testMode = activeAlarmId == JuanitaAlarmStore.LEGACY_ID &&
@@ -55,6 +56,7 @@ class JuanitaAlarmRingingService : Service() {
                 val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
                     ?: JuanitaAlarmStore.LEGACY_ID
                 activeAlarmIds.add(alarmId)
+                persistActiveAlarmIds()
                 activeAlarmId = alarmId
                 testMode = intent.getBooleanExtra(EXTRA_TEST_MODE, false)
                 if (activeAlarmIds.size == 1) volumeNotice = AlarmVolumeController.ensureAudible(this)
@@ -160,6 +162,11 @@ class JuanitaAlarmRingingService : Service() {
             .build()
     }
 
+    private fun persistActiveAlarmIds() {
+        getSharedPreferences(ACTIVE_ALARMS_PREFS, Context.MODE_PRIVATE).edit()
+            .putStringSet(ACTIVE_ALARMS_KEY, activeAlarmIds.toSet()).apply()
+    }
+
     private fun actionRequestCode(suffix: Int): Int =
         5200 + ((activeAlarmId.hashCode() and 0x0fffffff) * 3) + suffix
 
@@ -185,6 +192,7 @@ class JuanitaAlarmRingingService : Service() {
         runCatching { player?.release() }
         player = null
         activeAlarmIds.clear()
+        persistActiveAlarmIds()
         AlarmVolumeController.restore(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
         getSystemService(NotificationManager::class.java).cancel(JuanitaAlarmScheduler.NOTIFICATION_ID)
@@ -201,6 +209,12 @@ class JuanitaAlarmRingingService : Service() {
         const val ACTION_STOP = "ai.juanita.app.alarm.STOP_RING"
         const val EXTRA_TEST_MODE = "alarm_test_mode"
         private const val CHANNEL_ID = "juanita_alarm_ringing"
+        private const val ACTIVE_ALARMS_PREFS = "juanita_alarm_runtime"
+        private const val ACTIVE_ALARMS_KEY = "currently_ringing_ids"
+        fun activeAlarmIds(context: Context): Set<String> =
+            context.getSharedPreferences(ACTIVE_ALARMS_PREFS, Context.MODE_PRIVATE)
+                .getStringSet(ACTIVE_ALARMS_KEY, emptySet()).orEmpty().toSet()
+
         fun start(context: Context, alarmId: String = JuanitaAlarmStore.LEGACY_ID, testMode: Boolean = false) {
             val intent = Intent(context, JuanitaAlarmRingingService::class.java)
                 .setAction(ACTION_START)
