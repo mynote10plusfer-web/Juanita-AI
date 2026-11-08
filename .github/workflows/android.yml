@@ -9,7 +9,8 @@ on:
 
 concurrency:
   group: android-build-${{ github.ref }}
-  cancel-in-progress: true
+  # Do not cancel emulator/device tests just because another commit is pushed to this PR.
+  cancel-in-progress: false
 
 permissions:
   contents: read
