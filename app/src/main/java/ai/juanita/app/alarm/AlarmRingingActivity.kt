@@ -121,7 +121,7 @@ class AlarmRingingActivity : ComponentActivity() {
                         state.contains("non riuscita", ignoreCase = true) ||
                             state.contains("impossibile avviare", ignoreCase = true) -> {
                             voiceStarted = false
-                            addRetryButton("Avvia buongiorno")
+                            addRetryButton("Avvia buongiorno") { startMorningVoice() }
                             "La voce non è riuscita ad avviarsi: ${state.take(180)}. La sveglia sonora resta attiva."
                         }
                         state.contains("Connessione a Gemini", ignoreCase = true) -> "Mi sto collegando per parlarti…"
