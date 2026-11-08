@@ -35,6 +35,9 @@ import kotlinx.coroutines.sync.withLock
 class GeminiLiveAssistant {
     private val lifecycleMutex = Mutex()
     @Volatile private var session: LiveSession? = null
+    // Once private notification text is read, omit assistant-side transcript text
+    // for the rest of this Live session so message bodies cannot enter the archive.
+    @Volatile private var notificationContentReadInSession = false
 
     suspend fun start(
         systemInstruction: String,
@@ -45,6 +48,7 @@ class GeminiLiveAssistant {
         onReadNotifications: (appName: String, limit: Int) -> String = { _, _ -> "Notification reading unavailable." }
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
+        notificationContentReadInSession = false
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
             systemInstruction = content {
@@ -146,6 +150,7 @@ class GeminiLiveAssistant {
                     val limit = functionCall.args["limit"]?.jsonPrimitive?.content?.toIntOrNull()?.coerceIn(1, 5) ?: 3
                     val result = runCatching { onReadNotifications(appId, limit) }
                         .getOrElse { "Notification reading unavailable. No notification content was shared." }
+                    if (result.startsWith("App:")) notificationContentReadInSession = true
                     FunctionResponsePart(
                         functionCall.name,
                         JsonObject(mapOf("selected_notifications" to JsonPrimitive(result.take(5000)))),
@@ -157,7 +162,11 @@ class GeminiLiveAssistant {
             },
             transcriptHandler = { input, output ->
                 input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("USER", it) }
-                output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("ASSISTANT", it) }
+                // Notification text is private message content. After it is read, do not
+                // archive assistant transcriptions for the remainder of this Live session.
+                if (!notificationContentReadInSession) {
+                    output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("ASSISTANT", it) }
+                }
             },
             enableInterruptions = false
         )
