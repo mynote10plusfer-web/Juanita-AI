@@ -15,6 +15,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
+import ai.juanita.app.alarm.JuanitaAlarmRingingService
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
 import ai.juanita.app.profile.PersonalProfile
@@ -211,6 +212,10 @@ class JuanitaVoiceService : Service() {
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
+                                    if (initialPrompt.isNotBlank() && role.equals("ASSISTANT", ignoreCase = true)) {
+                                        // Keep the local alarm sounding until Gemini actually begins speaking.
+                                        JuanitaAlarmRingingService.stop(this@JuanitaVoiceService)
+                                    }
                                     val sent = transcriptQueue.trySend(role to text)
                                     if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
                                         _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
