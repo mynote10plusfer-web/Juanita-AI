@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #8 signing-certificate correction is merged to main. The 0.10.2 signed release (versionCode 31) was built and verified with the permanent certificate. Candidate 0.10.3 (versionCode 32) ports the encrypted local Improvement Lab and capability catalogue, isolates debug package identity, and adds a debug Firebase variant configuration. Candidate head f6ea111aca1ae1b925c736d3c3176c57b4b60d0a passed Android debug CI (run 42414475965, including debug package-identity assertion and artifact upload). Subsequent roadmap/architecture and capability-catalogue commits were added after that run; the latest branch head therefore still needs a fresh CI run. Signed-release verification and physical-device verification remain pending.
+Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #13 for 0.10.4 is still separate and unmerged. A dedicated full-fidelity conversation archive branch removes the 1,800-character truncation for new archived turns and adds instrumentation-test coverage; CI and device verification are pending.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -46,6 +46,28 @@ Juanita must behave like a continuous personal assistant with an accumulating, u
 - [IN PROGRESS — CANDIDATE 0.10.3; CI VERIFICATION PENDING] While the in-app video-call screen is open, set Android `FLAG_KEEP_SCREEN_ON` for the host activity window. Clear it immediately when the call screen closes or the composable is disposed. Audio-only sessions must not hold the display awake; they continue through the foreground microphone service and may run with the display off.
 - [IN PROGRESS — CANDIDATE 0.10.3; CI/DEVICE VERIFICATION PENDING] On first launch, offer a guided first-meeting profile with optional fields for preferred name, location, languages, interests, lifestyle/priorities, goals and desired assistance. Every field is optional; users can skip. Only explicitly submitted answers are stored as user-confirmed profile memories in the encrypted local memory store. The onboarding completion flag is stored locally. No passwords or sensitive personal data are requested.
 - Acceptance: verify the screen stays awake throughout a video call, including when the user's camera is disabled; verify it returns to normal immediately after ending/closing the call; verify an audio-only session does not keep the screen awake. Verify onboarding can be skipped, saved, and shown only once, and submitted profile memories appear in the memory manager and are available to later sessions.
+
+### Full-fidelity episodic conversation archive — USER-REQUESTED; FIRST IMPLEMENTATION SLICE IN PROGRESS (2026-11-08)
+
+**User goal:** retain complete conversation text so Juanita can search past exchanges and reopen the original context. Exact transcript history is the source record; summaries and curated memories are indexes/shortcuts, never replacements.
+
+**First code change on branch `feature/full-fidelity-conversation-archive`:**
+- Removed the silent 1,800-character truncation from the encrypted per-session conversation archive write path. New archived turns are now written with their complete recognized text.
+- Kept the separate automatic-memory extraction queue bounded; that queue is not the transcript archive and must not be confused with it.
+- Added Android instrumentation tests for exact round-trip of long multilingual/Unicode turns across fresh store instances and for preserving multiple turns in order.
+- Added a CI step to compile the Android instrumentation-test APK. Compilation is not execution; actual Android/Keystore behavior still requires running the tests on a device or emulator.
+
+**Known limitations and safeguards still to implement:**
+- Text already truncated in historical archive entries cannot be reconstructed from the stored file. Do not pretend this change restores previously lost characters.
+- The per-session archive currently rewrites the encrypted session JSON file on each appended turn. Benchmark large sessions and consider an encrypted append-only/chunked format with crash-safe migration before claiming unlimited scale.
+- Legacy transcript records remain subject to their legacy storage cap; audit and migrate them without deleting or duplicating existing sessions.
+- Add explicit encrypted export/backup and restore with integrity validation. Local-only data may be lost if app data is cleared, the app is uninstalled or the Keystore key becomes unavailable.
+- Improve recall so a search result reopens the complete original turn and nearby turns before Juanita quotes or makes a historical claim. Keep model context bounded; never send the entire archive wholesale.
+- Preserve separate controls for transcript archive, curated semantic memories and the permanent personal profile. Clearing one layer must not silently erase another.
+
+**Acceptance gates:** exact round-trip for turns longer than 1,800 characters; chronological and role integrity; process restart; write interruption/corruption handling; retention and deletion behavior; migration of legacy records; relevant search across languages and paraphrases; source-turn reopening; encrypted backup/restore; no invented historical quotations. No raw audio recording is implied: the archive stores text received from the speech-recognition/transcription pipeline, whose recognition may itself contain errors.
+
+**Status:** FIRST CODE SLICE COMMITTED; CI BUILD/TEST-COMPILATION PENDING; INSTRUMENTATION NOT YET EXECUTED; DEVICE VERIFICATION NOT PERFORMED.
 
 ## Product vision
 
@@ -147,8 +169,7 @@ Extend the familiar-person memory beyond voice to an optional visual profile, wh
 - A stored photo is a reference for conversational context; displaying or recalling it is not proof that the person currently in front of the camera is that person.
 - Do not infer or store sensitive traits such as race/ethnicity, health, religion, sexuality, political views or other sensitive attributes from appearance.
 
-**Optional visual recognition (later stage; separate consent)**
-- Real-time face matching against enrolled profiles is a distinct biometric capability and must not be implied by merely having a photo.
+**Optional visual recognition (later stage; separate consent)**- Real-time face matching against enrolled profiles is a distinct biometric capability and must not be implied by merely having a photo.
 - Only research or implement it if a suitable on-device approach is available, with explicit, informed opt-in from each enrolled person, clear camera-use indication, local processing, encrypted templates, calibrated thresholds and an unknown/uncertain fallback.
 - No face images, face embeddings or biometric templates may be sent to Gemini, Firebase, ChatGPT or another cloud service by default.
 - Do not identify bystanders, passers-by or unenrolled people. Do not perform covert, continuous or background identification.
@@ -298,7 +319,6 @@ Implementation phases:
 - [PROPOSED] Add a call-screening UI with transcript, caller details, confidence/reason indicators, and explicit Accept / Reject / Reply controls.
 - [PROPOSED] Add an approved-reply workflow and a safe handoff to the user. If the audio route or API is unavailable, fall back to displaying caller information and asking the user to answer manually.
 - [RESEARCH] Evaluate an independent VoIP/SIP screening route as an alternative if cellular call audio access is blocked. This would be a separate calling service and may have provider/network costs; no paid service or billing activation without explicit approval.
-
 Technical constraints and safeguards:
 
 Verified Android platform constraints (official Android documentation checked 2026-11-07):
@@ -447,8 +467,7 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 - Treat repository files, issue text, logs, web pages and generated patches as untrusted input; defend against prompt injection and secret exfiltration.
 - Never expose API keys, keystore files, signing passwords, tokens or private user data in prompts, logs, commits or pull requests.
 - Require human approval for changes affecting memory retention/deletion, encryption, permissions, network destinations, account access, signing, release distribution or data migrations.
-- Every generated patch must be reviewable, reproducible and revertible. Maintain a known-good commit and never let a failed experiment replace the working release.
-- Do not claim Juanita has changed or improved herself until a patch is committed, CI passes, and the relevant behavior is verified. A green build alone does not prove feature correctness.
+- Every generated patch must be reviewable, reproducible and revertible. Maintain a known-good commit and never let a failed experiment replace the working release.- Do not claim Juanita has changed or improved herself until a patch is committed, CI passes, and the relevant behavior is verified. A green build alone does not prove feature correctness.
 
 ### Acceptance criteria
 - Juanita can turn a repeated user correction or build/test failure into a traceable improvement proposal.
