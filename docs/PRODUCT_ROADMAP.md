@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #13 for 0.10.4 is still separate and unmerged. A dedicated full-fidelity conversation archive branch removes the 1,800-character truncation for new archived turns and adds instrumentation-test coverage; CI and device verification are pending.
+Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #13 for 0.10.4 is separate and unmerged; its exact-head Android debug CI passed (run 42468482215), while signed Release verification and device tests remain pending. PR #14 removes the 1,800-character truncation for new archived turns; Android debug CI and instrumentation-test APK compilation passed (run 42469366424). Instrumentation tests have not yet been executed on an emulator or physical device.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
