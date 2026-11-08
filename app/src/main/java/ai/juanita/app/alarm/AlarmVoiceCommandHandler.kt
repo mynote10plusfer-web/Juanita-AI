@@ -186,9 +186,26 @@ class AlarmVoiceCommandHandler(private val context: Context) {
             else -> return "Stanno suonando più sveglie. Chiedi quale vuole spegnere: " +
                 active.mapNotNull { key -> store.find(key)?.let { "ID $key — ${describe(it)}" } }.joinToString("; ")
         }
-        val alarm = store.find(id)
-        JuanitaAlarmScheduler.dismiss(context, id)
-        return "Ho spento la suoneria corrente${alarm?.let { ": ${describe(it)}" }.orEmpty()}. Le eventuali ripetizioni future restano programmate."
+        val secondsRaw = args["after_seconds"].orEmpty().trim()
+        val ringsRaw = args["ring_count"].orEmpty().trim()
+        val seconds = if (secondsRaw.isBlank()) 0 else secondsRaw.toIntOrNull()
+            ?: return "Non ho capito il numero di secondi."
+        val rings = if (ringsRaw.isBlank()) 0 else ringsRaw.toIntOrNull()
+            ?: return "Non ho capito il numero di squilli."
+        if (seconds !in 0..86_400) return "Posso impostare uno spegnimento tra 1 secondo e 24 ore."
+        if (rings !in 0..100) return "Posso contare da 1 a 100 squilli."
+        if (seconds == 0 && rings == 0) {
+            val alarm = store.find(id)
+            JuanitaAlarmScheduler.dismiss(context, id)
+            return "Ho spento la suoneria corrente${alarm?.let { ": ${describe(it)}" }.orEmpty()}. Le eventuali ripetizioni future restano programmate."
+        }
+        if (seconds == 0 && rings == 0) return "Dimmi dopo quanti secondi o quanti squilli vuoi che la spenga."
+        JuanitaAlarmRingingService.stopAfter(context, id, seconds, rings)
+        val details = buildList {
+            if (seconds > 0) add("tra $seconds secondi")
+            if (rings > 0) add("dopo $rings squilli completi del tono")
+        }.joinToString(" oppure ")
+        return "Va bene, fermerò la suoneria $details. Le eventuali ripetizioni future restano programmate."
     }
 
     private fun delete(args: Map<String, String>): String {
