@@ -92,26 +92,13 @@ jobs:
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           boot-timeout: 900
-          # The runner's post-boot settings/ADB call was disconnecting API 35 before tests started.
-          # Keep animations enabled rather than turning an emulator transport failure into a false app failure.
+          # Avoid the runner's failing post-boot animation/ADB settings command.
           disable-animations: false
+          # The action executes this script with /bin/sh; keep it strictly POSIX.
           script: |
-            set -euo pipefail
-            echo "Checking Android emulator transport before Gradle tests..."
-            adb wait-for-device
-            for attempt in $(seq 1 30); do
-              state="$(adb get-state 2>/dev/null || true)"
-              boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-              if [[ "$state" == "device" && "$boot" == "1" ]]; then
-                echo "Emulator is online and boot completed."
-                break
-              fi
-              if [[ "$attempt" == "30" ]]; then
-                echo "::error::Android emulator did not remain online after boot."
-                adb devices -l || true
-                adb logcat -d -t 500 || true
-                exit 1
-              fi
-              sleep 2
-            done
+            set -eu
+            echo "Waiting for Android emulator transport..."
+            timeout 60s adb wait-for-device
+            echo "ADB state: $(adb get-state)"
+            echo "Boot completed: $(adb shell getprop sys.boot_completed)"
             gradle --no-daemon :app:connectedDebugAndroidTest
