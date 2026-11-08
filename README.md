@@ -34,12 +34,12 @@ The Android app initializes Firebase App Check. Debug builds use the Firebase Ap
 
 For a pre-release conversation test, prefer the debug build and Firebase's documented debug-provider flow. A production Play Integrity registration is still required before distributing the signed release build.
 
-## Notification reader — candidate 0.10.4
+## Notification reader — deferred
 
-- An opt-in Android `NotificationListenerService` is registered. The user must explicitly enable Juanita in Android notification-access settings.
-- The Altro tab displays up to 30 recent notifications in volatile app memory. Reading notifications aloud with Juanita's configured Gemini Live voice is not yet implemented; Android system TTS is deliberately not used.
-- Notification content is not written to the encrypted conversation archive, not sent to Gemini, and is cleared when the app process is recreated or the user taps Svuota. Android controls which notification text is exposed; hidden previews cannot be recovered.
-- This is a first-stage notification inbox, not direct WhatsApp account access. It cannot retrieve old messages, open chats, send replies, or guarantee background delivery until tested on physical devices.
+- Notification reading is intentionally disabled in the 0.10.6 sideload build. The Android notification-listener service is not declared in the manifest, and no Gemini Live notification-reading tools or notification-access UI are exposed.
+- The implementation source is retained for a later project phase, after a distribution path that passes Google Play Protect requirements is established.
+- Do not ask users to disable Play Protect or grant notification access for this build.
+
 
 ## Not implemented yet
 
