@@ -1248,3 +1248,8 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 - Verifica separata di package, firma permanente e versionCode 41 prima della Release.
 - Test fisico Note10+ e S22 Ultra: profilo, creazione/elenco/stop sveglia, buongiorno udibile, accesso e lettura notifiche, anteprima voce e stop automatico.
 - Nessun servizio a pagamento, billing, Firebase Blaze, TTS, cancellazione dati, cambio package/firma o bypass Play Protect.
+
+
+## 0.11.5 — scelta voci femminili e maschili (2026-11-08)
+
+**STATO: implementazione candidata in CI; non ancora verificata su dispositivo.** Il menu Gemini Live è suddiviso in due gruppi, con tutte le 30 voci del catalogo documentato da Firebase AI Logic: 14 femminili e 16 maschili. Gli identificativi delle sette voci già presenti restano invariati, così le preferenze salvate non vengono perse. L'anteprima continua a usare la voce Gemini selezionata, senza Android TTS. Prima di dichiarare completato il lavoro vanno provate almeno una voce femminile e una maschile su sessione Live reale.
