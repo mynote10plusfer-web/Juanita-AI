@@ -461,6 +461,13 @@ private fun JuanitaApp(
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
                         Text("Orari esatti: ${if (context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()) "Autorizzati" else "Da autorizzare"}", color = Color.White, fontSize = 12.sp)
                     }
+                    if (android.os.Build.VERSION.SDK_INT >= 34) {
+                        Text("Sveglia a schermo intero: ${if (context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()) "Autorizzata" else "Da autorizzare"}", color = Color.White, fontSize = 12.sp)
+                    }
+                    Button(onClick = { showPermissionOnboarding = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Rivedi guida permessi") }
                     Button(onClick = {
                         val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                             data = android.net.Uri.parse("package:${context.packageName}")
