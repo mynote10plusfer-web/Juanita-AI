@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Production 0.10.4 (versionCode 33) is the latest verified permanently signed release (CI verified; device behavior still requires user testing). PR #17 is the 0.10.5 candidate (versionCode 34): consent-gated, app-scoped notification reading through Gemini Live. The candidate is under implementation and CI verification; no 0.10.5 APK is available yet. Voice-led permanent PersonalProfile onboarding and Smart Alarm/Agenda/Reminders remain approved roadmap work, not part of the current notification-reader code slice.
+Last updated: 2026-11-08 — 0.10.5 (versionCode 34) is the latest previously verified signed release. Release 0.10.6 is being prepared with notification reading deliberately deferred from the sideload build. Permanent PersonalProfile storage is being introduced as a foundation; voice-led onboarding and editing are not yet complete.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -990,21 +990,8 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 **Status: USER-REQUIRED SPECIFICATION — NOT IMPLEMENTED OR TESTED.**
 
 
-## Consent-scoped notification reading — USER APPROVED; 0.10.5 IMPLEMENTATION IN PROGRESS
+## Notification reading — USER APPROVED; DEFERRED TO FINAL PROJECT PHASE
 
-**User experience:** When the user explicitly asks to check notifications, Juanita first lists app names and counts only, then asks which app the user wants. Only after the user chooses an app may she request a bounded set of message contents. The selected content is read using the configured Gemini Live voice. The user may choose a specific app such as WhatsApp or another app visible in the inbox.
-
-**Implementation in candidate branch feature/notification-reading-consent-0.10.5:**
-- Added Gemini Live tools listNotificationApps and readRecentNotifications.
-- Inventory is grouped by Android package and contains app label, package identifier and count; package identifier is an internal selector and must not be spoken to the user.
-- Reading is scoped to one exact package identifier and a maximum of five recent entries per tool call.
-- Added a separate persisted in-app consent, OFF by default, for sending selected notification message content to Gemini. The local tool callback checks this preference at call time and returns no message content if disabled.
-- The existing Android listener remains exported=false and protected by BIND_NOTIFICATION_LISTENER_SERVICE.
-- Notification bodies are read from the volatile in-memory inbox only. When a notification body is returned, assistant-side audio transcript archiving is suppressed for the remainder of that Live session, preventing the read-aloud response from entering the archive. User-side transcripts continue to be archived. No notification content is written to curated memories, analytics or persistent notification storage by this bridge.
-- Notification content is treated as untrusted external data, not instructions. No reply, dismissal or mark-as-read action is implemented.
-- Android app inventory is returned only when the user asks to check notifications; message bodies require the separate in-app consent and a selected app.
-- Voice output uses the existing Gemini Live configured voice path; no Android TTS is introduced.
-
-**Important limitations:** Android can redact previews, and apps decide which notification fields are exposed. This does not read WhatsApp's private database or historical chats. A model instruction tells Gemini to ask the user to choose an app before invoking the content tool; actual spoken behavior and function-call sequencing still require device testing.
-
-**Verification gates:** CI build and test compilation; inspect tool schemas and fail-closed consent behavior; verify exact app scoping and 1–5 item cap; verify consent revocation during a Live session; verify no archive/memory/log persistence; test notification inventory and spoken readout on Note10+ Android 12 and S22 Ultra. CI success is not physical-device verification.
+- Notification listener service and Gemini Live reading tools are intentionally excluded from the sideload release to avoid the sensitive notification-listener permission that triggers Google Play Protect installation blocks for some sideloaded apps.
+- Source code is retained for a later phase; it is not active or exposed in the current release.
+- Do not disable Play Protect to test this build. Revisit notification reading only after an acceptable distribution and policy-compliance path is available.

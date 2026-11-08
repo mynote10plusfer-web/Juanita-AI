@@ -8,7 +8,6 @@ import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.Bundle
-import android.provider.Settings
 import android.view.WindowManager
 import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
@@ -70,7 +69,6 @@ import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import ai.juanita.app.memory.ImprovementReport
-import ai.juanita.app.notifications.NotificationInbox
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -284,29 +282,6 @@ private fun JuanitaApp(
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     val context = LocalContext.current
     var selectedSection by remember { mutableStateOf("HOME") }
-    val notificationEntries by NotificationInbox.entries.collectAsState()
-    var notificationAccessEnabled by remember { mutableStateOf(false) }
-    var notificationCloudConsent by remember {
-        mutableStateOf(AssistantPreferences(context).allowNotificationContentToGemini)
-    }
-    LaunchedEffect(selectedSection) {
-        if (selectedSection == "MORE") {
-            while (true) {
-                val enabledListeners = Settings.Secure.getString(
-                    context.contentResolver,
-                    "enabled_notification_listeners"
-                ).orEmpty()
-                notificationAccessEnabled = enabledListeners
-                    .split(':')
-                    .mapNotNull { ComponentName.unflattenFromString(it) }
-                    .any { component ->
-                        component.packageName == context.packageName &&
-                            component.className == "${context.packageName}.notifications.JuanitaNotificationListener"
-                    }
-                delay(1_500L)
-            }
-        }
-    }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
@@ -706,71 +681,8 @@ private fun JuanitaApp(
                 if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
-                SettingsCard(panel, gold, "NOTIFICHE DEL TELEFONO") {
-                    Text(
-                        if (notificationAccessEnabled)
-                            "Accesso autorizzato. Juanita riceve le notifiche pubblicate da Android."
-                        else
-                            "Per leggere le notifiche, autorizza Juanita nelle impostazioni Android.",
-                        color = if (notificationAccessEnabled) gold else Color(0xFFB9BBC1),
-                        fontSize = 13.sp
-                    )
-                    Button(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                            }.onFailure {
-                                status = "Impossibile aprire le impostazioni delle notifiche."
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) {
-                        Text(if (notificationAccessEnabled) "Gestisci accesso notifiche" else "Autorizza lettura notifiche")
-                    }
-                    Text(
-                        "Gli ultimi 30 avvisi restano temporanei sul dispositivo. L'elenco delle app e i conteggi vengono comunicati a Gemini solo quando chiedi di controllare le notifiche. I testi dei messaggi restano bloccati finché non attivi il consenso qui sotto.",
-                        color = Color(0xFF9A9DA4),
-                        fontSize = 11.sp
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(
-                            checked = notificationCloudConsent,
-                            onCheckedChange = { enabled ->
-                                notificationCloudConsent = enabled
-                                AssistantPreferences(context).allowNotificationContentToGemini = enabled
-                                status = if (enabled) {
-                                    "Consenso attivo: Juanita potrà leggere solo le notifiche che selezioni esplicitamente."
-                                } else {
-                                    "Consenso disattivato: i contenuti delle notifiche non vengono inviati a Gemini."
-                                }
-                            }
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Consenti lettura dei messaggi selezionati con Gemini", color = Color.White, fontSize = 13.sp)
-                            Text("Disattivato per impostazione predefinita. Puoi revocarlo in qualsiasi momento.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Notifiche recenti (${notificationEntries.size})", color = Color.White, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { NotificationInbox.clear() }) { Text("Svuota", color = gold) }
-                    }
-                    if (notificationEntries.isEmpty()) {
-                        Text("Nessuna notifica ricevuta finora. Dopo aver autorizzato l'accesso, attendi un nuovo messaggio o avviso.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    } else {
-                        notificationEntries.take(15).forEach { entry ->
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text(entry.appName + " · " + entry.title, color = gold, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                if (entry.text.isNotBlank()) Text(entry.text.take(400), color = Color.White, fontSize = 13.sp)
-                                Text(
-                                    "Lettura con la voce configurata di Juanita: in preparazione. Nessuna voce TTS di sistema verrà usata.",
-                                    color = Color(0xFF9A9DA4),
-                                    fontSize = 10.sp
-                                )
-                            }
-                            androidx.compose.material3.HorizontalDivider(color = Color(0xFF30343B))
-                        }
-                    }
+                SettingsCard(panel, gold, "FUNZIONI IN SVILUPPO") {
+                    Text("La lettura delle notifiche è stata rinviata alla fase finale del progetto. In questa versione Juanita non richiede l’accesso alle notifiche e non legge i messaggi del telefono.", color = Color(0xFFB9BBC1), fontSize = 13.sp)
                 }
 
                 ImprovementLabSection(
