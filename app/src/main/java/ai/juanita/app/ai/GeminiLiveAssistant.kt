@@ -101,7 +101,8 @@ class GeminiLiveAssistant {
                                 "interests" to Schema.string("Durable hobbies and interests explicitly described by the user."),
                                 "lifestyle" to Schema.string("Non-sensitive durable routines or lifestyle preferences explicitly described by the user."),
                                 "goals" to Schema.string("Ongoing goals or projects explicitly described by the user."),
-                                "assistance_preferences" to Schema.string("How the user explicitly prefers Juanita to communicate or help.")
+                                "assistance_preferences" to Schema.string("How the user explicitly prefers Juanita to communicate or help."),
+                                "clear_fields" to Schema.string("Comma-separated profile field keys the user explicitly asked Juanita to forget. Allowed: preferred_name, birth_date, languages, home_locality, interests, lifestyle, goals, assistance_preferences.")
                             )
                         )
                     )
@@ -136,7 +137,11 @@ class GeminiLiveAssistant {
                     val fields = allowed.mapNotNull { key ->
                         functionCall.args[key]?.jsonPrimitive?.content
                             ?.trim()?.takeIf { it.isNotBlank() }?.let { key to it }
-                    }.toMap()
+                    }.toMap().toMutableMap()
+                    functionCall.args["clear_fields"]?.jsonPrimitive?.content
+                        ?.split(",")?.map { it.trim() }
+                        ?.filter { it in allowed }
+                        ?.forEach { fields[it] = "" }
                     val result = if (fields.isEmpty()) {
                         "No profile fields were saved: no explicit personal detail was supplied."
                     } else {
