@@ -20,6 +20,7 @@ class AlarmVoiceCommandHandler(private val context: Context) {
     fun execute(name: String, args: Map<String, String>): String = when (name) {
         "createAlarm" -> create(args)
         "listAlarms" -> list()
+        "updateAlarm" -> update(args)
         "setAlarmEnabled" -> setEnabled(args)
         "deleteAlarm" -> delete(args)
         else -> "Comando sveglia non riconosciuto."
@@ -79,6 +80,55 @@ class AlarmVoiceCommandHandler(private val context: Context) {
         return alarms.joinToString("\n") { alarm ->
             "ID ${alarm.id} — ${if (alarm.schedule.enabled) "attiva" else "disattivata"} — ${describe(alarm)}"
         }.take(3000)
+    }
+
+    private fun update(args: Map<String, String>): String {
+        val id = args["alarm_id"].orEmpty().trim()
+        if (id.isBlank()) return "ID sveglia mancante. Prima elenca le sveglie."
+        val current = store.find(id) ?: return "Non trovo una sveglia con questo ID."
+        val old = current.schedule
+        val timeRaw = args["time"]?.trim().orEmpty()
+        val parsedTime = if (timeRaw.isBlank()) null else
+            runCatching { LocalTime.parse(timeRaw, DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)) }.getOrNull()
+                ?: return "Orario non valido. Usa HH:mm."
+        val dateRaw = args["date"]?.trim().orEmpty()
+        val daysRaw = args["repeat_days"]?.trim().orEmpty()
+        if (dateRaw.isNotBlank() && daysRaw.isNotBlank()) return "Scegli una data singola oppure i giorni di ripetizione."
+        val date = if (dateRaw.isNotBlank()) runCatching { LocalDate.parse(dateRaw) }.getOrNull()
+            ?: return "Data non valida. Usa YYYY-MM-DD." else null
+        val days = if (daysRaw.isNotBlank()) {
+            val parsed = daysRaw.split(",").mapNotNull { raw ->
+                runCatching { DayOfWeek.valueOf(raw.trim().uppercase(Locale.ROOT)) }.getOrNull()
+            }.toSet()
+            if (parsed.isEmpty() || parsed.size != daysRaw.split(",").size) return "Giorni di ripetizione non validi."
+            parsed
+        } else null
+        val hour = parsedTime?.hour ?: old.hour
+        val minute = parsedTime?.minute ?: old.minute
+        val oneShot = when {
+            date != null -> date.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            days != null -> null
+            old.oneShotAtEpochMillis != null && parsedTime != null -> {
+                val existingDate = java.time.Instant.ofEpochMilli(old.oneShotAtEpochMillis)
+                    .atZone(ZoneId.systemDefault()).toLocalDate()
+                existingDate.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            }
+            else -> old.oneShotAtEpochMillis
+        }
+        val repeatDays = days ?: if (date != null) emptySet() else old.repeatDays
+        if (oneShot == null && repeatDays.isEmpty()) return "La sveglia deve avere una data singola o almeno un giorno di ripetizione."
+        if (oneShot != null && oneShot <= System.currentTimeMillis()) return "La nuova data e ora devono essere future."
+        val updated = current.copy(
+            label = args["label"]?.trim()?.take(80) ?: current.label,
+            schedule = AlarmSchedule(hour, minute, repeatDays, oneShot, old.enabled)
+        )
+        if (!store.upsert(updated)) return "Non sono riuscita a salvare la modifica."
+        if (updated.schedule.enabled && !JuanitaAlarmScheduler.schedule(context, updated)) {
+            store.upsert(current)
+            JuanitaAlarmScheduler.schedule(context, current)
+            return "Android non ha accettato la nuova programmazione. La sveglia precedente è stata ripristinata."
+        }
+        return "Sveglia aggiornata. ${describe(updated)}"
     }
 
     private fun setEnabled(args: Map<String, String>): String {
