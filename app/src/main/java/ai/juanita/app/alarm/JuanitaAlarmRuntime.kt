@@ -123,9 +123,9 @@ object JuanitaAlarmScheduler {
         manager.cancel(pending)
         JuanitaAlarmStore(context).setSnooze(alarmId, triggerAt)
         val voiceState = JuanitaVoiceService.state.value
-        if (voiceState != "Non connessa" && voiceState != "Conversazione terminata") {
-            runCatching { JuanitaVoiceService.stop(context) }
-        }
+        val liveSessionActive = voiceState.contains("in ascolto", ignoreCase = true) ||
+            voiceState.contains("Connessione a Gemini Live", ignoreCase = true)
+        if (liveSessionActive) runCatching { JuanitaVoiceService.stop(context) }
         runCatching {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
                 manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
