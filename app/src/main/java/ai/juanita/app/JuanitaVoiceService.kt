@@ -17,6 +17,10 @@ import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
+import ai.juanita.app.profile.PersonalProfile
+import ai.juanita.app.profile.PersonalProfileStore
+import java.time.LocalDate
+import java.time.Period
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +43,7 @@ class JuanitaVoiceService : Service() {
     private val assistant = GeminiLiveAssistant()
     private lateinit var memoryStore: EncryptedMemoryStore
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
+    private lateinit var personalProfileStore: PersonalProfileStore
     private var startRequested = false
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
@@ -68,6 +73,7 @@ class JuanitaVoiceService : Service() {
         super.onCreate()
         memoryStore = EncryptedMemoryStore(applicationContext)
         automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
+        personalProfileStore = PersonalProfileStore(applicationContext)
         createNotificationChannel()
     }
 
@@ -107,8 +113,13 @@ class JuanitaVoiceService : Service() {
                             val localContext = withContext(Dispatchers.IO) {
                                 memoryStore.buildAssistantContext()
                             }
-                            val sessionInstruction = if (localContext.isBlank()) instruction else {
-                                "$instruction\n\n$localContext"
+                            val profileContext = withContext(Dispatchers.IO) {
+                                buildPersonalProfileContext(personalProfileStore.load())
+                            }
+                            val sessionInstruction = buildString {
+                                append(instruction)
+                                if (profileContext.isNotBlank()) append("\n\n").append(profileContext)
+                                if (localContext.isNotBlank()) append("\n\n").append(localContext)
                             }
                             // A single ordered worker prevents transcript callbacks racing
                             // with one another or with the final memory flush.
@@ -206,7 +217,27 @@ class JuanitaVoiceService : Service() {
                                         excludeSessionId = conversationId
                                     )
                                 },
-
+                                onProfileUpdate = { fields ->
+                                    val saved = mutableListOf<String>()
+                                    fields.forEach { (key, value) ->
+                                        if (key !in PersonalProfile.allowedKeys) return@forEach
+                                        if (key == PersonalProfile.BIRTH_DATE) {
+                                            val parsed = runCatching { LocalDate.parse(value) }.getOrNull()
+                                            require(parsed != null && !parsed.isAfter(LocalDate.now())) {
+                                                "La data di nascita deve essere una data valida in formato YYYY-MM-DD."
+                                            }
+                                        }
+                                        val safeValue = when (key) {
+                                            PersonalProfile.PREFERRED_NAME -> value.take(80)
+                                            PersonalProfile.BIRTH_DATE -> value
+                                            else -> value.take(500)
+                                        }
+                                        personalProfileStore.updateField(key, safeValue)
+                                        saved += key
+                                    }
+                                    if (saved.isEmpty()) "No profile fields were saved."
+                                    else "Saved explicitly stated profile fields: " + saved.joinToString(", ") + "."
+                                }
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
@@ -269,6 +300,38 @@ class JuanitaVoiceService : Service() {
                 stopSelf()
             }
         }
+    }
+
+    /**
+     * Build a small, explicit profile context for the next Live session.
+     * The profile is encrypted separately from transcripts and curated memories.
+     */
+    private fun buildPersonalProfileContext(profile: PersonalProfile): String {
+        if (profile.fields.isEmpty()) return ""
+        val labels = mapOf(
+            PersonalProfile.PREFERRED_NAME to "Preferred name",
+            PersonalProfile.BIRTH_DATE to "Birth date",
+            PersonalProfile.LANGUAGES to "Languages",
+            PersonalProfile.HOME_LOCALITY to "Home locality",
+            PersonalProfile.INTERESTS to "Interests",
+            PersonalProfile.LIFESTYLE to "Lifestyle",
+            PersonalProfile.GOALS to "Goals",
+            PersonalProfile.ASSISTANCE_PREFERENCES to "Assistance preferences"
+        )
+        val lines = profile.fields.mapNotNull { (key, field) ->
+            labels[key]?.let { it + ": " + field.value }
+        }.toMutableList()
+        profile.value(PersonalProfile.BIRTH_DATE)?.let { raw ->
+            runCatching {
+                val birthDate = LocalDate.parse(raw)
+                val age = Period.between(birthDate, LocalDate.now()).years
+                if (age in 0..120) lines += "Age calculated from the user's explicitly provided birth date: " + age
+            }
+        }
+        if (lines.isEmpty()) return ""
+        return "CONFIRMED PERSONAL PROFILE (private local profile; use only when relevant):\n" +
+            lines.joinToString("\n") +
+            "\nThese are user-provided details. Respect corrections and do not ask again for information already present."
     }
 
     private fun mergeTranscriptChunks(existing: String, incoming: String): String {
