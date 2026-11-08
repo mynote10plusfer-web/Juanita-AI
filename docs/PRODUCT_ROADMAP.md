@@ -1100,7 +1100,7 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 
 Candidate branch: `feature/complete-gentle-morning-alarm-0.11.0`.
 
-- Keeps the 0.10.9 local weekly alarm, exact/inexact scheduling, local alarm tone, 12-second ramp, lock-screen UI, snooze and dismiss.
+- Keeps the 0.10.9 local alarm engine and adds one-time date/time scheduling alongside weekly recurrence; exact/inexact scheduling, local alarm tone, 12-second ramp, lock-screen UI, snooze and dismiss remain.
 - Adds an explicit opt-in for a morning voice briefing and requests microphone + optional calendar + optional coarse location permissions from the foreground settings UI.
 - Starts Gemini Live from the visible alarm activity only when the user enabled the feature and microphone permission is already granted. It uses the saved Gemini Live voice; no Android TTS. The local alarm tone continues until Gemini's first assistant transcript indicates speech has begun.
 - Sends one opening briefing prompt only on the initial session; recovery sessions must not repeat the greeting.
