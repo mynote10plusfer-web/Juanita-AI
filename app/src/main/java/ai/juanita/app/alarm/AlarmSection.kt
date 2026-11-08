@@ -241,7 +241,8 @@ fun AlarmSection(panel: Color, gold: Color) {
                     status = "Concedi prima il permesso notifiche, poi premi di nuovo Salva e attiva."
                     notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
-                    val oneShotAt = if (oneTimeMode) oneTimeDate.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null\n                    val schedule = AlarmSchedule(hour, minute, if (oneTimeMode) emptySet() else days, oneShotAt, enabled = true)
+                    val oneShotAt = if (oneTimeMode) oneTimeDate.atTime(hour, minute).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null
+                    val schedule = AlarmSchedule(hour, minute, if (oneTimeMode) emptySet() else days, oneShotAt, enabled = true)
                     val ok = JuanitaAlarmScheduler.schedule(context, schedule)
                     enabled = ok
                     status = if (ok) "Sveglia salvata e programmata sul dispositivo."
