@@ -29,6 +29,7 @@ class JuanitaAlarmRingingService : Service() {
     private var player: MediaPlayer? = null
     private var volumeJob: Job? = null
     private var autoStopJob: Job? = null
+    private var autoStopAlarmId: String? = null
     private var ringCountAlarmId: String? = null
     private var remainingRingCycles: Int? = null
     private var activeAlarmId: String = JuanitaAlarmStore.LEGACY_ID
@@ -44,11 +45,17 @@ class JuanitaAlarmRingingService : Service() {
                 if (alarmId.isNullOrBlank()) {
                     autoStopJob?.cancel()
                     autoStopJob = null
+                    autoStopAlarmId = null
                     ringCountAlarmId = null
                     remainingRingCycles = null
                     activeAlarmIds.clear()
                 } else {
                     activeAlarmIds.remove(alarmId)
+                    if (autoStopAlarmId == alarmId) {
+                        autoStopJob?.cancel()
+                        autoStopJob = null
+                        autoStopAlarmId = null
+                    }
                     if (ringCountAlarmId == alarmId) {
                         ringCountAlarmId = null
                         remainingRingCycles = null
@@ -79,6 +86,7 @@ class JuanitaAlarmRingingService : Service() {
                 val rings = intent.getIntExtra(EXTRA_STOP_AFTER_RINGS, 0)
                 autoStopJob?.cancel()
                 autoStopJob = null
+                autoStopAlarmId = alarmId.takeIf { seconds > 0 }
                 ringCountAlarmId = alarmId.takeIf { rings > 0 }
                 remainingRingCycles = rings.takeIf { it > 0 }
                 if (seconds > 0) {
@@ -250,6 +258,7 @@ class JuanitaAlarmRingingService : Service() {
         volumeJob = null
         autoStopJob?.cancel()
         autoStopJob = null
+        autoStopAlarmId = null
         ringCountAlarmId = null
         remainingRingCycles = null
         runCatching { player?.stop() }
