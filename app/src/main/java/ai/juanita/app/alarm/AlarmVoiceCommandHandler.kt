@@ -72,7 +72,7 @@ class AlarmVoiceCommandHandler(private val context: Context) {
             store.delete(alarm.id)
             return "La sveglia non è stata programmata da Android. Controlla l'accesso a Sveglie e promemoria."
         }
-        return "Sveglia salvata e programmata. ID: ${alarm.id}. ${describe(alarm)}"
+        return "Sveglia salvata e programmata. ID: ${alarm.id}. ${describe(alarm)}" + timingNote()
     }
 
     private fun openDeviceAlarms(): String {
@@ -141,7 +141,7 @@ class AlarmVoiceCommandHandler(private val context: Context) {
             JuanitaAlarmScheduler.schedule(context, current)
             return "Android non ha accettato la nuova programmazione. La sveglia precedente è stata ripristinata."
         }
-        return "Sveglia aggiornata. ${describe(updated)}"
+        return "Sveglia aggiornata. ${describe(updated)}" + timingNote()
     }
 
     private fun setEnabled(args: Map<String, String>): String {
@@ -158,7 +158,7 @@ class AlarmVoiceCommandHandler(private val context: Context) {
                 return "Android non ha programmato la sveglia. Controlla i permessi per gli orari esatti."
             }
         } else JuanitaAlarmScheduler.cancel(context, id)
-        return "Sveglia ${if (enabled) "attivata" else "disattivata"}. ${describe(updated)}"
+        return "Sveglia ${if (enabled) "attivata" else "disattivata"}. ${describe(updated)}" + if (enabled) timingNote() else ""
     }
 
     private fun delete(args: Map<String, String>): String {
@@ -169,6 +169,10 @@ class AlarmVoiceCommandHandler(private val context: Context) {
         JuanitaAlarmScheduler.cancel(context, id)
         return "Sveglia eliminata: ${describe(alarm)}. Le altre sveglie non sono state modificate."
     }
+
+    private fun timingNote(): String =
+        if (JuanitaAlarmScheduler.hasExactAlarmAccess(context)) ""
+        else " Attenzione: l'accesso agli orari esatti non è attivo; Android potrebbe ritardare la sveglia."
 
     private fun describe(alarm: JuanitaAlarm): String {
         val schedule = alarm.schedule
