@@ -76,6 +76,7 @@ object JuanitaAlarmScheduler {
     }
 
     fun scheduleAll(context: Context): Boolean {
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         cancelLegacyPending(context)
         val alarms = JuanitaAlarmStore(context).all()
         var success = true
