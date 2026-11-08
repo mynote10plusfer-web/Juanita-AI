@@ -213,7 +213,7 @@ class JuanitaVoiceService : Service() {
                                         .groupBy { it.packageName }
                                         .map { (packageName, items) ->
                                             val label = items.firstOrNull()?.appName ?: packageName
-                                            "$label ($packageName): \${items.size}"
+                                            "$label ($packageName): ${items.size}"
                                         }
                                         .sorted()
                                         .joinToString("\n")
@@ -231,7 +231,7 @@ class JuanitaVoiceService : Service() {
                                             "No current notifications are available for the selected app."
                                         } else {
                                             selected.joinToString("\n\n") { entry ->
-                                                "App: \${entry.appName}\nTitle: \${entry.title.take(200)}\nMessage: \${entry.text.take(1200)}"
+                                                "App: ${entry.appName}\nTitle: ${entry.title.take(200)}\nMessage: ${entry.text.take(1200)}"
                                             }.take(4800)
                                         }
                                     }
