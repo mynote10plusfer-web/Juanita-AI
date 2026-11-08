@@ -773,12 +773,11 @@ private fun JuanitaApp(
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(entry.appName + " · " + entry.title, color = gold, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 if (entry.text.isNotBlank()) Text(entry.text.take(400), color = Color.White, fontSize = 13.sp)
-                                TextButton(
-                                    onClick = {
-                                        val spoken = listOf(entry.appName, entry.title, entry.text).filter { it.isNotBlank() }.joinToString(". ")
-                                        status = onSpeak(spoken, selectedLanguage)
-                                    }
-                                ) { Text("Leggi ad alta voce", color = gold) }
+                                Text(
+                                    "Lettura con la voce configurata di Juanita: in preparazione. Nessuna voce TTS di sistema verrà usata.",
+                                    color = Color(0xFF9A9DA4),
+                                    fontSize = 10.sp
+                                )
                             }
                             androidx.compose.material3.HorizontalDivider(color = Color(0xFF30343B))
                         }
