@@ -88,6 +88,7 @@ class JuanitaVoiceService : Service() {
                 val instruction = intent.getStringExtra(EXTRA_INSTRUCTION).orEmpty()
                 val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
                 val initialPrompt = intent.getStringExtra(EXTRA_INITIAL_PROMPT).orEmpty()
+                val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 if (instruction.isBlank()) {
                     _state.value = "Impossibile avviare: istruzioni mancanti"
                     stopSelf(startId)
@@ -214,7 +215,7 @@ class JuanitaVoiceService : Service() {
                                 onTranscript = { role, text ->
                                     if (initialPrompt.isNotBlank() && role.equals("ASSISTANT", ignoreCase = true)) {
                                         // Keep the local alarm sounding until Gemini actually begins speaking.
-                                        JuanitaAlarmRingingService.stop(this@JuanitaVoiceService)
+                                        JuanitaAlarmRingingService.stop(this@JuanitaVoiceService, alarmId)
                                     }
                                     val sent = transcriptQueue.trySend(role to text)
                                     if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
@@ -456,6 +457,7 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
+        const val EXTRA_ALARM_ID = "extra_alarm_id"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
 
@@ -468,12 +470,13 @@ class JuanitaVoiceService : Service() {
         private val _memoryState = MutableStateFlow("Memoria automatica pronta.")
         val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
-        fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "") {
+        fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "", alarmId: String? = null) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_INSTRUCTION, instruction)
                 putExtra(EXTRA_VOICE, voiceName)
                 putExtra(EXTRA_INITIAL_PROMPT, initialPrompt)
+                if (alarmId != null) putExtra(EXTRA_ALARM_ID, alarmId)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }
