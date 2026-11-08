@@ -147,7 +147,7 @@ object JuanitaAlarmScheduler {
                 manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
             }
         }
-        JuanitaAlarmRingingService.stop(context)
+        JuanitaAlarmRingingService.stop(context, alarmId)
     }
 
     internal fun dismiss(context: Context, alarmId: String) {
@@ -156,7 +156,7 @@ object JuanitaAlarmScheduler {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         manager.cancel(alarmPendingIntent(context, alarmId, true))
         JuanitaAlarmStore(context).clearSnooze(alarmId)
-        JuanitaAlarmRingingService.stop(context)
+        JuanitaAlarmRingingService.stop(context, alarmId)
     }
 
     private fun alarmPendingIntent(context: Context, alarmId: String, snooze: Boolean): PendingIntent {
