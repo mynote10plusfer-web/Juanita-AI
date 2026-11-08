@@ -92,6 +92,8 @@ jobs:
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           emulator-boot-timeout: 900
+          # Start ADB before the runner's boot polling; its launcher calls adb directly.
+          pre-emulator-launch-script: adb start-server
           # Avoid the runner's failing post-boot animation/ADB settings command.
           disable-animations: false
           # The action executes each script line separately; keep conditionals on one line.
