@@ -37,7 +37,7 @@ For a pre-release conversation test, prefer the debug build and Firebase's docum
 ## Notification reader — candidate 0.10.4
 
 - An opt-in Android `NotificationListenerService` is registered. The user must explicitly enable Juanita in Android notification-access settings.
-- The Altro tab displays up to 30 recent posted notifications in volatile app memory and can read an item aloud using the currently selected Android system TTS language.
+- The Altro tab displays up to 30 recent notifications in volatile app memory. Reading notifications aloud with Juanita's configured Gemini Live voice is not yet implemented; Android system TTS is deliberately not used.
 - Notification content is not written to the encrypted conversation archive, not sent to Gemini, and is cleared when the app process is recreated or the user taps Svuota. Android controls which notification text is exposed; hidden previews cannot be recovered.
 - This is a first-stage notification inbox, not direct WhatsApp account access. It cannot retrieve old messages, open chats, send replies, or guarantee background delivery until tested on physical devices.
 
