@@ -363,11 +363,14 @@ fun AlarmSection(panel: Color, gold: Color) {
             text = { Text("Verrà eliminata solo ${target.label.ifBlank { String.format(Locale.getDefault(), "%02d:%02d", target.schedule.hour, target.schedule.minute) }}. Le altre sveglie non verranno modificate.") },
             confirmButton = {
                 TextButton(onClick = {
-                    JuanitaAlarmScheduler.cancel(context, target.id)
-                    store.delete(target.id)
+                    if (store.delete(target.id)) {
+                        JuanitaAlarmScheduler.cancel(context, target.id)
+                        status = "Sveglia eliminata."
+                    } else {
+                        status = "Non sono riuscita a eliminare la sveglia dalla memoria locale."
+                    }
                     refresh()
                     deleteTarget = null
-                    status = "Sveglia eliminata."
                 }) { Text("Elimina", color = Color(0xFFE49B91)) }
             },
             dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Annulla") } }
