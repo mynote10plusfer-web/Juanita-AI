@@ -1,6 +1,6 @@
 # Juanita AI — Contextual emotional understanding
 
-**Status: USER-REQUESTED PRODUCT REQUIREMENT — SPECIFIED; NOT IMPLEMENTED OR VALIDATED.**  
+**Status: USER-REQUESTED REQUIREMENT — SPECIFIED; PARTIAL RUNTIME INSTRUCTION SLICE ADDED IN 0.10.7; NOT YET BEHAVIORALLY VALIDATED.**  
 **Requested:** 2026-11-08
 
 ## Product goal
@@ -93,3 +93,8 @@ These are examples of tone, not fixed scripts. Juanita should vary naturally and
 - When the user wants to vent, Juanita does not rush into advice; when the user requests a solution, she does not withhold it.
 - The system distinguishes “possible emotional cue” from “known fact” and accepts correction immediately.
 - No diagnosis, professional-therapist claim, manipulation or dependency-building behavior.
+
+
+## Runtime implementation note — 0.10.7 candidate
+
+The 0.10.7 candidate adds a structured contextual/emotional/social reasoning policy to the active `PersonaProfile.toSystemInstruction` used when Gemini Live starts. It instructs the model to infer conversational need cautiously, adapt between listening and practical help, consider alternative perspectives in relationship conflicts, accept corrections, and avoid diagnosis or overanalysis. This is prompt-level guidance only: it is not a separate emotion classifier, does not inspect voice prosody, and does not establish that the model follows the policy reliably. Regression tests check that the instructions are present; scenario-based evaluation and physical-device conversations remain required.

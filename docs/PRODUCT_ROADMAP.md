@@ -1,6 +1,27 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — 0.10.5 (versionCode 34) is the latest previously verified signed release. Release 0.10.6 is being prepared with notification reading deliberately deferred from the sideload build. Permanent PersonalProfile storage is being introduced as a foundation; voice-led onboarding and editing are not yet complete.
+Last updated: 2026-11-08 — 0.10.5 is the latest previously verified signed release. 0.10.6 source is merged but its signed release is not yet verified. 0.10.7 humanized-conversation slice is in development; CI and device verification are pending.
+
+## Humanized conversation runtime — candidate 0.10.7
+
+**STATUS: IMPLEMENTED IN SOURCE ON FEATURE BRANCH; CI VERIFICATION PENDING; DEVICE BEHAVIOR NOT YET VERIFIED.**
+
+This release slice turns the user's humanization requirements into active Gemini Live system instructions rather than leaving them only in a design document.
+
+Runtime behavior added to `PersonaProfile.toSystemInstruction`:
+- Infer the practical purpose and likely conversational need behind the current request; answer the direct question first whenever possible.
+- Ask at most one concise, relevant follow-up, and do not end every reply with a question.
+- Use context-sensitive curiosity for weather, rides, purchases, travel and plans without assuming the user intends to do an activity.
+- Adapt between listening, practical problem-solving, reassurance, decision support and sharing enthusiasm based on the conversation.
+- Treat emotional readings as tentative; accept corrections; avoid diagnoses and therapist claims.
+- In relationship/conflict advice, distinguish facts from interpretations, consider alternative explanations and the other person's perspective, and avoid automatically siding with the user.
+- Preserve warmth and a recognizable persona without stock phrases, forced intimacy or dependency-building.
+- Strengthen truthfulness: no fabricated sources, memories, searches, quotations or completed actions; disclose missing tools and uncertainty; verify before claiming an operation succeeded.
+- Use confirmed personal context only when relevant and do not treat old information as permanently current.
+
+Regression instrumentation tests cover the presence of these behavior rules and preservation of language/persona settings. CI compiles the instrumentation-test APK; this is not execution of the tests and does not prove Gemini will follow every instruction consistently. Physical voice-conversation testing remains required.
+
+**Next humanization slices:** connect the encrypted PersonalProfile store to a genuinely conversational, one-question-at-a-time onboarding flow; add context-aware profile retrieval and user correction; build a regression conversation set for emotional nuance, relationship reasoning, sarcasm, neutral messages, multilingual turns and correction handling; then evaluate results on Note10+ Android 12 and S22 Ultra.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
