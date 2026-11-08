@@ -34,7 +34,10 @@ object JuanitaAlarmScheduler {
         ) return true
 
         val next = AlarmScheduleCalculator.nextOccurrence(schedule, ZonedDateTime.now())
-            ?: return false
+        if (next == null) {
+            if (schedule.oneShotAtEpochMillis != null) JuanitaAlarmStore(context).consumeOneShot(alarm.id)
+            return false
+        }
         val triggerAt = next.toInstant().toEpochMilli()
         return runCatching {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
@@ -52,6 +55,18 @@ object JuanitaAlarmScheduler {
     }
 
     fun scheduleAll(context: Context): Boolean {
+        // Cancel the legacy 0.11.0 singleton PendingIntents after migrating its record.
+        val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        manager.cancel(PendingIntent.getBroadcast(
+            context, 5201,
+            Intent(context, JuanitaAlarmReceiver::class.java).setAction(ACTION_FIRE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        ))
+        manager.cancel(PendingIntent.getBroadcast(
+            context, 5207,
+            Intent(context, JuanitaAlarmReceiver::class.java).setAction(ACTION_SNOOZE_FIRE),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        ))
         val alarms = JuanitaAlarmStore(context).all()
         var success = true
         alarms.forEach { alarm ->
@@ -125,7 +140,7 @@ object JuanitaAlarmScheduler {
     }
 
     private fun requestCode(id: String, suffix: Int): Int =
-        (REQUEST_BASE + (id.hashCode() and 0x3fffffff) * 3 + suffix) and 0x7fffffff
+        (REQUEST_BASE + (id.hashCode() and 0x0fffffff) * 3 + suffix) and 0x7fffffff
 }
 
 class JuanitaAlarmReceiver : BroadcastReceiver() {
@@ -162,7 +177,7 @@ class JuanitaAlarmBootReceiver : BroadcastReceiver() {
             if (snoozeAt > System.currentTimeMillis()) {
                 val snoozeIntent = PendingIntent.getBroadcast(
                     context,
-                    5200 + (alarm.id.hashCode() and 0x3fffffff) * 3 + 1,
+                    5200 + (alarm.id.hashCode() and 0x0fffffff) * 3 + 1,
                     Intent(context, JuanitaAlarmReceiver::class.java)
                         .setAction(JuanitaAlarmScheduler.ACTION_SNOOZE_FIRE)
                         .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarm.id),
