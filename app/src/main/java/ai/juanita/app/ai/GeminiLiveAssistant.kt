@@ -59,6 +59,7 @@ class GeminiLiveAssistant {
         onConnectionState: (status: String) -> Unit = {}
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
+        synchronized(recentTranscript) { recentTranscript.clear() }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
             systemInstruction = content {
