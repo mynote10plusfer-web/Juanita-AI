@@ -91,7 +91,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          boot-timeout: 900
+          emulator-boot-timeout: 900
           # Avoid the runner's failing post-boot animation/ADB settings command.
           disable-animations: false
           # The action executes this script with /bin/sh; keep it strictly POSIX.
@@ -101,4 +101,12 @@ jobs:
             timeout 60s adb wait-for-device
             echo "ADB state: $(adb get-state)"
             echo "Boot completed: $(adb shell getprop sys.boot_completed)"
-            gradle --no-daemon :app:connectedDebugAndroidTest
+            if gradle --no-daemon :app:connectedDebugAndroidTest; then
+              echo "Android instrumentation tests completed successfully."
+            else
+              result=$?
+              echo "Instrumentation failed; collecting emulator diagnostics..."
+              adb devices -l || true
+              adb logcat -d -b all -t 1200 || true
+              exit "$result"
+            fi
