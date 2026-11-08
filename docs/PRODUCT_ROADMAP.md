@@ -1070,13 +1070,27 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 
 **Release gate:** real-device testing for at least 10–15 minutes, repeated GoAway cycles, network loss, stop-during-reconnect, no duplicate microphone capture and voice continuity on Note10+ Android 12 and S22 Ultra. Until device testing, do not claim the issue is definitively fixed or publish a Release APK with this change.
 
-## Smart Alarm — PR #23 MERGED; FOUNDATION ONLY
+## Smart Alarm — PR #25 MERGED; LOCAL ALARM IMPLEMENTED, DEVICE VALIDATION PENDING
 
-**Status:** PR #23 merged into main (2026-11-08). Adds a pure timezone-aware schedule model and instrumentation-test source for one-time and weekly alarms, including DST behavior.
+**Merged 2026-11-08** as cumulative release candidate 0.10.9 (versionCode 38). This replaces the earlier PR #23 foundation-only status.
 
-**Not yet implemented:** Android AlarmManager scheduling, encrypted persistence, alarm UI, ringtone/gradual volume, snooze/dismiss, reboot/time-zone rescheduling, exact-alarm permission handling, lock-screen presentation, or Juanita's spoken greeting. The current PR is not a usable alarm and must not be described as one.
+**Implemented in app source:**
+- Weekly local schedule with selectable hour and weekdays, stored on device.
+- Android AlarmManager exact scheduling when the user grants exact-alarm access; documented inexact fallback otherwise.
+- Restore weekly schedule after reboot, clock/time-zone changes and exact-alarm permission grant.
+- Local alarm playback using the device's configured alarm sound in a looping MediaPlayer foreground service.
+- Gradual 12-second volume ramp without changing the user's global alarm volume setting.
+- High-priority alarm notification and dedicated lock-screen/full-screen alarm screen.
+- Snooze for 10 minutes, with snooze timestamp persisted and restored after reboot.
+- Dismiss action cancels ringing and pending snooze.
+- Permission guidance for notifications, exact alarms and Android 14+ full-screen intents.
+- No paid service, network API or subscription is required for the alarm itself.
 
-**Next implementation slices:** local persistence and AlarmManager receiver/scheduler; then alarm management UI and permission/lock-screen behavior; then spoken greeting using the configured Gemini Live voice, only if a reliable non-TTS playback path is technically verified. Weather briefing remains optional and must use the multi-source forecast policy above.
+**Voice limitation — deliberately not faked:** the alarm does not start Gemini Live or activate the microphone from the background. Android restricts background microphone foreground-service starts; the user must open Juanita and explicitly start the Live conversation. No Android TTS or substitute voice is used. Automatic spoken greeting and weather briefing remain unimplemented until a reliable, policy-compliant, consent-respecting playback path using Juanita's configured Live voice is verified.
+
+**CI status:** the PR #25 debug build and Android instrumentation-test compilation passed for the implementation commit before the version-only bump; the cumulative 0.10.9 release build is being produced and must pass permanent-signature verification before distribution.
+
+**Physical-device validation still required:** test on Note10+ Android 12 and S22 Ultra for exact/inexact timing, screen off/locked, notification and full-screen permissions, alarm audio, gradual volume, snooze/dismiss, reboot, timezone change, battery optimization and force-stop behavior. CI compilation is not proof of real-device behavior. Do not claim the alarm or the PR #24 microphone recovery has been physically verified until the user tests them.
 
 ## Familiar-person voice recognition — USER-APPROVED; NOT IMPLEMENTED
 
