@@ -1195,3 +1195,12 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 - The alarm tone is currently stopped on the first assistant output transcript callback, not a verified first audio sample. This is not equivalent to actual audible speech start.
 - The foreground activity starts Gemini Live using the configured voice. Android's while-in-use microphone rules apply to microphone foreground services on API 34+; real-device validation is mandatory and no background-start bypass is permitted. See Android documentation: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
 - Do not publish a Release APK until latest CI is green, the remaining functional blockers are fixed or explicitly scoped, permanent signing is verified, and physical-device tests pass on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+### Follow-up hardening — independent active ringing occurrences
+- The local ringing service previously had one mutable active alarm ID. If two alarm events arrived while the tone was already playing, the later event could overwrite the ID shown in the notification; dismissing one occurrence could stop the shared tone for both.
+- The service now tracks a set of currently ringing alarm IDs and keeps one shared local alarm tone while at least one occurrence remains active. Snooze/dismiss requests remove only the matching ID; the tone and notification remain while another occurrence is active. The notification reports the number of active alarms.
+- The alarm activity passes its own ID into the Gemini Live service. When the first assistant transcript callback ends the tone for that morning session, it removes only that alarm occurrence rather than stopping every active alarm.
+- Stale stop requests are guarded so a late notification action after service teardown does not crash the caller.
+- This is a source-level correction, not yet a proven device behavior. CI compilation/instrumentation and physical overlapping-alarm tests are still required. The SDK callback limitation remains: transcript arrival is not proof of first audible audio.
+- Commits: `a7fd047`, `04f3b4b`, `7b56f25`, `cbfc582`, `81879b7`.
