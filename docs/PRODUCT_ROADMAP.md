@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-07 — PR #11 merged as production candidate 0.10.3 (versionCode 32), with permanent release signing verified. PR #12 adds the opt-in Android notification reader and prepares candidate 0.10.4 (versionCode 33); its debug CI, signed-release CI and physical-device verification are pending.
+Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #12 is the open 0.10.4 (versionCode 33) notification-reader candidate; CI, permanent-signature verification and physical-device verification remain pending. The integrated Smart Alarm, Agenda and Reminders package is now user-approved and specified below; implementation has not yet begun.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -498,6 +498,79 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 6. **Avatar creation:** investigate and implement genuine on-device 2D portrait generation first; test hardware compatibility, storage, thermals and quality. Then add persistent avatar asset workflow. Rigged 3D, expressions and lip sync follow as a distinct phase.
 7. **Phone-call support:** research Android Telecom/default-dialer feasibility, then implement an opt-in incoming-call companion. Investigate two-way cellular audio only where officially supported; evaluate separate VoIP mode for full AI conversation. Third-party app calls such as WhatsApp remain separate.
 8. **Daily assistant capabilities:** reminders, calendar, travel, notifications and other integrations with explicit permissions and confirmations.
+
+## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / NEXT IMPLEMENTATION PACKAGE
+
+**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm. It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
+
+### Product areas
+
+1. **Smart alarm**
+   - Create, edit, enable/disable and delete alarms; one-time and repeating schedules; selected weekdays; snooze and dismiss; test alarm; next-alarm status.
+   - Configurable alarm sound, gradual volume where device support permits, greeting style and briefing options.
+   - Alarm tone and dismiss/snooze controls must work independently of Internet, Gemini, weather and avatar rendering.
+   - Fire reliably with the app UI closed and screen off. Restore schedules after reboot, app update, time-zone change and daylight-saving transitions. Handle duplicate, missed and past-due alarms explicitly.
+   - Do not claim Juanita can stop or control alarms owned by third-party clock apps.
+
+2. **Juanita reminders and tasks**
+   - Natural-language creation (for example, “ricordami domani alle dieci di chiamare Marco”), with date/time/time-zone parsing and a confirmation question when the request is ambiguous.
+   - One-time and recurring reminders, task/checklist items, due dates, optional advance alerts, completion/snooze/reschedule and deletion.
+   - Keep Juanita-created reminders in a dedicated local encrypted store, separate from calendar-provider events and personal memories. Never silently turn casual conversation into a scheduled reminder.
+   - Provide a clear list of upcoming, overdue and completed items; avoid duplicate reminders after restart or rescheduling.
+
+3. **Calendar and events**
+   - Stage 1: optional read-only access through Android Calendar Provider, allowing Juanita to show today's agenda and upcoming events from calendars already present/synced on the device (for example Google or Exchange calendars). Ask for `READ_CALENDAR` only when the user enables this feature; let the user choose which calendars are included where feasible.
+   - Stage 2: create events using the Android Calendar insert intent or, if a direct write workflow is justified, request `WRITE_CALENDAR` separately and confirm title, date, time, calendar and attendees before writing. Never edit/delete an existing event without a separate explicit confirmation.
+   - Distinguish imported calendar events from Juanita's own reminders in the UI and data model. Preserve source calendar/event IDs and time-zone semantics; do not duplicate imported events into the local reminder store.
+   - Do not assume that Google Calendar's cloud API or a Google OAuth integration is required: prefer the on-device provider first, which can expose calendars synchronized by Android. A dedicated cloud connector can be considered later only if the user asks for cross-device access beyond device-synced calendars.
+
+4. **Morning briefing**
+   - Optional short greeting in the user's selected language, today's calendar agenda, Juanita reminders due today/overdue, and optional weather.
+   - User controls which categories may be spoken aloud, briefing length, quiet/private mode and whether sensitive event titles are hidden while the phone is locked.
+   - Weather is optional, based on an explicitly permitted fresh foreground location or a manually selected locality; no background tracking solely for the briefing. If weather/location/network data is unavailable, omit it without inventing conditions.
+   - Avoid long unsolicited monologues; allow greeting-only mode and a configurable briefing time.
+
+5. **Voice identity — non-negotiable**
+   - Spoken greetings and briefings must use the same selected voice identity/configuration and audio-generation path used by Juanita's normal Gemini Live conversations. Reuse the existing saved Live voice preference; do not add a second voice selector.
+   - No Android system TextToSpeech or generic substitute voice for Juanita's greeting, briefing or notification read-aloud.
+   - Research whether the configured Gemini Live output can safely produce a short utterance from a scheduled background alarm flow. Verify session lifecycle, foreground-service rules, network availability, quotas and device lock state. Do not assume the current interactive Live API can be invoked as a fire-and-forget speech synthesizer.
+   - If Juanita's voice cannot be started safely/available, the alarm tone and controls must still work; clearly indicate that the spoken briefing is unavailable. Never silently switch to a different voice.
+   - Avatar lip-sync remains a later enhancement and is not a dependency for the first working alarm.
+
+### Android architecture and safeguards
+
+- Use Android `AlarmManager` for precise user-facing alarm/reminder triggers where exact timing is required. For target Android 12+, request the appropriate “Alarms & reminders” special access (`SCHEDULE_EXACT_ALARM`) with an explanation and a live permission check; do not silently claim punctuality if access is denied. Review whether `USE_EXACT_ALARM` is policy-eligible before considering it.
+- Use a dedicated alarm receiver/playback component and a lock-screen-aware alarm activity/notification. Full-screen intent access is conditional on Android version and policy; check availability and provide a graceful notification fallback. Do not request broad privileges without need.
+- Persist local definitions transactionally and re-schedule after boot, package replacement, time/time-zone changes and exact-alarm permission changes. Respect Android 12+ background execution and foreground-service restrictions.
+- Store local reminders encrypted on-device; do not upload schedules, calendar contents or location history by default. Calendar read/write permissions are separate, optional and revocable.
+- Calendar Provider permissions: `READ_CALENDAR` for reading; `WRITE_CALENDAR` for direct inserts/updates/deletes. Prefer Android calendar intents for user-mediated event creation/editing where practical, avoiding unnecessary write permission.
+- Keep this package independent of the existing notification listener. Reading a notification is not the same as importing a calendar event or creating a reminder.
+
+### Delivery phases
+
+A. **Research and foundation:** verify Android exact-alarm/full-screen-intent behavior for targetSdk 35 and minSdk 26; design encrypted reminder schema, receiver lifecycle and reboot/time-change recovery; prototype use of Juanita's saved Gemini Live voice without Android TTS.
+B. **First usable release:** local alarms + local reminders, alarm tone/snooze/dismiss, agenda UI and morning greeting only when the real configured voice path is proven safe. Add unit tests for recurrence, time zones, daylight saving, duplicate delivery and persistence.
+C. **Calendar integration:** read-only Android Calendar Provider with calendar selection and today's/upcoming agenda; then confirmed event creation via Calendar intents. Direct calendar writes remain a later opt-in.
+D. **Morning briefing enhancements:** optional weather, quiet/private mode, per-category spoken controls and configurable briefing.
+E. **Voice command integration:** parse natural-language reminder/alarm/event requests from Gemini Live and ask for confirmation before committing changes; distinguish a draft from a successfully saved item.
+
+### Acceptance criteria
+
+- Alarms and reminders trigger at the intended local time with the UI closed/screen off on Note10+ (Android 12) and S22 Ultra; reboot, app update, time-zone and daylight-saving tests pass.
+- Exact-alarm permission denial/revocation is detected and communicated honestly; no silent inexact fallback is presented as punctual.
+- Dismiss/snooze do not cancel future repeats; repeated broadcasts do not create duplicate alerts.
+- Juanita-created reminders survive process death/reboot and can be inspected, edited, completed and deleted independently of personal memories.
+- Calendar events are read only after consent; imported events are clearly distinguished from Juanita-created reminders. No existing event is modified or deleted without explicit confirmation.
+- The morning briefing speaks only categories the user enabled and hides sensitive content in lock-screen/private mode.
+- Juanita's configured Gemini Live voice is used when available; Android system TTS is never used as a substitute. Alarm tone/controls remain functional when voice/network/provider is unavailable.
+- Weather is sourced from a timestamped response and permitted locality; if unavailable, it is omitted.
+- Automated tests cover schedule calculations, persistence, rescheduling, privacy and permissions; physical-device tests cover both Samsung devices. CI alone is not evidence of reliable alarm delivery.
+
+### Dependencies and status
+
+- Depends on stabilization of notification-reader candidate 0.10.4 and review of the TTS mismatch in that PR.
+- Android alarm/permission/lock-screen research and a Gemini Live short-output feasibility spike are required before committing to background speech.
+- Status: **USER-APPROVED — SPECIFIED; NOT IMPLEMENTED.** No alarm, reminder scheduler, Calendar Provider integration or morning-briefing code is present yet.
 
 ## Roadmap maintenance rule
 
