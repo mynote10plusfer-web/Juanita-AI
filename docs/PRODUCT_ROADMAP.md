@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Production 0.10.4 (versionCode 33) is the latest verified permanently signed release (CI verified; device behavior still requires user testing). PR #17 is the 0.10.5 candidate (versionCode 34): consent-gated, app-scoped notification reading through Gemini Live. The candidate is under implementation and CI verification; no 0.10.5 APK is available yet. Voice-led permanent PersonalProfile onboarding and Smart Alarm/Agenda/Reminders remain approved roadmap work, not part of the current notification-reader code slice.
+Last updated: 2026-11-08 — Production 0.10.5 (versionCode 34) is the latest verified permanently signed Release APK (GitHub Actions run 42475627820; permanent certificate verified). Notification behavior and spoken readout remain pending physical-device tests on Note10+ Android 12 and S22 Ultra. The next isolated work branch is feature/personal-profile-foundation-0.10.6: a separate AES-256-GCM encrypted Personal Profile data layer has been added; voice-led onboarding, profile UI, conversational updates and profile lifecycle tests are still pending. Smart Alarm/Agenda/Reminders remain user-approved and specified, not implemented.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
@@ -44,7 +44,7 @@ Juanita must behave like a continuous personal assistant with an accumulating, u
 ### Video-call screen behavior and first-meeting profile
 
 - [IN PROGRESS — CANDIDATE 0.10.3; CI VERIFICATION PENDING] While the in-app video-call screen is open, set Android `FLAG_KEEP_SCREEN_ON` for the host activity window. Clear it immediately when the call screen closes or the composable is disposed. Audio-only sessions must not hold the display awake; they continue through the foreground microphone service and may run with the display off.
-- [IN PROGRESS — CANDIDATE 0.10.3; CI/DEVICE VERIFICATION PENDING] On first launch, offer a guided first-meeting profile with optional fields for preferred name, location, languages, interests, lifestyle/priorities, goals and desired assistance. Every field is optional; users can skip. Only explicitly submitted answers are stored as user-confirmed profile memories in the encrypted local memory store. The onboarding completion flag is stored locally. No passwords or sensitive personal data are requested.
+- [LEGACY UI — NOT THE APPROVED EXPERIENCE] The current first-launch component is a seven-field manual text form. It stores answers as ordinary category=profile memories and sets an app preference flag. It is not voice-led and is not a separate permanent Personal Profile. Do not present it as completion of the approved onboarding requirement.
 - Acceptance: verify the screen stays awake throughout a video call, including when the user's camera is disabled; verify it returns to normal immediately after ending/closing the call; verify an audio-only session does not keep the screen awake. Verify onboarding can be skipped, saved, and shown only once, and submitted profile memories appear in the memory manager and are available to later sessions.
 
 ### Full-fidelity episodic conversation archive — USER-REQUESTED; FIRST IMPLEMENTATION SLICE — CI VERIFIED; DEVICE TESTS PENDING (2026-11-08)
@@ -903,7 +903,7 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 - Add tests for independent profile persistence when daily memory is cleared, edits/corrections, skipped/declined questions, one-question-at-a-time pacing, location permission denied, approximate vs confirmed location, age/date-of-birth consistency, duplicate-question avoidance, offline operation and explicit profile reset confirmation.
 - This is a specification, not evidence of implementation. First audit the existing onboarding/profile and memory storage before changing code, then implement migration-safe separation.
 
-**Status: USER-APPROVED SPECIFICATION — NOT IMPLEMENTED / EXISTING PROFILE ARCHITECTURE TO BE AUDITED.**
+**Status: USER-APPROVED SPECIFICATION — FOUNDATION IN PROGRESS on feature/personal-profile-foundation-0.10.6.** A dedicated PersonalProfile model and separate AES-256-GCM Android Keystore store have been added on the isolated branch, with independent file/key alias, field provenance, timestamps, confidence, explicit-confirmation guard, schema versioning and atomic replacement. This is not yet integrated into the app UI or voice conversation. The existing manual onboarding remains unchanged on main. Voice-led one-question-at-a-time onboarding, profile editor/audit, contextual profile retrieval, reset confirmation, migration strategy and automated/device tests remain NOT IMPLEMENTED. No APK has been built from this branch.
 
 ### Truthfulness, evidence and anti-hallucination protocol — USER-REQUIRED CORE PRINCIPLE (2026-11-08)
 
