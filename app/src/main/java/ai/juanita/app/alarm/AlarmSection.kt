@@ -58,7 +58,10 @@ import java.util.UUID
 fun AlarmSection(panel: Color, gold: Color) {
     val context = LocalContext.current
     val store = remember { JuanitaAlarmStore(context) }
-    var alarms by remember { mutableStateOf(store.all().sortedBy { it.schedule.hour * 60 + it.schedule.minute }) }
+    var alarms by remember {
+        JuanitaAlarmScheduler.cancelLegacyPending(context)
+        mutableStateOf(store.all().sortedBy { it.schedule.hour * 60 + it.schedule.minute })
+    }
     var status by remember { mutableStateOf("Sveglie indipendenti salvate sul dispositivo · nessun servizio a pagamento.") }
     var editingId by remember { mutableStateOf<String?>(null) }
     var label by remember { mutableStateOf("") }
