@@ -173,23 +173,34 @@ class GeminiLiveAssistant {
                 }
             }
         this.transcriptHandler = { input, output ->
-                input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("USER", it) }
-                output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("ASSISTANT", it) }
+                input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    rememberRecentTurn("USER", it)
+                    onTranscript("USER", it)
+                }
+                output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    rememberRecentTurn("JUANITA", it)
+                    onTranscript("ASSISTANT", it)
+                }
             }
         this.sessionFactory = { context ->
             val next = model.connect()
-            if (context.isNotBlank()) {
-                next.send(
-                    content("user") {
-                        text(
-                            "CONVERSATION CONTINUITY NOTE — the previous audio connection ended normally. " +
-                                "Continue naturally without repeating the greeting. Recent conversation:\\n" + context
-                        )
-                    },
-                    turnComplete = false
-                )
+            try {
+                if (context.isNotBlank()) {
+                    next.send(
+                        content("user") {
+                            text(
+                                "CONVERSATION CONTINUITY NOTE — the previous audio connection ended normally. " +
+                                    "Continue naturally without repeating the greeting. Recent conversation:\\n" + context
+                            )
+                        },
+                        turnComplete = false
+                    )
+                }
+                next
+            } catch (failure: Exception) {
+                withTimeoutOrNull(1_500L) { runCatching { next.close() } }
+                throw failure
             }
-            next
         }
         this.onConnectionState = onConnectionState
         manualStop = false
@@ -198,6 +209,13 @@ class GeminiLiveAssistant {
         startAudioOnSession(connected)
     }
 
+
+    private fun rememberRecentTurn(role: String, text: String) {
+        synchronized(recentTranscript) {
+            recentTranscript.addLast("$role: ${text.take(900)}")
+            while (recentTranscript.size > 12) recentTranscript.removeFirst()
+        }
+    }
 
     /**
      * The SDK-managed audio helper exposes a GoAway callback but not the
