@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #13 is the open 0.10.4 (versionCode 33) notification-reader candidate; CI, permanent-signature verification and physical-device verification remain pending. The integrated Smart Alarm, Agenda and Reminders package is now user-approved and specified below; implementation has not yet begun.
+Last updated: 2026-11-08 — Production 0.10.3 (versionCode 32) remains the latest verified signed release. PR #13 is the consolidated 0.10.4 (versionCode 33) candidate: opt-in notification inbox, updated persona/emotional-intelligence guidance, removal of Android system TTS preview, and first full-fidelity archive slice with long-turn instrumentation tests. The earlier PR #13 debug CI passed before consolidation; a fresh exact-head CI run is required. Signed Release verification and physical-device testing remain pending. The integrated Smart Alarm, Agenda and Reminders package is now user-approved and specified below; implementation has not yet begun.
 
 ## Core user-approved direction: memory, learning and evolving identity
 
