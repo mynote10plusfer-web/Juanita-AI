@@ -97,7 +97,7 @@ class PersonalProfileStore(context: Context) {
     fun save(profile: PersonalProfile) {
         val safeFields = profile.fields
             .filterKeys { it in PersonalProfile.allowedKeys }
-            .filterValues { it.value.isNotBlank() }
+            .filterValues { it.value.isNotBlank() && it.confirmedByUser }
         val normalized = profile.copy(
             fields = safeFields,
             updatedAtMillis = System.currentTimeMillis()
@@ -135,6 +135,8 @@ class PersonalProfileStore(context: Context) {
     fun updateField(key: String, value: String, source: String = PersonalProfileField.SOURCE_USER_CONFIRMED,
                     confirmedByUser: Boolean = true, confidence: Float = 1f) {
         require(key in PersonalProfile.allowedKeys) { "Campo profilo non riconosciuto." }
+        require(source == PersonalProfileField.SOURCE_USER_CONFIRMED ||
+            source == PersonalProfileField.SOURCE_CONFIRMED_INFERENCE) { "Provenienza del profilo non riconosciuta." }
         require(confirmedByUser) { "I dati inferiti devono essere confermati prima del salvataggio." }
         val current = load()
         val updated = current.fields.toMutableMap()
