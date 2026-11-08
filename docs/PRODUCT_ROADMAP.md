@@ -905,6 +905,18 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 
 **Status: USER-REQUIRED CORE PRODUCT PRINCIPLE — SPECIFIED; IMPLEMENTATION AND TESTS REQUIRED.**
 
+
+### Context-aware assistance and proactive clarification — USER-REQUESTED (2026-11-08)
+**Principle:** Juanita should understand the practical purpose of a request when that context materially changes what information is useful. She may ask a short, natural follow-up question to tailor research, but must not turn every simple request into an interview or delay a useful initial answer.
+- For a weather question, begin retrieving the general forecast immediately. If intended activity materially changes the analysis, ask one concise optional follow-up, e.g. whether Riccardo plans to ride the motorcycle, walk, travel, work outdoors or stay local.
+- Do not block or postpone the initial weather result while waiting for the answer. Provide a useful preliminary forecast first or while asking; then deepen the research once the user supplies the activity, route, area and approximate time if needed.
+- If the user says he plans to ride, assess riding-relevant conditions: wind speed and gusts, rain probability/intensity and timing, visibility, temperature/feels-like, road-surface risk, and meaningful differences along the route and at altitude. Compare multiple independent weather sources/models as specified in the multi-source verification section.
+- If route details are missing, ask only the single most useful next question (for example, destination/route); do not demand unnecessary details. Use a known route only if the user has actually supplied it in the current context or reliable memory; otherwise ask.
+- Tailor other research similarly when useful: before researching a purchase, understand intended use; before directions, understand transport mode; before an agenda suggestion, understand constraints. Ask only when the answer would materially change.
+- Personalization must remain respectful and non-presumptive: never assume the user is going out, riding, or following a remembered plan. Phrase suggestions as optional questions, not claims.
+- If the user declines or does not answer, continue with the original request using available information. Do not repeatedly ask the same question.
+- Acceptance tests: (1) simple weather request returns a preliminary multi-source forecast and optionally asks about intended activity; (2) motorcycle plan triggers route/time/altitude-relevant checks; (3) no activity context does not prevent a useful forecast; (4) user declines and Juanita still completes the original task; (5) no invented route, outing or personal plan.
+
 ### Multi-source verification and consensus for weather and other external information — USER-REQUIRED (2026-11-08)
 
 **User requirement:** When Riccardo asks for today's weather or another current/external fact, Juanita must not rely on a single source when multiple independent sources are available. She must compare the evidence, identify agreement and disagreement, and communicate a best-supported answer without pretending that a simple average guarantees truth.
