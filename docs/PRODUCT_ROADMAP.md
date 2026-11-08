@@ -197,6 +197,13 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 
 The current `GeminiLiveAssistant` calls Firebase AI Logic `LiveSession.startAudioConversation()` and receives text transcription callbacks; the app does not currently expose PCM microphone frames to the speaker-recognition layer. Do not add a second `AudioRecord`/microphone reader beside the SDK-managed capture. Firebase's official Live API guide documents that Android apps may instead create their own recorder and handle the stream. The next technical spike is therefore to prototype one app-owned capture pipeline that feeds the same PCM frames to Gemini Live and the local speaker engine, while preserving the existing Live session, output audio, VAD/turn behavior and stop lifecycle. Revert immediately if this regresses the current working voice path. Reference: https://firebase.google.com/docs/ai-logic/live-api (Kotlin section; last updated 2026-11-05 UTC).
 
+**Feasibility research update (2026-11-08):**
+- sherpa-onnx documents Android speaker-identification and speaker-diarization examples, including Kotlin/Android deployment and local inference. This makes it a credible no-cloud prototype candidate, not proof of accuracy or suitability on either Samsung device.
+- The sherpa-onnx code is Apache-2.0, but the selected speaker model and training dataset can have separate licenses; each artifact must be checked before bundling. Model size, CPU/RAM/thermal cost and multilingual performance remain unverified.
+- Official project references: https://github.com/k2-fsa/sherpa-onnx ; https://k2-fsa.github.io/sherpa/onnx/speaker-identification/ ; https://k2-fsa.github.io/sherpa/onnx/speaker-diarization/ ; https://k2-fsa.github.io/sherpa/onnx/speaker-identification/apk.html
+- Voice templates used to uniquely identify a person can constitute special-category biometric data under GDPR Articles 4(14) and 9. Before enabling matching, document the applicable lawful basis and Article 9 condition, provide specific informed consent and an equally usable guest path, and complete a privacy/legal review. Explicit consent in the UI is a safeguard, not by itself a complete compliance assessment.
+- Official legal reference: https://eur-lex.europa.eu/legal-content/EN-ES/TXT/?uri=CELEX:32016R0679 (GDPR Articles 4 and 9).
+
 ### Familiar-person visual profiles and optional camera matching — USER-APPROVED REQUIREMENT; RESEARCH / NOT IMPLEMENTED
 
 Extend the familiar-person memory beyond voice to an optional visual profile, while keeping ordinary photo memory separate from biometric face recognition.
@@ -579,7 +586,14 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 **Current engineering sequence (2026-11-08):** begin with the app-owned alarm engine and user-facing alarm controls; only after reliable local ringing, snooze/dismiss, reboot/time-zone recovery and permission-denied behavior are verified should Juanita's spoken morning greeting/briefing be connected. Then add local reminders/tasks, followed by optional read-only calendar access. Do not combine the alarm's reliable sound path with Gemini/network availability.
 
-**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm. It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
+**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm.
+
+**Android platform constraints verified 2026-11-08:**
+- For exact alarm scheduling on Android 12+, declare and check `SCHEDULE_EXACT_ALARM`; it is user-granted and may be revoked. Handle denial with a clear explanation and an honest inexact fallback, not a claim of punctual delivery.
+- Do not use `USE_EXACT_ALARM` casually: it is restricted by Google Play to qualifying core alarm/calendar use cases. The sideload path must also remain safe with Play Protect enabled.
+- On Android 14+, full-screen intent access is restricted to calling/alarm use cases. Check `NotificationManager.canUseFullScreenIntent()` and provide a notification fallback when unavailable; never assume the full-screen activity can always launch.
+- Re-check exact-alarm access after resume and restore schedules after the system's permission-granted broadcast and boot.
+- Official references: https://developer.android.com/develop/background-work/services/alarms ; https://developer.android.com/about/versions/14/changes/schedule-exact-alarms ; https://source.android.com/docs/core/permissions/fsi-limits It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
 
 ### Product areas
 
