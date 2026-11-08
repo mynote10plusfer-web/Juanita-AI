@@ -40,7 +40,8 @@ class GeminiLiveAssistant {
         systemInstruction: String,
         voiceName: String = DEFAULT_VOICE,
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
-        onArchiveSearch: (query: String) -> String = { "" }
+        onArchiveSearch: (query: String) -> String = { "" },
+        onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." }
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
@@ -58,6 +59,13 @@ class GeminiLiveAssistant {
                     date/time or when a time-sensitive answer depends on the present moment. Never
                     rely on a stale session-start timestamp for the current time. Interpret dates in
                     the returned device time zone and distinguish historical event times from now.
+                    You can save explicitly user-stated, durable, non-sensitive profile details with
+                    savePersonalProfile. Never infer or guess a value. Call it only when the user
+                    clearly stated the information, never for a hypothetical, joke, temporary mood,
+                    third-party private detail or sensitive information. Birth date must be normalized
+                    to YYYY-MM-DD and saved only when the user explicitly gives it. Save only fields
+                    the user actually stated; do not ask a list of questions to fill the profile.
+                    The user may correct any saved detail later.
 
                 """.trimIndent())
             },
@@ -81,6 +89,20 @@ class GeminiLiveAssistant {
                             name = "getCurrentDateTime",
                             description = "Return the exact current date, time, UTC offset and time-zone ID from the Android device clock. Use for current-time and time-sensitive questions.",
                             parameters = emptyMap()
+                        ),
+                        FunctionDeclaration(
+                            name = "savePersonalProfile",
+                            description = "Save only durable, non-sensitive personal details that the user explicitly stated about themselves in this conversation. Include only fields directly stated by the user; never infer, guess, or fill missing fields. Use ISO YYYY-MM-DD for an explicitly stated birth date.",
+                            parameters = mapOf(
+                                "preferred_name" to Schema.string("Name the user explicitly said they prefer to be called."),
+                                "birth_date" to Schema.string("Birth date explicitly stated by the user, normalized as YYYY-MM-DD."),
+                                "languages" to Schema.string("Languages the user explicitly says they speak or are learning."),
+                                "home_locality" to Schema.string("Town or locality the user explicitly says they live in; never use GPS to infer it."),
+                                "interests" to Schema.string("Durable hobbies and interests explicitly described by the user."),
+                                "lifestyle" to Schema.string("Non-sensitive durable routines or lifestyle preferences explicitly described by the user."),
+                                "goals" to Schema.string("Ongoing goals or projects explicitly described by the user."),
+                                "assistance_preferences" to Schema.string("How the user explicitly prefers Juanita to communicate or help.")
+                            )
                         )
                     )
                 )
@@ -104,6 +126,27 @@ class GeminiLiveAssistant {
                     FunctionResponsePart(
                         functionCall.name,
                         JsonObject(mapOf("historical_context" to JsonPrimitive(result.take(6000)))),
+                        functionCall.id
+                    )
+                } else if (functionCall.name == "savePersonalProfile") {
+                    val allowed = listOf(
+                        "preferred_name", "birth_date", "languages", "home_locality",
+                        "interests", "lifestyle", "goals", "assistance_preferences"
+                    )
+                    val fields = allowed.mapNotNull { key ->
+                        functionCall.args[key]?.jsonPrimitive?.content
+                            ?.trim()?.takeIf { it.isNotBlank() }?.let { key to it }
+                    }.toMap()
+                    val result = if (fields.isEmpty()) {
+                        "No profile fields were saved: no explicit personal detail was supplied."
+                    } else {
+                        runCatching {
+                            runBlocking(Dispatchers.IO) { onProfileUpdate(fields) }
+                        }.getOrElse { "Profile update failed: " + it.javaClass.simpleName }
+                    }
+                    FunctionResponsePart(
+                        functionCall.name,
+                        JsonObject(mapOf("profile_update" to JsonPrimitive(result.take(1200)))),
                         functionCall.id
                     )
                 } else {
