@@ -28,6 +28,9 @@ class JuanitaAlarmRingingService : Service() {
     private val activeAlarmIds = linkedSetOf<String>()
     private var player: MediaPlayer? = null
     private var volumeJob: Job? = null
+    private var autoStopJob: Job? = null
+    private var ringCountAlarmId: String? = null
+    private var remainingRingCycles: Int? = null
     private var activeAlarmId: String = JuanitaAlarmStore.LEGACY_ID
     private var volumeNotice: String = "Controllo volume sveglia…"
     private var testMode: Boolean = false
@@ -38,7 +41,23 @@ class JuanitaAlarmRingingService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
-                if (alarmId.isNullOrBlank()) activeAlarmIds.clear() else activeAlarmIds.remove(alarmId)
+                if (alarmId.isNullOrBlank()) {
+                    autoStopJob?.cancel()
+                    autoStopJob = null
+                    ringCountAlarmId = null
+                    remainingRingCycles = null
+                    activeAlarmIds.clear()
+                } else {
+                    activeAlarmIds.remove(alarmId)
+                    if (ringCountAlarmId == alarmId) {
+                        ringCountAlarmId = null
+                        remainingRingCycles = null
+                    }
+                    if (activeAlarmIds.isEmpty()) {
+                        autoStopJob?.cancel()
+                        autoStopJob = null
+                    }
+                }
                 persistActiveAlarmIds()
                 if (activeAlarmIds.isNotEmpty()) {
                     activeAlarmId = activeAlarmIds.first()
@@ -49,6 +68,24 @@ class JuanitaAlarmRingingService : Service() {
                 } else {
                     stopRinging()
                     stopSelf(startId)
+                }
+                return START_NOT_STICKY
+            }
+            ACTION_STOP_AFTER -> {
+                val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
+                    ?: return START_NOT_STICKY
+                if (alarmId !in activeAlarmIds) return START_NOT_STICKY
+                val seconds = intent.getIntExtra(EXTRA_STOP_AFTER_SECONDS, 0)
+                val rings = intent.getIntExtra(EXTRA_STOP_AFTER_RINGS, 0)
+                autoStopJob?.cancel()
+                autoStopJob = null
+                ringCountAlarmId = alarmId.takeIf { rings > 0 }
+                remainingRingCycles = rings.takeIf { it > 0 }
+                if (seconds > 0) {
+                    autoStopJob = scope.launch {
+                        delay(seconds * 1_000L)
+                        stop(this@JuanitaAlarmRingingService, alarmId)
+                    }
                 }
                 return START_NOT_STICKY
             }
@@ -86,8 +123,31 @@ class JuanitaAlarmRingingService : Service() {
                     .build()
             )
             media.setDataSource(this, uri)
-            media.isLooping = true
+            media.isLooping = false
             media.setVolume(0.05f, 0.05f)
+            media.setOnCompletionListener { completed ->
+                if (player !== completed || activeAlarmIds.isEmpty()) return@setOnCompletionListener
+                val targetId = ringCountAlarmId
+                val remaining = remainingRingCycles
+                if (targetId != null && remaining != null && targetId in activeAlarmIds) {
+                    if (remaining <= 1) {
+                        ringCountAlarmId = null
+                        remainingRingCycles = null
+                        completed.seekTo(0)
+                        completed.start()
+                        stop(this@JuanitaAlarmRingingService, targetId)
+                        return@setOnCompletionListener
+                    }
+                    remainingRingCycles = remaining - 1
+                }
+                runCatching {
+                    completed.seekTo(0)
+                    completed.start()
+                }.onFailure {
+                    stopRinging()
+                    stopSelf()
+                }
+            }
             media.setOnPreparedListener {
                 if (player !== it || activeAlarmIds.isEmpty()) {
                     runCatching { it.release() }
@@ -188,6 +248,10 @@ class JuanitaAlarmRingingService : Service() {
     private fun stopRinging() {
         volumeJob?.cancel()
         volumeJob = null
+        autoStopJob?.cancel()
+        autoStopJob = null
+        ringCountAlarmId = null
+        remainingRingCycles = null
         runCatching { player?.stop() }
         runCatching { player?.release() }
         player = null
@@ -207,6 +271,9 @@ class JuanitaAlarmRingingService : Service() {
     companion object {
         const val ACTION_START = "ai.juanita.app.alarm.RING"
         const val ACTION_STOP = "ai.juanita.app.alarm.STOP_RING"
+        const val ACTION_STOP_AFTER = "ai.juanita.app.alarm.STOP_AFTER"
+        const val EXTRA_STOP_AFTER_SECONDS = "stop_after_seconds"
+        const val EXTRA_STOP_AFTER_RINGS = "stop_after_rings"
         const val EXTRA_TEST_MODE = "alarm_test_mode"
         private const val CHANNEL_ID = "juanita_alarm_ringing"
         private const val ACTIVE_ALARMS_PREFS = "juanita_alarm_runtime"
@@ -224,6 +291,14 @@ class JuanitaAlarmRingingService : Service() {
             else context.startService(intent)
         }
         fun startTest(context: Context) = start(context, JuanitaAlarmStore.LEGACY_ID, testMode = true)
+        fun stopAfter(context: Context, alarmId: String, seconds: Int = 0, rings: Int = 0) {
+            val intent = Intent(context, JuanitaAlarmRingingService::class.java)
+                .setAction(ACTION_STOP_AFTER)
+                .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
+                .putExtra(EXTRA_STOP_AFTER_SECONDS, seconds)
+                .putExtra(EXTRA_STOP_AFTER_RINGS, rings)
+            runCatching { context.startService(intent) }
+        }
         fun stop(context: Context, alarmId: String? = null) {
             val intent = Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_STOP)
             if (alarmId != null) intent.putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
