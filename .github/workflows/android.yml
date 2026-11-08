@@ -58,6 +58,7 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+
   instrumentation:
     name: Run Android instrumentation tests (API ${{ matrix.api-level }})
     runs-on: ubuntu-latest
@@ -84,10 +85,32 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: ${{ matrix.api-level }}
-          target: google_apis
+          # These tests use Android framework APIs only; Google Play services are not required.
+          target: default
           arch: x86_64
-          profile: pixel_6
+          profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          boot-timeout: 600
-          disable-animations: true
-          script: gradle --no-daemon :app:connectedDebugAndroidTest
+          boot-timeout: 900
+          # The runner's post-boot settings/ADB call was disconnecting API 35 before tests started.
+          # Keep animations enabled rather than turning an emulator transport failure into a false app failure.
+          disable-animations: false
+          script: |
+            set -euo pipefail
+            echo "Checking Android emulator transport before Gradle tests..."
+            adb wait-for-device
+            for attempt in $(seq 1 30); do
+              state="$(adb get-state 2>/dev/null || true)"
+              boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+              if [[ "$state" == "device" && "$boot" == "1" ]]; then
+                echo "Emulator is online and boot completed."
+                break
+              fi
+              if [[ "$attempt" == "30" ]]; then
+                echo "::error::Android emulator did not remain online after boot."
+                adb devices -l || true
+                adb logcat -d -t 500 || true
+                exit 1
+              fi
+              sleep 2
+            done
+            gradle --no-daemon :app:connectedDebugAndroidTest
