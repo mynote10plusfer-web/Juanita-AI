@@ -86,6 +86,8 @@ jobs:
           api-level: ${{ matrix.api-level }}
           target: google_apis
           arch: x86_64
-          profile: pixel_2
+          profile: pixel_6
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          boot-timeout: 600
           disable-animations: true
           script: gradle --no-daemon :app:connectedDebugAndroidTest
