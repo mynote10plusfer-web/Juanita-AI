@@ -71,12 +71,20 @@ object JuanitaAlarmScheduler {
 
     fun schedule(context: Context, schedule: AlarmSchedule): Boolean {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        AlarmPreferences(context).save(schedule)
+        val preferences = AlarmPreferences(context)
         val pending = alarmPendingIntent(context)
         manager.cancel(pending)
-        if (!schedule.enabled || (schedule.repeatDays.isEmpty() && schedule.oneShotAtEpochMillis == null)) return true
+        if (!schedule.enabled || (schedule.repeatDays.isEmpty() && schedule.oneShotAtEpochMillis == null)) {
+            preferences.save(schedule)
+            return true
+        }
 
-        val next = AlarmScheduleCalculator.nextOccurrence(schedule, ZonedDateTime.now()) ?: return false
+        val next = AlarmScheduleCalculator.nextOccurrence(schedule, ZonedDateTime.now())
+            ?: run {
+                preferences.save(schedule.copy(enabled = false))
+                return false
+            }
+        preferences.save(schedule)
         return runCatching {
             val triggerAt = next.toInstant().toEpochMilli()
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
