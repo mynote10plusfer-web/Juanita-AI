@@ -33,6 +33,11 @@ class AssistantPreferences(context: Context) {
         get() = storage.getString(KEY_ASSISTANT_NAME, DEFAULT_ASSISTANT_NAME) ?: DEFAULT_ASSISTANT_NAME
         set(value) { storage.edit().putString(KEY_ASSISTANT_NAME, value.trim()).apply() }
 
+    /** Separate opt-in: notification message bodies may be sent to Gemini only on explicit request. */
+    var allowNotificationContentToGemini: Boolean
+        get() = storage.getBoolean(KEY_NOTIFICATION_CLOUD_CONSENT, false)
+        set(value) { storage.edit().putBoolean(KEY_NOTIFICATION_CLOUD_CONSENT, value).apply() }
+
     var irony: Float get() = getTrait(KEY_IRONY, 0.75f); set(value) = setTrait(KEY_IRONY, value)
     var sweetness: Float get() = getTrait(KEY_SWEETNESS, 0.90f); set(value) = setTrait(KEY_SWEETNESS, value)
     var sensuality: Float get() = getTrait(KEY_SENSUALITY, 0.65f); set(value) = setTrait(KEY_SENSUALITY, value)
@@ -53,6 +58,7 @@ class AssistantPreferences(context: Context) {
         private const val KEY_WAKE_PHRASE = "wake_phrase"
         private const val KEY_DIALECT_ID = "dialect_id"
         private const val KEY_ASSISTANT_NAME = "assistant_name"
+        private const val KEY_NOTIFICATION_CLOUD_CONSENT = "notification_cloud_consent"
         private const val KEY_LIVE_VOICE = "live_voice_name"
         private const val KEY_IRONY = "trait_irony"
         private const val KEY_SWEETNESS = "trait_sweetness"
