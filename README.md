@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Candidate release: 0.10.4 (versionCode 33)
+## Latest verified signed Release: 0.10.5 (versionCode 34)
 
-This candidate adds opt-in Android notification reading, increments versionCode, and keeps the permanent production application ID and signing certificate unchanged. Debug builds use the isolated package ai.juanita.app.debug and a separate Firebase variant configuration. Only the signed Release APK is suitable for updating the production app.
+GitHub Actions run 42475627820 completed successfully, verified the APK v2 signature and confirmed the permanent production certificate. Physical-device behavior is still awaiting user testing. The next development branch, feature/personal-profile-foundation-0.10.6, is not a release and has no APK. Debug builds use the isolated package ai.juanita.app.debug; only a permanently signed Release APK is suitable for updating the production app.
 
 - Kotlin + Jetpack Compose Android app.
 - Firebase AI Logic with Gemini Developer API and Gemini Live audio model `gemini-3.1-flash-live-preview`.
@@ -34,14 +34,16 @@ The Android app initializes Firebase App Check. Debug builds use the Firebase Ap
 
 For a pre-release conversation test, prefer the debug build and Firebase's documented debug-provider flow. A production Play Integrity registration is still required before distributing the signed release build.
 
-## Notification reader — candidate 0.10.4
+## Notification reader — 0.10.5 (CI verified; device tests pending)
 
 - An opt-in Android `NotificationListenerService` is registered. The user must explicitly enable Juanita in Android notification-access settings.
-- The Altro tab displays up to 30 recent notifications in volatile app memory. Reading notifications aloud with Juanita's configured Gemini Live voice is not yet implemented; Android system TTS is deliberately not used.
+- The Altro tab displays up to 30 recent notifications in volatile app memory. Gemini Live has app-inventory and app-scoped read tools, guarded by a separate in-app content-sharing consent that is OFF by default. Actual notification delivery, spoken readout, permission lifecycle and app scoping still require physical-device verification; Android system TTS is deliberately not used.
 - Notification content is not written to the encrypted conversation archive, not sent to Gemini, and is cleared when the app process is recreated or the user taps Svuota. Android controls which notification text is exposed; hidden previews cannot be recovered.
 - This is a first-stage notification inbox, not direct WhatsApp account access. It cannot retrieve old messages, open chats, send replies, or guarantee background delivery until tested on physical devices.
 
 ## Not implemented yet
+
+- Separate permanent Personal Profile: an isolated encrypted store is being developed on feature/personal-profile-foundation-0.10.6. The current first-launch form still writes ordinary memories; voice-led onboarding and profile editing are not yet integrated.
 
 - Native regional neural voices guaranteed to sound authentically Sicilian, Canarian or Paisa.
 - Local familiar-person speaker identification and diarization; Gemini Live transcription alone does not identify a speaker.
