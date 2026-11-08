@@ -1109,7 +1109,7 @@ Candidate branch: `feature/complete-gentle-morning-alarm-0.11.0`.
 - External alarm integration is read-only and limited to the next alarm exposed by Android. Juanita cannot enumerate, edit or dismiss every alarm inside Samsung Clock or other third-party clock apps.
 - The alarm tone and controls remain local/offline. Spoken briefing requires Internet access and Gemini Live; offline operation does not synthesize a substitute voice.
 - Local reminder/task storage and automatic task extraction are not implemented in this candidate; do not tell the user Juanita can already list arbitrary reminders unless they are present in an authorized calendar.
-- Weather currently uses one free provider (Open-Meteo), not a multi-provider consensus. Multi-source comparison remains an explicit improvement before claiming weather results are cross-validated.
+- Weather uses the free Open-Meteo endpoint to compare three independent forecast model centers (ECMWF IFS, DWD ICON and NOAA GFS), averages available values and explicitly reports model disagreement or a single-model fallback. This is a three-model comparison through one API provider, not three independent API providers; a separate-provider comparison remains a later validation improvement.
 
 **Required CI and device gates:** compile debug + instrumentation test APK; produce signed Release 0.11.0 build 39 with the permanent certificate; verify package/version/signature; test alarm fire, full-screen permission fallback, mic/calendar/location permission denial, Live speech start/failure, no overlapping alarm tone, snooze/dismiss, reboot/time-zone changes and existing Android next-alarm reporting on Note10+ Android 12 and S22 Ultra. No claim of complete functionality until these tests pass.
 
