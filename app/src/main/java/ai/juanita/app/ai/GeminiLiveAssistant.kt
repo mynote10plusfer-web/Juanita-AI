@@ -19,6 +19,11 @@ import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
@@ -34,16 +39,27 @@ import kotlinx.coroutines.sync.withLock
 @OptIn(PublicPreviewAPI::class)
 class GeminiLiveAssistant {
     private val lifecycleMutex = Mutex()
+    private val recoveryMutex = Mutex()
+    private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var session: LiveSession? = null
+    @Volatile private var manualStop = true
+    private var healthJob: Job? = null
+    private var sessionFactory: (suspend (String) -> LiveSession)? = null
+    private var functionCallHandler: ((FunctionCallPart) -> FunctionResponsePart)? = null
+    private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
+    private var onConnectionState: (String) -> Unit = {}
+    private val recentTranscript = ArrayDeque<String>()
 
     suspend fun start(
         systemInstruction: String,
         voiceName: String = DEFAULT_VOICE,
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
-        onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." }
+        onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
+        onConnectionState: (status: String) -> Unit = {}
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
+        synchronized(recentTranscript) { recentTranscript.clear() }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
             systemInstruction = content {
@@ -109,12 +125,8 @@ class GeminiLiveAssistant {
                 )
             )
         )
-        val connected = model.connect()
-        session = connected
-
-        // Keep the known-good SDK-managed microphone/speaker path and server VAD.
-        connected.startAudioConversation(
-            functionCallHandler = { functionCall ->
+        // Prepare reusable callbacks before opening the single active session.
+        this.functionCallHandler = { functionCall ->
                 if (functionCall.name == "getCurrentDateTime") {
                     val now = ZonedDateTime.now()
                     val value = "Current local date/time: ${now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; zone: ${now.zone.id}; localized: ${now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss zzzz", Locale.getDefault()))}"
@@ -157,12 +169,128 @@ class GeminiLiveAssistant {
                 } else {
                     FunctionResponsePart(functionCall.name, JsonObject(emptyMap()), functionCall.id)
                 }
-            },
-            transcriptHandler = { input, output ->
-                input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("USER", it) }
-                output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let { onTranscript("ASSISTANT", it) }
+            }
+        this.transcriptHandler = { input, output ->
+                input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    rememberRecentTurn("USER", it)
+                    onTranscript("USER", it)
+                }
+                output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    rememberRecentTurn("JUANITA", it)
+                    onTranscript("ASSISTANT", it)
+                }
+            }
+        this.sessionFactory = { context ->
+            val next = model.connect()
+            try {
+                if (context.isNotBlank()) {
+                    next.send(
+                        content("user") {
+                            text(
+                                "CONVERSATION CONTINUITY NOTE — the previous audio connection ended normally. " +
+                                    "Continue naturally without repeating the greeting. Recent conversation:\n" + context
+                            )
+                        },
+                        turnComplete = false
+                    )
+                }
+                next
+            } catch (failure: Exception) {
+                withTimeoutOrNull(1_500L) { runCatching { next.close() } }
+                throw failure
+            }
+        }
+        this.onConnectionState = onConnectionState
+        manualStop = false
+        val connected = model.connect()
+        session = connected
+        startAudioOnSession(connected)
+    }
+
+
+    private fun rememberRecentTurn(role: String, text: String) {
+        synchronized(recentTranscript) {
+            recentTranscript.addLast("$role: ${text.take(900)}")
+            while (recentTranscript.size > 12) recentTranscript.removeFirst()
+        }
+    }
+
+    /**
+     * The SDK-managed audio helper exposes a GoAway callback but not the
+     * resumption-handle updates. On a planned server disconnect, reopen one
+     * audio session and replay a bounded text-only continuity note. Never open
+     * a second microphone reader or run a competing receive() collector.
+     */
+    private suspend fun startAudioOnSession(activeSession: LiveSession) {
+        activeSession.startAudioConversation(
+            functionCallHandler = functionCallHandler,
+            transcriptHandler = transcriptHandler,
+            goAwayHandler = {
+                recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
             },
             enableInterruptions = false
+        )
+        // A user stop can race with an in-flight reconnect/start operation.
+        // Re-check after the SDK has finished initializing its audio pipeline.
+        if (manualStop) {
+            runCatching { activeSession.stopAudioConversation() }
+            if (session === activeSession) session = null
+            withTimeoutOrNull(1_500L) { runCatching { activeSession.close() } }
+            return
+        }
+        startHealthMonitor(activeSession)
+    }
+
+    private fun startHealthMonitor(activeSession: LiveSession) {
+        healthJob?.cancel()
+        healthJob = recoveryScope.launch {
+            while (!manualStop && session === activeSession) {
+                delay(2_500L)
+                if (activeSession.isClosed()) {
+                    recoverAfterServerDisconnect(activeSession)
+                    break
+                }
+            }
+        }
+    }
+
+    private suspend fun recoverAfterServerDisconnect(expected: LiveSession) = recoveryMutex.withLock {
+        if (manualStop || session !== expected) return@withLock
+        onConnectionState("La connessione vocale si sta rinnovando…")
+        healthJob?.cancel()
+        session = null
+        runCatching { expected.stopAudioConversation() }
+        withTimeoutOrNull(2_000L) { runCatching { expected.close() } }
+
+        val context = synchronized(recentTranscript) {
+            recentTranscript.joinToString("\n").takeLast(5_000)
+        }
+        var lastFailure: Throwable? = null
+        for (attempt in 1..3) {
+            if (manualStop) return@withLock
+            delay(attempt * 700L)
+            try {
+                val fresh = sessionFactory?.invoke(context)
+                    ?: throw IllegalStateException("Session recovery is not configured")
+                if (manualStop) {
+                    runCatching { fresh.close() }
+                    return@withLock
+                }
+                session = fresh
+                startAudioOnSession(fresh)
+                onConnectionState("Juanita è di nuovo in ascolto.")
+                return@withLock
+            } catch (failure: Exception) {
+                lastFailure = failure
+                val failed = session
+                session = null
+                runCatching { failed?.stopAudioConversation() }
+                withTimeoutOrNull(1_500L) { runCatching { failed?.close() } }
+            }
+        }
+        onConnectionState(
+            "Connessione vocale interrotta. Riavvia la conversazione per riprovare." +
+                (lastFailure?.let { " (${it.javaClass.simpleName})" } ?: "")
         )
     }
 
@@ -175,6 +303,8 @@ class GeminiLiveAssistant {
 
     /** Stop microphone capture synchronously before any slower cleanup begins. */
     fun stopAudioCapture() {
+        manualStop = true
+        healthJob?.cancel()
         session?.let { active ->
             runCatching { active.stopAudioConversation() }
         }
@@ -185,6 +315,9 @@ class GeminiLiveAssistant {
     }
 
     private suspend fun stopSessionLocked() {
+        manualStop = true
+        healthJob?.cancel()
+        sessionFactory = null
         val active = session ?: return
         // Detach first so a repeated stop is harmless and cannot revive this session.
         session = null

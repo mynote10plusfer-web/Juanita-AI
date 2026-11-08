@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Juanita AI 0.10.8 (versionCode 37) is built as a signed Release APK; CI verified APK v2 signature, permanent release certificate, applicationId ai.juanita.app and monotonically increasing version. Physical-device behavior remains unverified. Next cumulative development package: Smart Alarm foundation. Do not ask the user to install intermediate builds; deliver one cumulative signed Release APK after CI and signing verification.
+Last updated: 2026-11-08 — Juanita AI 0.10.8 (versionCode 37) remains the latest signed Release APK; CI verified APK v2 signature, permanent release certificate, applicationId ai.juanita.app and monotonically increasing version. PR #23 merged the timezone-safe Smart Alarm schedule core (model/tests only). PR #24 adds Gemini Live disconnect recovery and is undergoing CI review; it is not released or device-tested. Do not ask the user to install intermediate builds; deliver one cumulative signed Release APK after CI and signing verification.
 
 ## Progressive personal knowledge — candidate 0.10.8
 
@@ -1049,3 +1049,35 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 - Notification listener service and Gemini Live reading tools are intentionally excluded from the sideload release to avoid the sensitive notification-listener permission that triggers Google Play Protect installation blocks for some sideloaded apps.
 - Source code is retained for a later phase; it is not active or exposed in the current release.
 - Do not disable Play Protect to test this build. Revisit notification reading only after an acceptable distribution and policy-compliance path is available.
+
+
+## Gemini Live long-conversation stability — USER-REPORTED BUG; PR #24 IN CI REVIEW
+
+**Observed by user (2026-11-08):** during audio-only conversation, after approximately 5–10 minutes the microphone stops accepting speech; closing and reopening the conversation restores it.
+
+**Engineering finding:** Firebase Live connections have an approximate 10-minute connection limit and send a GoAway notice about 60 seconds before disconnect. The existing 0.10.8 code used the SDK-managed audio path without handling that notice or reconnecting. See official Firebase session documentation: https://firebase.google.com/docs/ai-logic/live-api/sessions and Android LiveSession API reference: https://firebase.google.com/docs/reference/kotlin/com/google/firebase/ai/type/LiveSession.
+
+**PR #24 implementation under review:**
+- Handle the SDK-supported GoAway callback.
+- Detect a closed websocket while the audio session is meant to be active.
+- Reopen a fresh SDK-managed audio session with bounded retries.
+- Keep only one microphone/audio pipeline; do not add a competing recorder or receive collector.
+- Replay a bounded, text-only recent transcript as a continuity note in the new session.
+- Expose reconnecting/recovered/failed state to the foreground service.
+- Stop recovery immediately when the user ends the conversation.
+
+**Important limitation:** the Firebase SDK's high-level `startAudioConversation` exposes GoAway but not session-resumption-handle updates. The documented handle-based resumption sample requires consuming `receive()`, which conflicts with the helper's own receive loop. PR #24 therefore reconnects to a fresh Live session and replays recent transcript context; it does not claim exact server-side handle resumption. A custom single-recorder audio pipeline is a separate higher-risk technical project if exact handle-based continuity is later required.
+
+**Release gate:** CI compilation, then real-device testing for at least 10–15 minutes, repeated GoAway cycles, network loss, stop-during-reconnect, no duplicate microphone capture and voice continuity on Note10+ Android 12 and S22 Ultra. Until device testing, do not claim the issue is definitively fixed.
+
+## Smart Alarm — PR #23 MERGED; FOUNDATION ONLY
+
+**Status:** PR #23 merged into main (2026-11-08). Adds a pure timezone-aware schedule model and instrumentation-test source for one-time and weekly alarms, including DST behavior.
+
+**Not yet implemented:** Android AlarmManager scheduling, encrypted persistence, alarm UI, ringtone/gradual volume, snooze/dismiss, reboot/time-zone rescheduling, exact-alarm permission handling, lock-screen presentation, or Juanita's spoken greeting. The current PR is not a usable alarm and must not be described as one.
+
+**Next implementation slices:** local persistence and AlarmManager receiver/scheduler; then alarm management UI and permission/lock-screen behavior; then spoken greeting using the configured Gemini Live voice, only if a reliable non-TTS playback path is technically verified. Weather briefing remains optional and must use the multi-source forecast policy above.
+
+## Familiar-person voice recognition — USER-APPROVED; NOT IMPLEMENTED
+
+Speech-to-text is not speaker identification. Juanita must not claim she recognizes a friend merely because she transcribed their words. The planned behavior remains: at a natural pause, ask who is speaking only when the speaker is genuinely unknown and audio confidence is adequate; request explicit permission before enrolling a local voice profile; associate the confirmed voice with the confirmed name; provide guest/decline, correction, revoke and delete paths. Avoid enrollment from TV/radio, overlapping voices or uncertain audio. Local model feasibility, per-model licensing, Samsung-device performance and GDPR biometric-data review remain mandatory gates. See the speaker identity research section above.
