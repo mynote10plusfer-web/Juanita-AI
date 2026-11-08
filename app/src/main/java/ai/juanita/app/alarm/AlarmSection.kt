@@ -72,7 +72,7 @@ fun AlarmSection(panel: Color, gold: Color) {
     var oneTimeDate by remember { mutableStateOf(LocalDate.now().plusDays(1)) }
     var deleteTarget by remember { mutableStateOf<JuanitaAlarm?>(null) }
     var morningVoiceEnabled by remember {
-        mutableStateOf(context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).getBoolean("morning_voice_enabled", true))
+        mutableStateOf(context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).getBoolean("morning_voice_enabled", false))
     }
 
     fun refresh() {

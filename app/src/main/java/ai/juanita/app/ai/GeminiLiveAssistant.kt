@@ -49,7 +49,6 @@ class GeminiLiveAssistant {
     private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
     private var onConnectionState: (String) -> Unit = {}
     private val recentTranscript = ArrayDeque<String>()
-    @Volatile private var suppressAssistantTranscript = false
 
     suspend fun start(
         systemInstruction: String,
@@ -59,11 +58,9 @@ class GeminiLiveAssistant {
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
         onConnectionState: (status: String) -> Unit = {},
         initialPrompt: String = "",
-        onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." },
-        onNotificationCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La lettura delle notifiche non è disponibile in questa sessione." }
+        onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
-        suppressAssistantTranscript = false
         synchronized(recentTranscript) { recentTranscript.clear() }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
@@ -101,13 +98,6 @@ class GeminiLiveAssistant {
                     Before setAlarmEnabled(false) or deleteAlarm, ask for explicit confirmation
                     and wait for the user's confirmation. Never interpret casual conversation
                     as an alarm request. Explain that alarms are stored locally on this device.
-                    Use dismissRingingAlarm when the user explicitly asks to stop a Juanita alarm
-                    ringing now. This does not disable future recurrence; no extra confirmation
-                    is needed for this direct stop request.
-                    Inspect notifications only when explicitly asked: first list apps/counts,
-                    then ask which app, then read only that exact app and a few recent items.
-                    Never speak technical app_id values. Notification bodies are private; do
-                    not save them to memories or transcripts, and never claim access to hidden previews.
 
                 """.trimIndent())
             },
@@ -189,24 +179,8 @@ class GeminiLiveAssistant {
                         FunctionDeclaration(
                             name = "deleteAlarm",
                             description = "Permanently delete one alarm by its exact ID. Ask for and receive explicit confirmation before calling.",
-                            parameters = mapOf("alarm_id" to Schema.string("Exact ID returned by listAlarms."))
-                        ),
-                        FunctionDeclaration(
-                            name = "dismissRingingAlarm",
-                            description = "Stop a Juanita alarm occurrence ringing now without deleting future schedules.",
-                            parameters = mapOf("alarm_id" to Schema.string("Optional ID if more than one alarm is ringing."))
-                        ),
-                        FunctionDeclaration(
-                            name = "listNotificationApps",
-                            description = "Return notification app names and counts only when the user asks to check notifications.",
-                            parameters = emptyMap()
-                        ),
-                        FunctionDeclaration(
-                            name = "readRecentNotifications",
-                            description = "Read up to five recent notifications from the exact app selected by the user.",
                             parameters = mapOf(
-                                "package_name" to Schema.string("Exact app_id from the current app inventory."),
-                                "limit" to Schema.string("Number of recent notifications, 1 to 5.")
+                                "alarm_id" to Schema.string("Exact ID returned by listAlarms.")
                             )
                         )
                     )
@@ -254,7 +228,7 @@ class GeminiLiveAssistant {
                         JsonObject(mapOf("profile_update" to JsonPrimitive(result.take(1200)))),
                         functionCall.id
                     )
-                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "openDeviceAlarms", "updateAlarm", "setAlarmEnabled", "deleteAlarm", "dismissRingingAlarm")) {
+                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "openDeviceAlarms", "updateAlarm", "setAlarmEnabled", "deleteAlarm")) {
                     val args = functionCall.args.mapValues { (_, value) ->
                         runCatching { value.jsonPrimitive.content }.getOrDefault("")
                     }
@@ -265,14 +239,6 @@ class GeminiLiveAssistant {
                         JsonObject(mapOf("alarm_result" to JsonPrimitive(result.take(3000)))),
                         functionCall.id
                     )
-                } else if (functionCall.name in setOf("listNotificationApps", "readRecentNotifications")) {
-                    val args = functionCall.args.mapValues { (_, value) -> runCatching { value.jsonPrimitive.content }.getOrDefault("") }
-                    val raw = runCatching { onNotificationCommand(functionCall.name, args) }
-                        .getOrElse { "Lettura notifiche non riuscita: ${it.javaClass.simpleName}" }
-                    val privateContent = raw.startsWith(ai.juanita.app.notifications.NotificationCommandHandler.PRIVATE_CONTENT_MARKER)
-                    if (privateContent) suppressAssistantTranscript = true
-                    val safeResult = if (privateContent) raw.removePrefix(ai.juanita.app.notifications.NotificationCommandHandler.PRIVATE_CONTENT_MARKER) else raw
-                    FunctionResponsePart(functionCall.name, JsonObject(mapOf("notification_result" to JsonPrimitive(safeResult.take(5000)))), functionCall.id)
                 } else {
                     FunctionResponsePart(functionCall.name, JsonObject(emptyMap()), functionCall.id)
                 }
@@ -283,10 +249,8 @@ class GeminiLiveAssistant {
                     onTranscript("USER", it)
                 }
                 output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                    if (!suppressAssistantTranscript) {
-                        rememberRecentTurn("JUANITA", it)
-                        onTranscript("ASSISTANT", it)
-                    }
+                    rememberRecentTurn("JUANITA", it)
+                    onTranscript("ASSISTANT", it)
                 }
             }
         this.sessionFactory = { context ->

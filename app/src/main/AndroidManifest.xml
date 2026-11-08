@@ -35,9 +35,6 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
         <service android:name=".alarm.JuanitaAlarmRingingService" android:exported="false" android:foregroundServiceType="mediaPlayback" />
-        <service android:name=".notifications.JuanitaNotificationListener" android:label="Juanita AI · Accesso alle notifiche" android:exported="false" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
-        </service>
         <activity android:name=".alarm.AlarmRingingActivity" android:exported="false" android:excludeFromRecents="true" />
         <receiver android:name=".alarm.JuanitaAlarmReceiver" android:enabled="true" android:exported="false" />
         <receiver android:name=".alarm.JuanitaAlarmBootReceiver" android:enabled="true" android:exported="true">

@@ -39,7 +39,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
@@ -310,16 +309,6 @@ private fun JuanitaApp(
     val liveState by JuanitaVoiceService.state.collectAsState()
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
-    var notificationAccessGranted by remember { mutableStateOf(ai.juanita.app.notifications.NotificationAccess.isEnabled(context)) }
-    var notificationCloudConsent by remember {
-        mutableStateOf(context.getSharedPreferences("juanita_notification_settings", android.content.Context.MODE_PRIVATE).getBoolean("cloud_read_consent", false))
-    }
-    LaunchedEffect(selectedSection) {
-        if (selectedSection == "SETTINGS") while (true) {
-            notificationAccessGranted = ai.juanita.app.notifications.NotificationAccess.isEnabled(context)
-            delay(1_000L)
-        }
-    }
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
     val hostActivity = context as? Activity
@@ -404,27 +393,6 @@ private fun JuanitaApp(
         } else liveStartError = "Permesso microfono negato"
     }
 
-    val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
-                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono Juanita. Sono qui, pronta ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L)
-            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
-        } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
-    }
-    val startVoicePreview = {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
-                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono Juanita. Sono qui, pronta ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L)
-            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
-        } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -510,25 +478,6 @@ private fun JuanitaApp(
                     ) { Text("Apri impostazioni permessi") }
                     Text("Puoi revocare o modificare gli accessi in qualsiasi momento. Le funzioni facoltative non bloccano il resto dell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                }
-                SettingsCard(panel, gold, "LETTURA DELLE NOTIFICHE") {
-                    Text("Accesso Android: ${if (notificationAccessGranted) "attivo" else "non attivo"}", color = if (notificationAccessGranted) gold else Color(0xFFE4BD69), fontSize = 13.sp)
-                    Text("Per leggere le notifiche non basta autorizzare gli avvisi: devi attivare l'accesso speciale di Juanita nelle impostazioni Android.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                    Button(onClick = { runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) } },
-                        modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-                    ) { Text(if (notificationAccessGranted) "Gestisci accesso alle notifiche" else "Attiva accesso alle notifiche") }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Consenti lettura dei contenuti su richiesta", color = Color.White, fontSize = 13.sp)
-                            Text("I testi vengono inviati a Gemini soltanto quando chiedi di leggere una notifica e scegli l'app.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                        }
-                        Switch(checked = notificationCloudConsent, onCheckedChange = {
-                            notificationCloudConsent = it
-                            context.getSharedPreferences("juanita_notification_settings", android.content.Context.MODE_PRIVATE).edit()
-                                .putBoolean("cloud_read_consent", it).apply()
-                        })
-                    }
-                    Text("Juanita prima mostra le app e il numero di notifiche; poi ti chiede quale app leggere. Non apre, elimina o modifica le notifiche.", color = Color(0xFF777D87), fontSize = 11.sp)
                 }
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     OutlinedTextField(
@@ -666,11 +615,8 @@ private fun JuanitaApp(
                             }
                         }
                     }
-                    Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) { Text("Ascolta un campione della voce") }
-                    Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                    Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Text("La scelta viene salvata sul telefono. Per applicarla, termina e riavvia la conversazione vocale.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
                 }
@@ -767,7 +713,7 @@ private fun JuanitaApp(
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
                 SettingsCard(panel, gold, "FUNZIONI IN SVILUPPO") {
-                    Text("La lettura vocale delle notifiche è disponibile su richiesta quando l'accesso speciale Android è attivo e hai autorizzato separatamente l'invio dei contenuti a Gemini. Juanita mostra prima l'elenco delle app e legge soltanto quella che selezioni.", color = Color(0xFFB9BBC1), fontSize = 13.sp)
+                    Text("La lettura delle notifiche è stata rinviata alla fase finale del progetto. In questa versione Juanita non richiede l’accesso alle notifiche e non legge i messaggi del telefono.", color = Color(0xFFB9BBC1), fontSize = 13.sp)
                 }
 
                 ImprovementLabSection(

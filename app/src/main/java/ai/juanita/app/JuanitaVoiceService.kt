@@ -48,7 +48,6 @@ class JuanitaVoiceService : Service() {
     private var startRequested = false
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
-    private var voicePreviewJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
     private var transcriptWorker: Job? = null
     private var memoryWorkChannel: Channel<Unit>? = null
@@ -90,7 +89,6 @@ class JuanitaVoiceService : Service() {
                 val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
                 val initialPrompt = intent.getStringExtra(EXTRA_INITIAL_PROMPT).orEmpty()
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
-                val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
                 if (instruction.isBlank()) {
                     _state.value = "Impossibile avviare: istruzioni mancanti"
                     stopSelf(startId)
@@ -118,17 +116,13 @@ class JuanitaVoiceService : Service() {
                             val localContext = withContext(Dispatchers.IO) {
                                 memoryStore.buildAssistantContext()
                             }
-                            val loadedProfile = withContext(Dispatchers.IO) {
-                                runCatching { personalProfileStore.load() }.getOrElse {
-                                    _memoryState.value = "Profilo personale non leggibile: conversazione disponibile, profilo non caricato."
-                                    PersonalProfile()
-                                }
+                            val profileContext = withContext(Dispatchers.IO) {
+                                runCatching { buildPersonalProfileContext(personalProfileStore.load()) }
+                                    .getOrElse {
+                                        _memoryState.value = "Profilo personale non leggibile: conversazione disponibile, profilo non caricato."
+                                        ""
+                                    }
                             }
-                            val profileContext = buildPersonalProfileContext(loadedProfile)
-                            val (profileOpeningPrompt, profilePromptKey) = if (
-                                initialPrompt.isBlank() && alarmId == null && previewDurationMillis == 0L
-                            ) nextProfileOpeningPrompt(loadedProfile) else ("" to null)
-                            val effectiveInitialPrompt = initialPrompt.ifBlank { profileOpeningPrompt }
                             val sessionInstruction = buildString {
                                 append(instruction)
                                 if (profileContext.isNotBlank()) append("\n\n").append(profileContext)
@@ -219,8 +213,8 @@ class JuanitaVoiceService : Service() {
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
-                                    if (initialPrompt.isNotBlank() && alarmId != null && role.equals("ASSISTANT", ignoreCase = true)) {
-                                        // Keep the local alarm sounding until Gemini's first spoken response transcript.
+                                    if (initialPrompt.isNotBlank() && role.equals("ASSISTANT", ignoreCase = true)) {
+                                        // Keep the local alarm sounding until Gemini actually begins speaking.
                                         JuanitaAlarmRingingService.stop(this@JuanitaVoiceService, alarmId)
                                     }
                                     val sent = transcriptQueue.trySend(role to text)
@@ -259,28 +253,14 @@ class JuanitaVoiceService : Service() {
                                     _state.value = status
                                     updateNotification(status)
                                 },
-                                initialPrompt = effectiveInitialPrompt,
+                                initialPrompt = initialPrompt,
                                 onAlarmCommand = { name, arguments ->
-                                    ai.juanita.app.alarm.AlarmVoiceCommandHandler(applicationContext).execute(name, arguments)
-                                },
-                                onNotificationCommand = { name, arguments ->
-                                    ai.juanita.app.notifications.NotificationCommandHandler(applicationContext).execute(name, arguments)
+                                    ai.juanita.app.alarm.AlarmVoiceCommandHandler(applicationContext)
+                                        .execute(name, arguments)
                                 }
                             )
-                            if (profilePromptKey != null) {
-                                getSharedPreferences("juanita_profile_guidance", MODE_PRIVATE).edit()
-                                    .putBoolean(profilePromptKey, true).apply()
-                            }
-                            _state.value = if (previewDurationMillis > 0L) "Anteprima della voce Gemini in corso…"
-                                else "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
-                            updateNotification(if (previewDurationMillis > 0L) "Anteprima voce Gemini" else "Conversazione vocale attiva")
-                            if (previewDurationMillis > 0L) {
-                                voicePreviewJob?.cancel()
-                                voicePreviewJob = serviceScope.launch {
-                                    kotlinx.coroutines.delay(previewDurationMillis)
-                                    requestStop()
-                                }
-                            }
+                            _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
+                            updateNotification("Conversazione vocale attiva")
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {
@@ -374,19 +354,6 @@ class JuanitaVoiceService : Service() {
             "\nThese are user-provided details. Respect corrections and do not ask again for information already present."
     }
 
-    private fun nextProfileOpeningPrompt(profile: PersonalProfile): Pair<String, String?> {
-        val guidance = getSharedPreferences("juanita_profile_guidance", MODE_PRIVATE)
-        val name = profile.value(PersonalProfile.PREFERRED_NAME).orEmpty()
-        val birth = profile.value(PersonalProfile.BIRTH_DATE).orEmpty()
-        return when {
-            name.isBlank() && !guidance.getBoolean("preferred_name_questioned", false) ->
-                ("Saluta con naturalezza e poni una sola domanda breve: come preferisce essere chiamato? Non chiedere altri dati insieme e rispetta un eventuale rifiuto." to "preferred_name_questioned")
-            name.isNotBlank() && birth.isBlank() && !guidance.getBoolean("birth_date_questioned", false) ->
-                ("Dopo un breve scambio naturale, se il momento è adatto, chiedi una sola volta e con delicatezza se desidera condividere la data di nascita. È facoltativa; non insistere e non chiedere altri dati insieme." to "birth_date_questioned")
-            else -> "" to null
-        }
-    }
-
     private fun mergeTranscriptChunks(existing: String, incoming: String): String {
         val oldText = existing.trim()
         val newText = incoming.trim()
@@ -471,7 +438,6 @@ class JuanitaVoiceService : Service() {
 
     override fun onDestroy() {
         sessionJob?.cancel()
-        voicePreviewJob?.cancel()
         // Stop capture synchronously even if Android is tearing down the service.
         assistant.stopAudioCapture()
         transcriptChannel?.close()
@@ -492,7 +458,6 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_VOICE = "extra_voice_name"
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
         const val EXTRA_ALARM_ID = "extra_alarm_id"
-        const val EXTRA_PREVIEW_DURATION_MS = "extra_preview_duration_ms"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
 
@@ -505,15 +470,13 @@ class JuanitaVoiceService : Service() {
         private val _memoryState = MutableStateFlow("Memoria automatica pronta.")
         val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
-        fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "",
-                  alarmId: String? = null, previewDurationMillis: Long = 0L) {
+        fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "", alarmId: String? = null) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_INSTRUCTION, instruction)
                 putExtra(EXTRA_VOICE, voiceName)
                 putExtra(EXTRA_INITIAL_PROMPT, initialPrompt)
                 if (alarmId != null) putExtra(EXTRA_ALARM_ID, alarmId)
-                if (previewDurationMillis > 0L) putExtra(EXTRA_PREVIEW_DURATION_MS, previewDurationMillis)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }

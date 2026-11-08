@@ -30,7 +30,6 @@ class AlarmVoiceCommandHandler(private val context: Context) {
         "updateAlarm" -> update(args)
         "setAlarmEnabled" -> setEnabled(args)
         "deleteAlarm" -> delete(args)
-        "dismissRingingAlarm" -> dismissRinging(args)
         else -> "Comando sveglia non riconosciuto."
     }
 
@@ -173,22 +172,6 @@ class AlarmVoiceCommandHandler(private val context: Context) {
             }
         } else JuanitaAlarmScheduler.cancel(context, id)
         return "Sveglia ${if (enabled) "attivata" else "disattivata"}. ${describe(updated)}" + if (enabled) timingNote() else ""
-    }
-
-    private fun dismissRinging(args: Map<String, String>): String {
-        val active = JuanitaAlarmRingingService.activeAlarmIds(context)
-        if (active.isEmpty()) return "In questo momento non c'è una sveglia Juanita che sta suonando."
-        val requested = args["alarm_id"].orEmpty().trim()
-        val id = when {
-            requested.isNotBlank() && requested in active -> requested
-            requested.isNotBlank() -> return "Quella sveglia non risulta attualmente in suoneria."
-            active.size == 1 -> active.single()
-            else -> return "Stanno suonando più sveglie. Chiedi quale vuole spegnere: " +
-                active.mapNotNull { key -> store.find(key)?.let { "ID $key — ${describe(it)}" } }.joinToString("; ")
-        }
-        val alarm = store.find(id)
-        JuanitaAlarmScheduler.dismiss(context, id)
-        return "Ho spento la suoneria corrente${alarm?.let { ": ${describe(it)}" }.orEmpty()}. Le eventuali ripetizioni future restano programmate."
     }
 
     private fun delete(args: Map<String, String>): String {
