@@ -894,3 +894,37 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 **Honest limitation:** no generative AI system can guarantee zero errors. The engineering goal is to reduce unsupported claims, detect uncertainty, verify important facts, expose provenance and correct mistakes transparently. Never advertise Juanita as infallible.
 
 **Status: USER-REQUIRED CORE PRODUCT PRINCIPLE — SPECIFIED; IMPLEMENTATION AND TESTS REQUIRED.**
+
+### Multi-source verification and consensus for weather and other external information — USER-REQUIRED (2026-11-08)
+
+**User requirement:** When Riccardo asks for today's weather or another current/external fact, Juanita must not rely on a single source when multiple independent sources are available. She must compare the evidence, identify agreement and disagreement, and communicate a best-supported answer without pretending that a simple average guarantees truth.
+
+**Weather workflow**
+- Query at least three genuinely independent, reputable weather providers/models when available and practical. Do not count different websites that merely re-publish the same underlying forecast as independent sources.
+- Check that the forecasts refer to the same location, local time zone, forecast period and comparable variables. Prefer fresh updates and record each source's update/issue time.
+- Compare temperature, precipitation probability and amount, wind speed/gusts, cloud cover and expected timing where supplied.
+- For comparable numeric variables, calculate a transparent consensus (for example median and/or mean) and retain the source range/spread. Use robust statistics such as a median when one forecast is an outlier; do not hide the outlier.
+- Do not blindly average categorical or timing-sensitive predictions. For rain start/end times, storm risk, wind gusts and rapidly changing conditions, report the range, scenarios or majority agreement, as appropriate.
+- Weight sources only when there is a defensible reason (provider reliability for the region, model skill, update freshness, local observation quality); explain material weighting. Never invent provider rankings or accuracy scores.
+- If only one or two usable independent sources are available, say so and lower the confidence; do not manufacture a three-source consensus.
+- If sources strongly disagree, clearly state the disagreement, show the plausible range and confidence, and avoid presenting a falsely precise single number.
+- Distinguish observed current conditions from forecasts. Use official local meteorological alerts (for the Canary Islands, AEMET and relevant official authorities) as safety-critical evidence; never dilute or average away an official warning because other providers disagree.
+- Present a concise practical conclusion first, followed by source names, update times, key agreements/disagreements and the consensus method when useful. Keep the source evidence inspectable.
+
+**General external-information rule**
+- Apply the same multi-source principle to other current facts when the consequences or uncertainty justify it: compare independent sources, prioritize primary sources, verify dates and context, and distinguish corroboration from copied/repeated claims.
+- Use two or three concordant independent sources as corroboration where available, but do not treat majority vote as proof. A single authoritative primary source may be decisive for a specific official fact; explain why rather than forcing an artificial average.
+- Never average unlike measurements, incompatible definitions, different time windows or conflicting claims that cannot meaningfully be combined.
+- If independent evidence is insufficient, disclose the limitation and say what remains unverified.
+
+**Acceptance tests**
+- Weather providers agree closely: report a clear consensus and identify sources/update times.
+- One forecast is a numerical outlier: robust consensus does not let it distort the estimate; its difference remains visible.
+- Forecasts disagree on rain timing or wind gusts: report a range/scenarios rather than a misleading arithmetic average.
+- Only one/two independent sources are available: explicitly disclose source scarcity.
+- Multiple sites re-publish one model: count them as one underlying source, not independent corroboration.
+- Official severe-weather alert conflicts with benign app forecasts: preserve and clearly surface the official alert.
+- Stale forecast versus fresh forecast: disclose update times and do not silently combine incomparable periods.
+- Search/source service unavailable: say that current conditions could not be verified; never simulate a lookup or invent weather.
+
+**Status: USER-REQUIRED SPECIFICATION — NOT IMPLEMENTED OR TESTED.**
