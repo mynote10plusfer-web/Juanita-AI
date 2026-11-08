@@ -2,7 +2,7 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Candidate release: 0.10.4 (versionCode 33)
+## Latest verified Release: 0.10.4 (versionCode 33)
 
 This candidate adds opt-in Android notification reading, increments versionCode, and keeps the permanent production application ID and signing certificate unchanged. Debug builds use the isolated package ai.juanita.app.debug and a separate Firebase variant configuration. Only the signed Release APK is suitable for updating the production app.
 
