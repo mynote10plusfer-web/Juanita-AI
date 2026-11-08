@@ -191,7 +191,7 @@ class GeminiLiveAssistant {
                         content("user") {
                             text(
                                 "CONVERSATION CONTINUITY NOTE — the previous audio connection ended normally. " +
-                                    "Continue naturally without repeating the greeting. Recent conversation:\\n" + context
+                                    "Continue naturally without repeating the greeting. Recent conversation:\n" + context
                             )
                         },
                         turnComplete = false
@@ -258,7 +258,7 @@ class GeminiLiveAssistant {
         withTimeoutOrNull(2_000L) { runCatching { expected.close() } }
 
         val context = synchronized(recentTranscript) {
-            recentTranscript.joinToString("\\n").takeLast(5_000)
+            recentTranscript.joinToString("\n").takeLast(5_000)
         }
         var lastFailure: Throwable? = null
         for (attempt in 1..3) {
