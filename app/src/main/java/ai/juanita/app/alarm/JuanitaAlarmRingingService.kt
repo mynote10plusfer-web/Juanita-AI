@@ -213,7 +213,7 @@ class JuanitaAlarmRingingService : Service() {
         fun stop(context: Context, alarmId: String? = null) {
             val intent = Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_STOP)
             if (alarmId != null) intent.putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
-            context.startService(intent)
+            runCatching { context.startService(intent) }
         }
     }
 }
