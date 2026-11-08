@@ -13,7 +13,6 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import ai.juanita.app.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -159,7 +158,7 @@ class JuanitaAlarmRingingService : Service() {
             else context.startService(intent)
         }
         fun stop(context: Context) {
-            context.startService(Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_STOP))
+            context.stopService(Intent(context, JuanitaAlarmRingingService::class.java))
         }
     }
 }
