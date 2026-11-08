@@ -150,6 +150,11 @@ class GeminiLiveAssistant {
                             parameters = emptyMap()
                         ),
                         FunctionDeclaration(
+                            name = "openDeviceAlarms",
+                            description = "Open the phone's default Clock app to show alarms already managed there. Do not claim you can read Samsung Clock's private alarm list; Android exposes only this public intent.",
+                            parameters = emptyMap()
+                        ),
+                        FunctionDeclaration(
                             name = "updateAlarm",
                             description = "Edit one existing alarm by exact ID. Supply only changed fields: time HH:mm, date YYYY-MM-DD to make it one-off, repeat_days to make it weekly, and/or label. Preserve all unspecified fields.",
                             parameters = mapOf(
@@ -220,7 +225,7 @@ class GeminiLiveAssistant {
                         JsonObject(mapOf("profile_update" to JsonPrimitive(result.take(1200)))),
                         functionCall.id
                     )
-                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "updateAlarm", "setAlarmEnabled", "deleteAlarm")) {
+                } else if (functionCall.name in setOf("createAlarm", "listAlarms", "openDeviceAlarms", "updateAlarm", "setAlarmEnabled", "deleteAlarm")) {
                     val args = functionCall.args.mapValues { (_, value) ->
                         runCatching { value.jsonPrimitive.content }.getOrDefault("")
                     }
