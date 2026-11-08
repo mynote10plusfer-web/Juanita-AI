@@ -1122,6 +1122,26 @@ Speech-to-text is not speaker identification. Juanita must not claim she recogni
 
 **STATUS: IN PROGRESS — isolated branch `feature/smart-alarm-0.11.1-multi-alarm-voice`; issue #27.** The 0.11.0 user test confirmed that local ringing works, while spoken greeting and natural-language alarm creation do not meet the intended behavior.
 
+### Implementation progress — 2026-11-08 (draft PR #29)
+
+**Source implementation added; first CI pass succeeded for the PR's earlier head. The branch has since received additional hardening commits, so CI must be rerun against the latest head. No Release APK has been produced and no Samsung device test has been claimed.**
+
+Implemented in the current feature branch:
+- Independent alarm collection with backward-compatible migration from the 0.11.0 singleton setting.
+- Per-alarm scheduling identities, independent snooze/dismiss, recurrence, boot/time/time-zone/exact-alarm and package-update rescheduling.
+- In-app list/add/edit/enable-disable/delete manager; seven equal weekday chips keep Dom on one line.
+- Gemini Live alarm tools for create/list/update/enable/delete and a public intent to open the phone Clock app.
+- First-launch permission guide plus persistent access status/review in Settings.
+- Five-second delay before starting morning Live, visible asynchronous failure and retry, no TTS fallback.
+- Alarm stream temporary 70% minimum, original volume restore, stale-volume recovery and 3-second tone/volume test.
+- Instrumentation tests for independent alarm records, isolation on disable/delete and legacy migration.
+
+Known limits / validation still required:
+- Android does not expose Samsung Clock's private list of alarms; the public Clock intent can open it, while AlarmManager.getNextAlarmClock() exposes only the next alarm where available.
+- The Firebase Live audio helper currently gives no verified callback for the exact first speaker-audio sample. Tone stop is tied to the first assistant output transcript, so overlap/gap must be checked on real devices.
+- The alarm stream can be adjusted; Gemini Live's speech output may use another stream. Test both separately.
+- The current CI success was for an earlier PR head; latest branch commits need a fresh CI pass.
+
 ### User-observed gaps and source-confirmed findings
 - The current UI persists one `AlarmSchedule` only; it cannot maintain multiple independent alarm records or different times for different weekdays.
 - Morning voice opt-in defaults to OFF. The current permission flow bundles microphone with optional calendar and location requests.
