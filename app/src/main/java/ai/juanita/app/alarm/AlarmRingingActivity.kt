@@ -28,6 +28,8 @@ class AlarmRingingActivity : ComponentActivity() {
     private lateinit var root: LinearLayout
     private lateinit var alarmId: String
     private var voiceStarted = false
+    private var testMode = false
+    private var snoozeButton: Button? = null
     private var retryButton: Button? = null
     private var statusText: TextView? = null
 
@@ -35,6 +37,7 @@ class AlarmRingingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
             ?: JuanitaAlarmStore.LEGACY_ID
+        testMode = intent.getBooleanExtra(JuanitaAlarmRingingService.EXTRA_TEST_MODE, false)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -64,7 +67,7 @@ class AlarmRingingActivity : ComponentActivity() {
         })
         val alarm = JuanitaAlarmStore(this).find(alarmId)
         root.addView(TextView(this).apply {
-            text = alarm?.label?.takeIf { it.isNotBlank() } ?: "È ora di svegliarsi"
+            text = if (testMode) "Prova della sveglia" else alarm?.label?.takeIf { it.isNotBlank() } ?: "È ora di svegliarsi"
             textSize = 30f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
@@ -77,9 +80,10 @@ class AlarmRingingActivity : ComponentActivity() {
             gravity = Gravity.CENTER
         }
         root.addView(statusText)
-        root.addView(makeButton("POSTICIPA · 10 MINUTI") {
+        snoozeButton = makeButton("POSTICIPA · 10 MINUTI") {
             sendAlarmAction(JuanitaAlarmScheduler.ACTION_SNOOZE)
-        })
+        }
+        root.addView(snoozeButton)
         root.addView(makeButton("SPEGNI LA SVEGLIA") {
             sendAlarmAction(JuanitaAlarmScheduler.ACTION_DISMISS)
         })
@@ -92,18 +96,23 @@ class AlarmRingingActivity : ComponentActivity() {
         })
         setContentView(root)
 
-        observeVoiceStatus()
+        if (testMode) {
+            snoozeButton?.visibility = android.view.View.GONE
+            statusText?.text = "Prova audio e schermata: nessun buongiorno vocale verrà avviato."
+        } else {
+            observeVoiceStatus()
+        }
         val alarmPrefs = getSharedPreferences("juanita_alarm", MODE_PRIVATE)
         val voiceEnabled = alarmPrefs.getBoolean("morning_voice_enabled", false)
         val microphoneGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (voiceEnabled && microphoneGranted) {
+        if (!testMode && voiceEnabled && microphoneGranted) {
             statusText?.text = "Buongiorno in preparazione…"
             // The local alarm tone remains active during this delay and while Live connects.
             lifecycleScope.launch {
                 delay(5_000L)
                 if (!isFinishing && !isDestroyed) startMorningVoice()
             }
-        } else if (voiceEnabled) {
+        } else if (!testMode && voiceEnabled) {
             statusText?.text = "Per il buongiorno vocale serve il permesso microfono. La sveglia sonora continua."
             addRetryButton("Apri Juanita") {
                 startActivity(Intent(this, ai.juanita.app.MainActivity::class.java)
@@ -199,9 +208,10 @@ class AlarmRingingActivity : ComponentActivity() {
     }
 
     private fun sendAlarmAction(action: String) {
+        val effectiveAction = if (testMode) JuanitaAlarmScheduler.ACTION_DISMISS else action
         sendBroadcast(
             Intent(this, JuanitaAlarmReceiver::class.java)
-                .setAction(action)
+                .setAction(effectiveAction)
                 .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
         )
         finish()
