@@ -19,19 +19,23 @@ object AlarmVolumeController {
     fun ensureAudible(context: Context): String {
         val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         return runCatching {
+            val dndFilter = context.getSystemService(NotificationManager::class.java).currentInterruptionFilter
+            val dndNotice = if (dndFilter == NotificationManager.INTERRUPTION_FILTER_NONE) {
+                " Non disturbare totale è attivo: Android potrebbe silenziare la sveglia; non lo modifico automaticamente."
+            } else ""
             val maximum = audio.getStreamMaxVolume(AudioManager.STREAM_ALARM)
             val current = audio.getStreamVolume(AudioManager.STREAM_ALARM)
-            if (maximum <= 0) return "Volume sveglia non regolabile su questo dispositivo."
+            if (maximum <= 0) return "Volume sveglia non regolabile su questo dispositivo." + dndNotice
             val target = ceil(maximum * TARGET_PERCENT / 100.0).toInt().coerceIn(1, maximum)
-            if (current >= target) return "Volume sveglia già adeguato."
+            if (current >= target) return "Volume sveglia già adeguato." + dndNotice
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             if (!prefs.getBoolean(KEY_ADJUSTED, false)) {
                 prefs.edit().putInt(KEY_ORIGINAL, current).putBoolean(KEY_ADJUSTED, true).commit()
             }
             audio.setStreamVolume(AudioManager.STREAM_ALARM, target, 0)
             val actual = audio.getStreamVolume(AudioManager.STREAM_ALARM)
-            if (actual >= target) "Volume sveglia aumentato temporaneamente al livello consigliato."
-            else "Android o il dispositivo non hanno consentito di aumentare il volume della sveglia."
+            if (actual >= target) "Volume sveglia aumentato temporaneamente al livello consigliato." + dndNotice
+            else "Android o il dispositivo non hanno consentito di aumentare il volume della sveglia." + dndNotice
         }.getOrElse {
             "Non ho potuto regolare il volume della sveglia: verifica il volume allarme e Non disturbare."
         }
