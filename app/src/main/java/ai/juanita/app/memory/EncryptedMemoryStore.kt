@@ -221,7 +221,7 @@ class EncryptedMemoryStore(context: Context) {
         if (!isConversationArchiveEnabled || text.isBlank()) return
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
-        appendEncryptedSessionTurn(ArchivedTurn(UUID.randomUUID().toString(), safeRole, text.take(MAX_TURN_TEXT_LENGTH), timestampMillis), sessionId)
+        appendEncryptedSessionTurn(ArchivedTurn(UUID.randomUUID().toString(), safeRole, text, timestampMillis), sessionId)
         purgeExpiredArchive()
     }
 
@@ -734,7 +734,7 @@ class EncryptedMemoryStore(context: Context) {
                 put(JSONObject().apply {
                     put("id", turn.id)
                     put("role", turn.role)
-                    put("text", turn.text.take(MAX_TURN_TEXT_LENGTH))
+                    put("text", turn.text)
                     put("createdAt", turn.timestampMillis)
                 })
             }
@@ -903,7 +903,6 @@ class EncryptedMemoryStore(context: Context) {
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
         private const val MAX_MEMORY_TEXT_LENGTH = 500
-        private const val MAX_TURN_TEXT_LENGTH = 1800
         private const val MAX_MEMORY_ITEMS = 100
         private const val MAX_MEMORY_CHARS = 32_000
         private const val MAX_ARCHIVE_RECORDS = 300
