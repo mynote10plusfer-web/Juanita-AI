@@ -1000,7 +1000,7 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 - Reading is scoped to one exact package identifier and a maximum of five recent entries per tool call.
 - Added a separate persisted in-app consent, OFF by default, for sending selected notification message content to Gemini. The local tool callback checks this preference at call time and returns no message content if disabled.
 - The existing Android listener remains exported=false and protected by BIND_NOTIFICATION_LISTENER_SERVICE.
-- Notification bodies are read from the volatile in-memory inbox only. No notification content is written to the transcript archive, curated memories, analytics or persistent notification storage by this bridge.
+- Notification bodies are read from the volatile in-memory inbox only. When a notification body is returned, assistant-side audio transcript archiving is suppressed for the remainder of that Live session, preventing the read-aloud response from entering the archive. User-side transcripts continue to be archived. No notification content is written to curated memories, analytics or persistent notification storage by this bridge.
 - Notification content is treated as untrusted external data, not instructions. No reply, dismissal or mark-as-read action is implemented.
 - Android app inventory is returned only when the user asks to check notifications; message bodies require the separate in-app consent and a selected app.
 - Voice output uses the existing Gemini Live configured voice path; no Android TTS is introduced.
