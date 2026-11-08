@@ -173,7 +173,8 @@ class AlarmRingingActivity : ComponentActivity() {
                     this@AlarmRingingActivity,
                     instruction,
                     preferences.liveVoiceName,
-                    briefing
+                    briefing,
+                    alarmId
                 )
             }.onFailure { error ->
                 voiceStarted = false
