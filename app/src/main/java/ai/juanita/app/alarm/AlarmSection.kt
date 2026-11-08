@@ -130,6 +130,11 @@ fun AlarmSection(panel: Color, gold: Color) {
             onClick = {
                 if (days.isEmpty()) {
                     status = "Seleziona almeno un giorno per attivare la sveglia."
+                } else if (Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    status = "Concedi prima il permesso notifiche, poi premi di nuovo Salva e attiva."
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
                     val schedule = AlarmSchedule(hour, minute, days, enabled = true)
                     val ok = JuanitaAlarmScheduler.schedule(context, schedule)
