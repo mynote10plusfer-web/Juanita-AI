@@ -17,6 +17,8 @@ import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
+import ai.juanita.app.data.AssistantPreferences
+import ai.juanita.app.notifications.NotificationInbox
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -205,6 +207,34 @@ class JuanitaVoiceService : Service() {
                                         query,
                                         excludeSessionId = conversationId
                                     )
+                                },
+                                onNotificationInventory = {
+                                    NotificationInbox.entries.value
+                                        .groupBy { it.packageName }
+                                        .map { (packageName, items) ->
+                                            val label = items.firstOrNull()?.appName ?: packageName
+                                            "$label ($packageName): \${items.size}"
+                                        }
+                                        .sorted()
+                                        .joinToString("\n")
+                                        .ifBlank { "No notifications are currently available." }
+                                },
+                                onReadNotifications = { packageName, requestedLimit ->
+                                    if (!AssistantPreferences(applicationContext).allowNotificationContentToGemini) {
+                                        "Consent is disabled in Juanita settings. No notification content was shared."
+                                    } else {
+                                        val selected = NotificationInbox.entries.value
+                                            .filter { it.packageName == packageName }
+                                            .sortedByDescending { it.postedAt }
+                                            .take(requestedLimit.coerceIn(1, 5))
+                                        if (selected.isEmpty()) {
+                                            "No current notifications are available for the selected app."
+                                        } else {
+                                            selected.joinToString("\n\n") { entry ->
+                                                "App: \${entry.appName}\nTitle: \${entry.title.take(200)}\nMessage: \${entry.text.take(1200)}"
+                                            }.take(4800)
+                                        }
+                                    }
                                 }
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
