@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — production baseline is signed Release 0.10.9 (versionCode 38), with permanent certificate and applicationId ai.juanita.app verified by CI. Candidate branch feature/complete-gentle-morning-alarm-0.11.0 is being prepared as versionCode 39. Candidate code adds a consent-gated Gemini Live morning greeting, local date/time, Android next-alarm lookup, read-only calendar summary and Open-Meteo weather lookup. This candidate is NOT yet CI-verified, signed, released or tested on physical devices. Do not distribute intermediate builds; deliver one cumulative signed Release APK only after CI, signature and device validation.
+Last updated: 2026-11-08 — current cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. The prior 0.11.2 candidate (versionCode 41) built as a signed Release and passed permanent-certificate verification in GitHub Actions, but Google Play Protect blocked the sideload installation. It is not considered device-validated or installed. A new sideload-safe candidate 0.11.3 (versionCode 42) is being prepared with the privileged notification-listener service, Gemini notification tools, notification-reader settings and onboarding entry removed from the shipped app. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading is deferred until an acceptable distribution/policy path is established; a Google Play Developer registration alone does not guarantee approval. No paid services or billing without explicit approval.
 
 ## Progressive personal knowledge — candidate 0.10.8
 
@@ -284,7 +284,7 @@ Next steps:
 
 ## Notification access and personal inbox — candidate 0.10.4
 
-**Stage 1 — opt-in notification reader (implemented in feature branch; CI/device verification pending)**
+**STATUS: DEFERRED — NOT INCLUDED IN THE SIDeload RELEASE.** The earlier implementation is retained only as historical/reference source and must not be declared or registered in the app manifest, exposed in onboarding/settings, or offered as Gemini Live tools until a distribution and policy path is approved.
 - Register an Android `NotificationListenerService` protected by `BIND_NOTIFICATION_LISTENER_SERVICE`; do not request notification access automatically. The user opens Android's notification-listener settings and enables Juanita explicitly.
 - Receive posted notifications, identify the source application and extract only text Android makes available in notification extras. Do not bypass lock-screen privacy or recover hidden previews.
 - Show the latest 30 notification entries in the Altro tab and provide an explicit clear action. Voice read-aloud is deferred until it can use Juanita's configured Gemini Live voice path; Android TextToSpeech must not be used as a fallback.
@@ -1213,6 +1213,15 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 - Workflow change on this branch: `pre-emulator-launch-script: adb start-server`, so the ADB daemon is initialized before the action begins boot polling. This is a targeted CI infrastructure correction; its effectiveness is pending the next run.
 - No test is skipped, no failure is masked, and API 35 remains a mandatory release gate.
 
+
+## Current release and engineering status — 2026-11-08
+
+- The signed 0.11.2 / versionCode 41 workflow completed successfully, including restoration of the permanent keystore, Release build, APK signature verification and comparison against the known production certificate. The APK was blocked by Google Play Protect during sideload installation; CI success is not proof of installation or physical-device behavior.
+- The next cumulative candidate is 0.11.3 / versionCode 42. The privileged NotificationListenerService declaration and all user-facing/runtime notification-reading entry points are being removed from the shipped build. Ordinary Android notifications required for Juanita's own alarm/service alerts remain separate and are not removed.
+- Notification reading is parked. Do not ask the user to disable Play Protect, do not suggest changing signing identity, and do not claim that a Play Developer registration alone resolves the warning. Revisit only after a compliant distribution review.
+- Keep all existing tabs and their user data. Current bottom navigation: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. The notification-reader card is removed; the tabs are not being redesigned or renamed in this change.
+- Next product package after the safe install candidate: continue the user-approved Juanita Personal Organizer. First audit and stabilize the existing multi-alarm scheduler and morning Live greeting on Note10+ Android 12 and S22 Ultra Android 15; then implement local reminders/tasks with explicit confirmation and integrate read-only calendar events before calendar write access. No paid APIs, cloud billing or subscriptions.
+- Czech/Czech-Moravian are not a roadmap language-expansion task: the user has already tested language switching. Preserve existing language options without adding a Czech-language development milestone.
 
 ## 0.11.2 — correzioni dal test reale (2026-11-08)
 
