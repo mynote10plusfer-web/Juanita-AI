@@ -24,6 +24,7 @@ class AlarmPreferences(context: Context) {
                 hour = prefs.getInt(KEY_HOUR, 7),
                 minute = prefs.getInt(KEY_MINUTE, 0),
                 repeatDays = days,
+                oneShotAtEpochMillis = prefs.getLong(KEY_ONE_SHOT, 0L).takeIf { it > 0L },
                 enabled = prefs.getBoolean(KEY_ENABLED, false)
             )
         }.getOrNull()
@@ -35,6 +36,7 @@ class AlarmPreferences(context: Context) {
             .putInt(KEY_HOUR, schedule.hour)
             .putInt(KEY_MINUTE, schedule.minute)
             .putString(KEY_DAYS, schedule.repeatDays.sortedBy { it.value }.joinToString(",") { it.value.toString() })
+            .putLong(KEY_ONE_SHOT, schedule.oneShotAtEpochMillis ?: 0L)
             .putBoolean(KEY_ENABLED, schedule.enabled)
             .apply()
     }
@@ -53,6 +55,7 @@ class AlarmPreferences(context: Context) {
         private const val KEY_MINUTE = "minute"
         private const val KEY_DAYS = "days"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_ONE_SHOT = "one_shot_at_epoch_millis"
         private const val KEY_SNOOZE = "snooze_at"
     }
 }
@@ -68,12 +71,20 @@ object JuanitaAlarmScheduler {
 
     fun schedule(context: Context, schedule: AlarmSchedule): Boolean {
         val manager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        AlarmPreferences(context).save(schedule)
+        val preferences = AlarmPreferences(context)
         val pending = alarmPendingIntent(context)
         manager.cancel(pending)
-        if (!schedule.enabled || schedule.repeatDays.isEmpty()) return true
+        if (!schedule.enabled || (schedule.repeatDays.isEmpty() && schedule.oneShotAtEpochMillis == null)) {
+            preferences.save(schedule)
+            return true
+        }
 
-        val next = AlarmScheduleCalculator.nextOccurrence(schedule, ZonedDateTime.now()) ?: return false
+        val next = AlarmScheduleCalculator.nextOccurrence(schedule, ZonedDateTime.now())
+            ?: run {
+                preferences.save(schedule.copy(enabled = false))
+                return false
+            }
+        preferences.save(schedule)
         return runCatching {
             val triggerAt = next.toInstant().toEpochMilli()
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
@@ -103,8 +114,9 @@ object JuanitaAlarmScheduler {
         if (!isSnooze) {
             val schedule = AlarmPreferences(context).load()
             if (schedule == null || !schedule.enabled) return
-            // Keep the next weekly occurrence armed before ringing this one.
-            schedule(context, schedule)
+            // Keep weekly recurrence armed; a one-time alarm is consumed after firing.
+            if (schedule.oneShotAtEpochMillis != null) AlarmPreferences(context).disable()
+            else schedule(context, schedule)
         }
         JuanitaAlarmRingingService.start(context)
     }

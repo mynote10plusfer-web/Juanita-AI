@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — Juanita AI 0.10.8 (versionCode 37) remains the latest signed Release APK; CI verified APK v2 signature, permanent release certificate, applicationId ai.juanita.app and monotonically increasing version. PR #23 merged the timezone-safe Smart Alarm schedule core (model/tests only). PR #24 merged after successful CI compilation and instrumentation-test compilation; its recovery implementation is source-integrated but not yet Release-built or tested on physical devices. Do not ask the user to install intermediate builds; deliver one cumulative signed Release APK after CI and signing verification.
+Last updated: 2026-11-08 — production baseline is signed Release 0.10.9 (versionCode 38), with permanent certificate and applicationId ai.juanita.app verified by CI. Candidate branch feature/complete-gentle-morning-alarm-0.11.0 is being prepared as versionCode 39. Candidate code adds a consent-gated Gemini Live morning greeting, local date/time, Android next-alarm lookup, read-only calendar summary and Open-Meteo weather lookup. This candidate is NOT yet CI-verified, signed, released or tested on physical devices. Do not distribute intermediate builds; deliver one cumulative signed Release APK only after CI, signature and device validation.
 
 ## Progressive personal knowledge — candidate 0.10.8
 
@@ -584,7 +584,7 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / NEXT IMPLEMENTATION PACKAGE
 
-**Current engineering sequence (2026-11-08):** begin with the app-owned alarm engine and user-facing alarm controls; only after reliable local ringing, snooze/dismiss, reboot/time-zone recovery and permission-denied behavior are verified should Juanita's spoken morning greeting/briefing be connected. Then add local reminders/tasks, followed by optional read-only calendar access. Do not combine the alarm's reliable sound path with Gemini/network availability.
+**Current engineering sequence (2026-11-08):** preserve the app-owned alarm sound path independently of Gemini/network; add the consent-gated Live greeting and read-only morning briefing as a separate layer. Local reminders/tasks and calendar write access remain distinct follow-up scope and must not be claimed as implemented.
 
 **User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm.
 
@@ -1091,6 +1091,27 @@ This sequence is the working plan; a roadmap entry is not evidence that a featur
 **CI status:** the PR #25 debug build and Android instrumentation-test compilation passed for the implementation commit before the version-only bump; the cumulative 0.10.9 release build is being produced and must pass permanent-signature verification before distribution.
 
 **Physical-device validation still required:** test on Note10+ Android 12 and S22 Ultra for exact/inexact timing, screen off/locked, notification and full-screen permissions, alarm audio, gradual volume, snooze/dismiss, reboot, timezone change, battery optimization and force-stop behavior. CI compilation is not proof of real-device behavior. Do not claim the alarm or the PR #24 microphone recovery has been physically verified until the user tests them.
+
+
+
+## Morning alarm and briefing — candidate 0.11.0 (versionCode 39)
+
+**IMPLEMENTED IN CANDIDATE SOURCE; NOT YET CI-VERIFIED OR RELEASED; PHYSICAL-DEVICE TESTING REQUIRED.**
+
+Candidate branch: `feature/complete-gentle-morning-alarm-0.11.0`.
+
+- Keeps the 0.10.9 local alarm engine and adds one-time date/time scheduling alongside weekly recurrence; exact/inexact scheduling, local alarm tone, 12-second ramp, lock-screen UI, snooze and dismiss remain.
+- Adds an explicit opt-in for a morning voice briefing and requests microphone + optional calendar + optional coarse location permissions from the foreground settings UI.
+- Starts Gemini Live from the visible alarm activity only when the user enabled the feature and microphone permission is already granted. It uses the saved Gemini Live voice; no Android TTS. The local alarm tone continues until Gemini's first assistant transcript indicates speech has begun.
+- Sends one opening briefing prompt only on the initial session; recovery sessions must not repeat the greeting.
+- Includes device-local weekday/date/time/time zone, Android's `AlarmManager.getNextAlarmClock()` result (next alarm only; Android does not expose the complete third-party alarm list through this API), today's read-only calendar events when READ_CALENDAR is granted, and an Open-Meteo current/daily forecast when location permission and a recent device location are available.
+- If calendar, location, network or weather is unavailable, the prompt explicitly says so; it must not invent a clear calendar or forecast.
+- External alarm integration is read-only and limited to the next alarm exposed by Android. Juanita cannot enumerate, edit or dismiss every alarm inside Samsung Clock or other third-party clock apps.
+- The alarm tone and controls remain local/offline. Spoken briefing requires Internet access and Gemini Live; offline operation does not synthesize a substitute voice.
+- Local reminder/task storage and automatic task extraction are not implemented in this candidate; do not tell the user Juanita can already list arbitrary reminders unless they are present in an authorized calendar.
+- Weather uses the free Open-Meteo endpoint to compare three independent forecast model centers (ECMWF IFS, DWD ICON and NOAA GFS), averages available values and explicitly reports model disagreement or a single-model fallback. This is a three-model comparison through one API provider, not three independent API providers; a separate-provider comparison remains a later validation improvement.
+
+**Required CI and device gates:** compile debug + instrumentation test APK; produce signed Release 0.11.0 build 39 with the permanent certificate; verify package/version/signature; test alarm fire, full-screen permission fallback, mic/calendar/location permission denial, Live speech start/failure, no overlapping alarm tone, snooze/dismiss, reboot/time-zone changes and existing Android next-alarm reporting on Note10+ Android 12 and S22 Ultra. No claim of complete functionality until these tests pass.
 
 ## Familiar-person voice recognition — USER-APPROVED; NOT IMPLEMENTED
 

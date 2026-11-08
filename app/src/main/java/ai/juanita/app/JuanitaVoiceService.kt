@@ -15,6 +15,7 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
+import ai.juanita.app.alarm.JuanitaAlarmRingingService
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
 import ai.juanita.app.profile.PersonalProfile
@@ -86,6 +87,7 @@ class JuanitaVoiceService : Service() {
             ACTION_START -> {
                 val instruction = intent.getStringExtra(EXTRA_INSTRUCTION).orEmpty()
                 val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
+                val initialPrompt = intent.getStringExtra(EXTRA_INITIAL_PROMPT).orEmpty()
                 if (instruction.isBlank()) {
                     _state.value = "Impossibile avviare: istruzioni mancanti"
                     stopSelf(startId)
@@ -210,6 +212,10 @@ class JuanitaVoiceService : Service() {
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
+                                    if (initialPrompt.isNotBlank() && role.equals("ASSISTANT", ignoreCase = true)) {
+                                        // Keep the local alarm sounding until Gemini actually begins speaking.
+                                        JuanitaAlarmRingingService.stop(this@JuanitaVoiceService)
+                                    }
                                     val sent = transcriptQueue.trySend(role to text)
                                     if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
                                         _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
@@ -245,7 +251,8 @@ class JuanitaVoiceService : Service() {
                                 onConnectionState = { status ->
                                     _state.value = status
                                     updateNotification(status)
-                                }
+                                },
+                                initialPrompt = initialPrompt
                             )
                             _state.value = "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification("Conversazione vocale attiva")
@@ -444,6 +451,7 @@ class JuanitaVoiceService : Service() {
         const val ACTION_STOP = "ai.juanita.app.action.STOP_VOICE"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
+        const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
 
@@ -456,11 +464,12 @@ class JuanitaVoiceService : Service() {
         private val _memoryState = MutableStateFlow("Memoria automatica pronta.")
         val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
-        fun start(context: Context, instruction: String, voiceName: String) {
+        fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "") {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_INSTRUCTION, instruction)
                 putExtra(EXTRA_VOICE, voiceName)
+                putExtra(EXTRA_INITIAL_PROMPT, initialPrompt)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }

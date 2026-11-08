@@ -56,7 +56,8 @@ class GeminiLiveAssistant {
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
-        onConnectionState: (status: String) -> Unit = {}
+        onConnectionState: (status: String) -> Unit = {},
+        initialPrompt: String = ""
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
         synchronized(recentTranscript) { recentTranscript.clear() }
@@ -205,6 +206,11 @@ class GeminiLiveAssistant {
         val connected = model.connect()
         session = connected
         startAudioOnSession(connected)
+        if (initialPrompt.isNotBlank() && !manualStop) {
+            // Speak the morning briefing through the selected Gemini Live voice.
+            // Recovery sessions deliberately do not replay this one-time greeting.
+            connected.send(content("user") { text(initialPrompt.take(7000)) }, turnComplete = true)
+        }
     }
 
 
