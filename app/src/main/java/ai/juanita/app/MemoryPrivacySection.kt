@@ -50,7 +50,6 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -95,6 +94,10 @@ internal fun MemoryPrivacySection(
     var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     val ioScope = rememberCoroutineScope()
+    // Refresh once when the Memory tab is opened, never on every streaming status update.
+    LaunchedEffect(Unit) {
+        memories = withContext(Dispatchers.IO) { onRefreshMemories() }
+    }
     val rangeStartDate = runCatching { LocalDate.parse(archiveRangeStart.trim()) }.getOrNull()
     val rangeEndDate = runCatching { LocalDate.parse(archiveRangeEnd.trim()) }.getOrNull()
     val validArchiveRange = rangeStartDate != null && rangeEndDate != null && !rangeEndDate.isBefore(rangeStartDate)
