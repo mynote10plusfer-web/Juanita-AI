@@ -13,6 +13,7 @@ import android.media.RingtoneManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import ai.juanita.app.data.AssistantPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -214,9 +215,11 @@ class JuanitaAlarmRingingService : Service() {
         val contentText = if (activeAlarmIds.size > 1) {
             "${activeAlarmIds.size} sveglie attive · $volumeNotice"
         } else "$title · $volumeNotice"
+        val assistantName = AssistantPreferences(this).assistantName
+            .ifBlank { AssistantPreferences.DEFAULT_ASSISTANT_NAME }
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle(if (testMode) "Prova · Juanita" else "Sveglia · Juanita")
+            .setContentTitle(if (testMode) "Prova · $assistantName" else "Sveglia · $assistantName")
             .setContentText(contentText)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_MAX)
