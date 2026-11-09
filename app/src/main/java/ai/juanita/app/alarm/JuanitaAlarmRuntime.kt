@@ -137,6 +137,7 @@ object JuanitaAlarmScheduler {
         manager.cancel(pending)
         JuanitaAlarmStore(context).setSnooze(alarmId, triggerAt)
         JuanitaVoiceService.stopForAlarm(context, alarmId)
+        closeAlarmActivity(context, alarmId)
         runCatching {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || manager.canScheduleExactAlarms()) {
                 manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pending)
@@ -154,7 +155,16 @@ object JuanitaAlarmScheduler {
         manager.cancel(alarmPendingIntent(context, alarmId, true))
         JuanitaAlarmStore(context).clearSnooze(alarmId)
         JuanitaVoiceService.stopForAlarm(context, alarmId)
+        closeAlarmActivity(context, alarmId)
         JuanitaAlarmRingingService.stop(context, alarmId)
+    }
+
+    private fun closeAlarmActivity(context: Context, alarmId: String) {
+        context.sendBroadcast(
+            Intent(AlarmRingingActivity.ACTION_ALARM_CLOSED)
+                .setPackage(context.packageName)
+                .putExtra(EXTRA_ALARM_ID, alarmId)
+        )
     }
 
     private fun alarmPendingIntent(context: Context, alarmId: String, snooze: Boolean): PendingIntent {
