@@ -285,7 +285,7 @@ internal fun MemoryPrivacySection(
 @Composable
 private fun ConversationArchiveCalendar(
     panel: Color, gold: Color,
-    conversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     archiveEnabled: Boolean, retentionLabel: String,
     onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionChanged: (Int) -> Unit,
     onRefresh: () -> List<EncryptedMemoryStore.ArchivedConversation>, onDeleteConversation: (String) -> Unit,
