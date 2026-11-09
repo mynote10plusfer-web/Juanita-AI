@@ -510,7 +510,10 @@ class EncryptedMemoryStore(context: Context) {
         get() = preferences.getInt(KEY_ARCHIVE_RETENTION_DAYS, 0).coerceIn(0, 90)
         set(value) {
             require(value in ALLOWED_RETENTION_DAYS) { "Unsupported archive retention period" }
-            preferences.edit().putInt(KEY_ARCHIVE_RETENTION_DAYS, value).apply()
+            preferences.edit()
+                .putInt(KEY_ARCHIVE_RETENTION_DAYS, value)
+                .putLong(KEY_LAST_ARCHIVE_PURGE_AT, 0L)
+                .apply()
             purgeExpiredArchive()
         }
 
@@ -770,12 +773,18 @@ class EncryptedMemoryStore(context: Context) {
     private fun purgeExpiredArchive() {
         val days = archiveRetentionDays
         if (days == 0) return
-        val cutoff = System.currentTimeMillis() - days * MILLIS_PER_DAY
+        val now = System.currentTimeMillis()
+        val lastPurge = preferences.getLong(KEY_LAST_ARCHIVE_PURGE_AT, 0L)
+        // Archive listing is used by the UI; never rescan and rewrite every session on each refresh.
+        // Retention is enforced at most once per day, or immediately after the user changes it.
+        if (lastPurge > 0L && (now - lastPurge).coerceAtLeast(0L) < MILLIS_PER_DAY) return
+        val cutoff = now - days * MILLIS_PER_DAY
         filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
         sessionArchiveFiles().forEach { file ->
             val turns = runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).filter { it.timestampMillis >= cutoff }
             if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
         }
+        preferences.edit().putLong(KEY_LAST_ARCHIVE_PURGE_AT, now).apply()
     }
 
     /** Merge encrypted per-session archives with legacy transcript records. */
@@ -992,6 +1001,7 @@ class EncryptedMemoryStore(context: Context) {
         private const val KEY_AUTO_MEMORY_ENABLED = "automatic_memory_enabled"
         private const val KEY_MEMORY_CLEAR_VERSION = "memory_clear_version"
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
+        private const val KEY_LAST_ARCHIVE_PURGE_AT = "conversation_archive_last_purge_at"
         private const val MILLIS_PER_DAY = 86_400_000L
         private val ALLOWED_RETENTION_DAYS = setOf(0, 7, 30, 90)
         private const val KEY_ENCRYPTED_DATA = "encrypted_records"
