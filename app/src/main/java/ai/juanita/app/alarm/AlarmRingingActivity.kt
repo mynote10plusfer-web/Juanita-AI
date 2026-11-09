@@ -215,6 +215,12 @@ class AlarmRingingActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // A stale full-screen PendingIntent must never wake the display after dismissal.
+        if (alarmId !in JuanitaAlarmRingingService.activeAlarmIds(this)) {
+            clearAlarmWindowOverrides()
+            finish()
+            return
+        }
         if (!closeReceiverRegistered) {
             ContextCompat.registerReceiver(
                 this,
