@@ -60,6 +60,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.avatar.AvatarProfile
@@ -364,9 +367,17 @@ private fun JuanitaApp(
     var memories by remember { mutableStateOf(initialMemories) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var selectedSection by remember { mutableStateOf("HOME") }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
-    LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                deviceDateTime = ZonedDateTime.now()
+                delay(1_000L)
+            }
+        }
+    }
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
         object : ServiceConnection {
