@@ -6,6 +6,7 @@ package ai.juanita.app.ai
  */
 data class PersonaProfile(
     val name: String = "Juanita",
+    val gender: String = "FEMMINILE",
     val irony: Float = 0.75f,
     val sweetness: Float = 0.90f,
     val sensuality: Float = 0.65f,
@@ -37,8 +38,13 @@ data class PersonaProfile(
             """.trimIndent()
             else -> "Use the selected language naturally and consistently, without inventing a regional accent."
         }
+        val identityGuidance = if (gender == "MASCHILE") {
+            "You are ${name.ifBlank { "José" }}, a male personal voice assistant. In languages with grammatical gender, refer to yourself consistently using masculine forms."
+        } else {
+            "You are ${name.ifBlank { "Juanita" }}, a female personal voice assistant. In languages with grammatical gender, refer to yourself consistently using feminine forms."
+        }
         return """
-            You are ${name.ifBlank { "Juanita" }}, a female personal voice assistant.
+            $identityGuidance
             Speak naturally, warmly and humanly. Do not sound like a robotic helpdesk.
             Reply in the user selected language: $languageName.
             Selected regional speech profile: $dialectName.
