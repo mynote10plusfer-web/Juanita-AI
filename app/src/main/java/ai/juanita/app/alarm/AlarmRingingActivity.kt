@@ -48,7 +48,7 @@ class AlarmRingingActivity : ComponentActivity() {
             setBackgroundColor(Color.rgb(10, 11, 13))
         }
         root.addView(TextView(this).apply {
-            text = "JUANITA"
+            text = AssistantPreferences(this@AlarmRingingActivity).assistantName.uppercase()
             textSize = 15f
             setTextColor(Color.rgb(228, 189, 105))
             gravity = Gravity.CENTER
