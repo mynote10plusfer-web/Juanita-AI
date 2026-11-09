@@ -43,6 +43,10 @@ class JuanitaAlarmRingingService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 val alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
+                if (intent.getBooleanExtra(EXTRA_STOP_VOICE, false)) {
+                    if (alarmId.isNullOrBlank()) activeAlarmIds.toList().forEach { JuanitaVoiceService.stopForAlarm(this, it) }
+                    else JuanitaVoiceService.stopForAlarm(this, alarmId)
+                }
                 if (alarmId.isNullOrBlank()) {
                     autoStopJob?.cancel()
                     autoStopJob = null
@@ -93,7 +97,7 @@ class JuanitaAlarmRingingService : Service() {
                 if (seconds > 0) {
                     autoStopJob = scope.launch {
                         delay(seconds * 1_000L)
-                        stop(this@JuanitaAlarmRingingService, alarmId)
+                        stop(this@JuanitaAlarmRingingService, alarmId, stopVoice = true)
                     }
                 }
                 return START_NOT_STICKY
@@ -144,7 +148,7 @@ class JuanitaAlarmRingingService : Service() {
                         remainingRingCycles = null
                         completed.seekTo(0)
                         completed.start()
-                        stop(this@JuanitaAlarmRingingService, targetId)
+                        stop(this@JuanitaAlarmRingingService, targetId, stopVoice = true)
                         return@setOnCompletionListener
                     }
                     remainingRingCycles = remaining - 1
@@ -287,6 +291,7 @@ class JuanitaAlarmRingingService : Service() {
         const val EXTRA_STOP_AFTER_SECONDS = "stop_after_seconds"
         const val EXTRA_STOP_AFTER_RINGS = "stop_after_rings"
         const val EXTRA_TEST_MODE = "alarm_test_mode"
+        const val EXTRA_STOP_VOICE = "stop_alarm_voice_session"
         private const val CHANNEL_ID = "juanita_alarm_ringing"
         private const val ACTIVE_ALARMS_PREFS = "juanita_alarm_runtime"
         private const val ACTIVE_ALARMS_KEY = "currently_ringing_ids"
@@ -311,9 +316,10 @@ class JuanitaAlarmRingingService : Service() {
                 .putExtra(EXTRA_STOP_AFTER_RINGS, rings)
             runCatching { context.startService(intent) }
         }
-        fun stop(context: Context, alarmId: String? = null) {
+        fun stop(context: Context, alarmId: String? = null, stopVoice: Boolean = false) {
             val intent = Intent(context, JuanitaAlarmRingingService::class.java).setAction(ACTION_STOP)
             if (alarmId != null) intent.putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
+            if (stopVoice) intent.putExtra(EXTRA_STOP_VOICE, true)
             runCatching { context.startService(intent) }
         }
     }
