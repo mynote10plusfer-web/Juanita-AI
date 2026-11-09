@@ -47,6 +47,8 @@ class JuanitaVoiceService : Service() {
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private lateinit var personalProfileStore: PersonalProfileStore
     private var startRequested = false
+    /** Non-null only when this Live session was launched by a specific alarm. */
+    private var activeAlarmId: String? = null
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
     private var voicePreviewJob: Job? = null
@@ -87,6 +89,16 @@ class JuanitaVoiceService : Service() {
                 requestStop()
                 return START_NOT_STICKY
             }
+            ACTION_STOP_ALARM -> {
+                val requestedAlarmId = intent.getStringExtra(EXTRA_ALARM_ID)
+                if (!requestedAlarmId.isNullOrBlank() && activeAlarmId == requestedAlarmId) {
+                    requestStop()
+                } else if (!startRequested && stopJob?.isActive != true) {
+                    // A stop request must not leave behind a newly-created, idle Service.
+                    stopSelf(startId)
+                }
+                return START_NOT_STICKY
+            }
             ACTION_START -> {
                 val instruction = intent.getStringExtra(EXTRA_INSTRUCTION).orEmpty()
                 val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
@@ -110,6 +122,7 @@ class JuanitaVoiceService : Service() {
                     return START_NOT_STICKY
                 }
                 if (!startRequested) {
+                    activeAlarmId = alarmId
                     acquireCpuWakeLock()
                     startRequested = true
                     sessionJob = serviceScope.launch {
@@ -340,6 +353,7 @@ class JuanitaVoiceService : Service() {
                     _memoryState.value = "Memoria in attesa: riprenderà al prossimo collegamento."
                 }
                 startRequested = false
+                activeAlarmId = null
                 releaseCpuWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 _state.value = "Conversazione terminata"
@@ -499,6 +513,7 @@ class JuanitaVoiceService : Service() {
         voicePreviewJob?.cancel()
         // Stop capture synchronously even if Android is tearing down the service.
         assistant.stopAudioCapture()
+        activeAlarmId = null
         releaseCpuWakeLock()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
@@ -514,6 +529,7 @@ class JuanitaVoiceService : Service() {
     companion object {
         const val ACTION_START = "ai.juanita.app.action.START_VOICE"
         const val ACTION_STOP = "ai.juanita.app.action.STOP_VOICE"
+        const val ACTION_STOP_ALARM = "ai.juanita.app.action.STOP_ALARM_VOICE"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
@@ -547,6 +563,15 @@ class JuanitaVoiceService : Service() {
         fun stop(context: Context) {
             val intent = Intent(context, JuanitaVoiceService::class.java).setAction(ACTION_STOP)
             context.startService(intent)
+        }
+
+        /** Stop only the Live session started by this alarm; never interrupt an unrelated call. */
+        fun stopForAlarm(context: Context, alarmId: String) {
+            if (alarmId.isBlank()) return
+            val intent = Intent(context, JuanitaVoiceService::class.java)
+                .setAction(ACTION_STOP_ALARM)
+                .putExtra(EXTRA_ALARM_ID, alarmId)
+            runCatching { context.startService(intent) }
         }
     }
 }
