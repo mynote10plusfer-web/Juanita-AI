@@ -869,7 +869,7 @@ private fun JuanitaApp(
 
                 if (selectedSection == "ALARM") {
                     SettingsCard(panel, gold, "SVEGLIA") {
-                        AlarmSection(panel = panel, gold = gold)
+                        AlarmSection(panel = panel, gold = gold, assistantName = assistantName)
                     }
                 }
 
