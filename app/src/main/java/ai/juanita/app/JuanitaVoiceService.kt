@@ -276,6 +276,11 @@ class JuanitaVoiceService : Service() {
                                 onConnectionState = { status ->
                                     _state.value = status
                                     updateNotification(status)
+                                    // A failed reconnect must not leave a foreground service,
+                                    // microphone pipeline or partial CPU wake lock running forever.
+                                    if (status.startsWith("Connessione vocale interrotta", ignoreCase = true)) {
+                                        requestStop()
+                                    }
                                 },
                                 initialPrompt = effectiveInitialPrompt,
                                 onAlarmCommand = { name, arguments ->
