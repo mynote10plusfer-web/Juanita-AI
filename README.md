@@ -103,3 +103,14 @@ The microphone is activated only after the user grants permission and starts a L
 - VersionCode 44. The voice selector groups the full 30-voice Gemini Live catalogue into 14 female and 16 male voices, following Firebase AI Logic's published gender labels.
 - Existing saved voice IDs remain unchanged; the selected voice continues to be used by Live conversations and the voice preview. Selection is persisted as before.
 - No Android system TTS is introduced. Each option can be auditioned through the existing Gemini Live preview; actual availability must be confirmed by a successful Live session on the configured model.
+
+
+## 0.11.6 candidate — assistant identity and background display lifecycle
+
+- VersionCode 45. First-run onboarding offers Juanita (female identity) or José (male identity); the choice is saved locally and can be changed later in Settings.
+- Persona instructions use matching grammatical gender and assistant name. The initial Gemini Live voice is aligned to the selected identity; a previously selected voice is retained when it already matches. The user can still choose any voice manually.
+- Existing installations default to the existing Juanita identity and retain their saved assistant name, voice and wake phrase. Switching identity updates the default wake phrase only when it still matches the previous app default; a custom phrase is preserved.
+- Identity switching does not clear memories, conversation archive, alarms, avatar profiles or other preferences.
+- MainActivity now clears its keep-screen-on window flag while paused and restores it only when the active call screen requires it in the foreground. The alarm lock-screen activity clears show-when-locked, turn-screen-on and keep-screen-on overrides when it stops, then reapplies them only when visible.
+- The biometric symptom is not yet confirmed fixed: no overlay permission, accessibility service or fingerprint-control API is declared in the manifest. Validate on Note10+ Android 12 with the user's foreground/background/force-stop test sequence before claiming resolution.
+- No Android TTS, paid service, package ID or signing-key change.
