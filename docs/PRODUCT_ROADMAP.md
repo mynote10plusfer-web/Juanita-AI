@@ -891,36 +891,45 @@ This is a distinct approach from the secretary-originated call/bridge above and 
 **Status: USER-PROPOSED — RESEARCH / PROTOTYPE REQUIRED; NOT IMPLEMENTED.** Test separately for SIM and WhatsApp; do not claim feasibility until the full two-way conversation succeeds on both target devices.
 
 
-## Engineering priorities — next implementation sequence (updated 2026-11-08)
+## Engineering priorities — next implementation sequence (updated 2026-11-09)
 
 This sequence is the working plan; a roadmap entry is not evidence that a feature has shipped.
 
-### Priority 1 — make learning reliable before making it broader
-1. Audit the existing automatic-memory path end to end: Live transcript callback → durable encrypted pending queue → extraction → validation/deduplication → encrypted memory store → retrieval in a later Live session.
-2. Add explicit provenance to every candidate: source turn/session, timestamp, user-confirmed vs model-inferred, confidence, category, sensitivity and optional expiry. Do not promote guesses, jokes, role-play, hypothetical statements or temporary details into durable facts.
-3. Add correction handling: when the user corrects a fact, replace or supersede the old item, invalidate dependent summaries and preserve the correction's provenance. If two claims cannot safely be reconciled, retain the conflict and ask rather than silently choosing.
-4. Improve retrieval beyond simple keyword overlap in a bounded, local-first way. Evaluate multilingual embeddings only after checking model size, licence, offline operation, latency, RAM and battery on both target phones. Keep lexical fallback.
-5. Build a visible memory audit: what was learned, why it was saved, when it was last confirmed, where it came from, and controls to correct/delete/pause. Separate user facts, preferences, project state, people, reminders and external knowledge.
-6. Add repeatable tests for extraction failures, offline recovery, queue overflow, duplicate facts, contradiction, correction, deletion, expiry and cross-session recall. A successful build is not proof of correct learning.
+### Priority 1 — finish and validate the 0.11.6 release
+1. Run the full CI suite on the final branch head: debug build, API 31 instrumentation, signed Release, permanent certificate verification and artifact upload.
+2. Verify the exact production package `ai.juanita.app`, versionName 0.11.6, versionCode 45 and unchanged permanent signing certificate.
+3. Validate the identity choice end to end: onboarding, Settings switch, voice alignment, wake phrase preservation, alarm greeting and notification name, with all local data preserved.
+4. Investigate the fingerprint symptom with the user's foreground/background/force-stop tests on Note10+ Android 12. Do not claim it is fixed from source inspection alone.
+5. Physically validate alarm fire, snooze/dismiss, timed/ring-count stop, morning Live speech and background behavior on Note10+ and S22 Ultra.
 
-**Definition of done:** after a normal eligible conversation, Juanita can recall a useful durable fact in a later session, explain its source/status, accept a correction, and stop using the superseded fact. No sensitive detail is silently promoted.
+### Priority 2 — local reminders and tasks (next new feature package)
+1. Add a dedicated encrypted local store, separate from conversation memories and Android calendar events.
+2. Support one-time and recurring reminders, task/checklist items, due dates, advance alerts, upcoming/overdue/completed views, complete/snooze/reschedule/delete.
+3. Add duplicate-delivery protection and recovery after process death, reboot, time-zone changes and exact-alarm permission changes.
+4. Add Gemini Live structured tools for create/list/update/complete/delete. Ask for confirmation whenever date, time, recurrence, task or action is ambiguous; never turn casual conversation into a reminder automatically.
+5. Integrate the manager into the existing Sveglia tab without removing or renaming any of the six tabs.
 
-### Priority 2 — notification reader candidate 0.10.4
-- Keep notification access opt-in and revocable. Display only information exposed by Android notification extras; no private WhatsApp database, historical chat scraping or automatic replies.
-- Keep notification contents volatile and local in the first release. Do not send them to Gemini or save them as memories.
-- Voice read-aloud is deliberately deferred until it can use Juanita's configured Gemini Live voice path. Android TextToSpeech is not an acceptable fallback for Riccardo.
-- Before release: pass CI, verify the production package/version and permanent signing certificate, then have the user test permission grant/revocation and WhatsApp/other-app previews on both Samsung devices.
+### Priority 3 — read-only calendar agenda
+1. Expand the current morning-briefing calendar read into an optional agenda view using Android Calendar Provider.
+2. Allow calendar selection where feasible and browse today's/upcoming events; clearly distinguish imported events from Juanita-created reminders.
+3. Keep calendar access read-only and request `READ_CALENDAR` only when the user enables the feature. Event creation can first use Android Calendar intents with explicit confirmation; do not request `WRITE_CALENDAR` by default.
 
-### Priority 3 — smart alarm and morning briefing
-- Implement the app-owned alarm first: one-time/repeating schedule, exact-alarm permission handling, snooze/dismiss, reboot/time-zone/DST recovery, lock-screen behavior and duplicate-fire prevention.
-- Only after alarm reliability is established, integrate the morning greeting, today's agenda/reminders and optional weather.
-- Speech must use the already selected Juanita voice through a technically supported Gemini audio-generation path. No Android TTS or silent voice substitution. If speech cannot be generated, the alarm must still ring and offer normal controls.
-- Keep the alarm, reminders and calendar data local and encrypted where appropriate; request only the permissions needed for each feature.
+### Priority 4 — make personal learning more reliable
+1. Audit transcript callback → encrypted pending queue → extraction → validation/deduplication → memory store → later-session retrieval.
+2. Track provenance, timestamps, confidence, confirmation state, sensitivity and expiry; never promote guesses, jokes, role-play or temporary details into durable facts.
+3. Add correction/supersession handling and tests for contradictions, deletion, offline recovery, queue overflow and cross-session recall.
+4. Improve multilingual retrieval only after measuring local model size, licence, RAM, latency and battery on both Samsung devices; preserve lexical fallback.
+5. Improve the memory audit UI so the user can see what was learned, why, when, from which conversation, and correct/delete/pause it.
+
+### Deferred capabilities
+- Notification reading remains deferred after the Play Protect block. Do not re-add NotificationListenerService or ask the user to disable Play Protect without a separate policy/distribution review and explicit approval.
+- Voice wake-word detection, familiar-person speaker recognition, face recognition, generated animated avatars/lip-sync and fully offline speech remain separate research phases.
+- No paid APIs, billing upgrades, cloud hosting, subscriptions, signing-key changes, data wipes or Play Protect bypasses without explicit approval.
 
 ### Release and test discipline
 - Never replace the production install with a debug package. Keep applicationId `ai.juanita.app`, monotonically increasing versionCode and the permanent release certificate.
-- Do not merge or deliver a candidate APK without successful CI and explicit package/version/signature checks.
-- CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra, including battery, background behavior, permissions and lifecycle.
+- Do not merge or distribute a candidate APK without successful CI and explicit package/version/signature checks.
+- CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra Android 15, including battery, background behavior, permissions and lifecycle.
 - No paid APIs, billing upgrades, cloud hosting or recurring service costs without fresh explicit approval.
 
 ### Permanent personal identity profile and gradual getting-to-know-you dialogue — USER-REQUESTED / APPROVED SPECIFICATION (2026-11-08)
