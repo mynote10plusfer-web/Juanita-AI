@@ -1257,13 +1257,13 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 
 ## 0.11.6 — assistant identity and display lifecycle hardening (2026-11-09)
 
-**STATO: implementazione candidata; CI e test fisici ancora da eseguire.**
+**STATUS: SOURCE UPDATED; RELEASE CI MUST RUN AGAIN ON THIS FINAL HEAD; PHYSICAL TESTS PENDING.**
 
-- Primo avvio: scelta tra Juanita (identità femminile) e José (identità maschile), con nome, istruzioni grammaticali e voce Gemini coerenti.
-- La scelta è modificabile in Impostazioni. Il cambio identità conserva memorie, archivio conversazioni, sveglie, avatar e preferenze. Le installazioni esistenti restano Juanita e mantengono nome, voce e frase di attivazione personalizzati.
-- La voce viene riallineata soltanto se quella selezionata non corrisponde al genere scelto; la selezione manuale resta libera.
-- La frase di attivazione viene aggiornata solo se coincide ancora con il valore predefinito precedente; le frasi personalizzate non vengono sovrascritte.
-- Corretto il ciclo di vita di FLAG_KEEP_SCREEN_ON: il flag viene rimosso quando MainActivity va in pausa e ripristinato solo al ritorno in primo piano se la schermata chiamata è ancora attiva.
-- AlarmRingingActivity applica gli override della schermata di blocco soltanto mentre è visibile e li rimuove in onStop/onDestroy. Non è stato aggiunto alcun overlay, servizio di accessibilità o accesso biometrico.
-- L'interferenza con l'impronta resta da verificare fisicamente sul Note10+; non dichiarare il problema risolto prima dei test dell'utente e di una verifica aggiuntiva.
-- Gate: CI cumulativa, firma permanente e package/versionCode, test onboarding/switch identità/conservazione dati, chiamata in background e sblocco biometrico sul Note10+ Android 12 e S22 Ultra Android 15.
+- First-run choice: Juanita (female identity) or José (male identity), with matching name, grammatical instructions and Gemini Live voice.
+- The choice is changeable in Settings. Switching identity preserves memories, conversation archive, alarms, avatar profiles and other local preferences. Existing installations remain Juanita and retain their saved name, voice and custom wake phrase.
+- The voice is realigned only when the selected voice does not match the chosen gender; manual voice selection remains available. A custom wake phrase is never overwritten.
+- MainActivity clears `FLAG_KEEP_SCREEN_ON` when paused and restores it only when the call screen still requires it in the foreground. AlarmRingingActivity applies lock-screen/display overrides only while visible and clears them in `onStop/onDestroy`.
+- Final audit correction: the morning alarm instruction, retry labels, alarm-tab wording and ringing notification now use the selected assistant name; the morning system instruction also uses the selected grammatical gender. This prevents a José selection from reverting to Juanita during alarm flows.
+- No overlay permission, accessibility service or biometric API was added. The fingerprint symptom is not declared fixed until physical tests confirm foreground, background and force-stop behavior on the Note10+.
+- Release identity remains `ai.juanita.app`, permanent signing certificate unchanged, versionName `0.11.6`, versionCode `45`.
+- Gate: fresh CI on the final branch head, package/signature/version verification, then onboarding and identity-switch tests, data preservation, alarm greeting/notification identity, background call lifecycle and biometric tests on Note10+ Android 12 and S22 Ultra Android 15.
