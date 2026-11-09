@@ -2,6 +2,9 @@ package ai.juanita.app.alarm
 
 import android.Manifest
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -32,6 +35,14 @@ class AlarmRingingActivity : ComponentActivity() {
     private var snoozeButton: Button? = null
     private var retryButton: Button? = null
     private var statusText: TextView? = null
+    private var closeReceiverRegistered = false
+    private val alarmClosedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID) == alarmId) {
+                finish()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -204,6 +215,15 @@ class AlarmRingingActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        if (!closeReceiverRegistered) {
+            ContextCompat.registerReceiver(
+                this,
+                alarmClosedReceiver,
+                IntentFilter(ACTION_ALARM_CLOSED),
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            closeReceiverRegistered = true
+        }
         // Lock-screen visibility is needed only while the alarm activity is actually visible.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
@@ -220,6 +240,10 @@ class AlarmRingingActivity : ComponentActivity() {
 
     override fun onStop() {
         clearAlarmWindowOverrides()
+        if (closeReceiverRegistered) {
+            runCatching { unregisterReceiver(alarmClosedReceiver) }
+            closeReceiverRegistered = false
+        }
         super.onStop()
     }
 
@@ -248,5 +272,9 @@ class AlarmRingingActivity : ComponentActivity() {
                 .putExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID, alarmId)
         )
         finish()
+    }
+
+    companion object {
+        const val ACTION_ALARM_CLOSED = "ai.juanita.app.alarm.ALARM_CLOSED"
     }
 }
