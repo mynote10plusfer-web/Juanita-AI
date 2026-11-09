@@ -38,18 +38,6 @@ class AlarmRingingActivity : ComponentActivity() {
         alarmId = intent.getStringExtra(JuanitaAlarmScheduler.EXTRA_ALARM_ID)
             ?: JuanitaAlarmStore.LEGACY_ID
         testMode = intent.getBooleanExtra(JuanitaAlarmRingingService.EXTRA_TEST_MODE, false)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            )
-        }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         window.statusBarColor = Color.BLACK
         window.navigationBarColor = Color.BLACK
 
@@ -206,6 +194,44 @@ class AlarmRingingActivity : ComponentActivity() {
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply { bottomMargin = 16 }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Lock-screen visibility is needed only while the alarm activity is actually visible.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    override fun onStop() {
+        clearAlarmWindowOverrides()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        clearAlarmWindowOverrides()
+        super.onDestroy()
+    }
+
+    private fun clearAlarmWindowOverrides() {
+        window.clearFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+        }
     }
 
     private fun sendAlarmAction(action: String) {
