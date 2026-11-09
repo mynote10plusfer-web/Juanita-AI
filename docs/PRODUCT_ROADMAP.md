@@ -1253,3 +1253,17 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 ## 0.11.5 — scelta voci femminili e maschili (2026-11-08)
 
 **STATO: implementazione candidata in CI; non ancora verificata su dispositivo.** Il menu Gemini Live è suddiviso in due gruppi, con tutte le 30 voci del catalogo documentato da Firebase AI Logic: 14 femminili e 16 maschili. Gli identificativi delle sette voci già presenti restano invariati, così le preferenze salvate non vengono perse. L'anteprima continua a usare la voce Gemini selezionata, senza Android TTS. Prima di dichiarare completato il lavoro vanno provate almeno una voce femminile e una maschile su sessione Live reale.
+
+
+## 0.11.6 — assistant identity and display lifecycle hardening (2026-11-09)
+
+**STATO: implementazione candidata; CI e test fisici ancora da eseguire.**
+
+- Primo avvio: scelta tra Juanita (identità femminile) e José (identità maschile), con nome, istruzioni grammaticali e voce Gemini coerenti.
+- La scelta è modificabile in Impostazioni. Il cambio identità conserva memorie, archivio conversazioni, sveglie, avatar e preferenze. Le installazioni esistenti restano Juanita e mantengono nome, voce e frase di attivazione personalizzati.
+- La voce viene riallineata soltanto se quella selezionata non corrisponde al genere scelto; la selezione manuale resta libera.
+- La frase di attivazione viene aggiornata solo se coincide ancora con il valore predefinito precedente; le frasi personalizzate non vengono sovrascritte.
+- Corretto il ciclo di vita di FLAG_KEEP_SCREEN_ON: il flag viene rimosso quando MainActivity va in pausa e ripristinato solo al ritorno in primo piano se la schermata chiamata è ancora attiva.
+- AlarmRingingActivity applica gli override della schermata di blocco soltanto mentre è visibile e li rimuove in onStop/onDestroy. Non è stato aggiunto alcun overlay, servizio di accessibilità o accesso biometrico.
+- L'interferenza con l'impronta resta da verificare fisicamente sul Note10+; non dichiarare il problema risolto prima dei test dell'utente e di una verifica aggiuntiva.
+- Gate: CI cumulativa, firma permanente e package/versionCode, test onboarding/switch identità/conservazione dati, chiamata in background e sblocco biometrico sul Note10+ Android 12 e S22 Ultra Android 15.
