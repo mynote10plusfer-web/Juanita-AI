@@ -185,7 +185,7 @@ internal fun MemoryPrivacySection(
             }
 
             ConversationArchiveCalendar(
-                panel = panel, gold = gold, conversations = conversations,
+                panel = panel, gold = gold, initialConversations = conversations,
                 archiveEnabled = archiveEnabled, retentionLabel = retentionLabel,
                 onArchiveEnabledChanged = { archiveEnabled = it; onArchiveEnabledChanged(it) },
                 onRetentionChanged = { retentionDays = it; onRetentionChanged(it) },
@@ -304,6 +304,7 @@ private fun ConversationArchiveCalendar(
     var selectingDays by remember { mutableStateOf(false) }
     var selectedDays by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var confirmSelectedDays by remember { mutableStateOf(false) }
+    var conversations by remember(initialConversations) { mutableStateOf(initialConversations) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
     val lifecycleOwner = LocalLifecycleOwner.current
