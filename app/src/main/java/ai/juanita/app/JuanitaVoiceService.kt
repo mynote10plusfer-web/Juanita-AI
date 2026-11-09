@@ -306,7 +306,10 @@ class JuanitaVoiceService : Service() {
                                     if (status.startsWith("Connessione vocale interrotta", ignoreCase = true)) {
                                         // Preserve the encrypted snapshot so a manual restart can
                                         // resume the interrupted topic instead of starting blank.
-                                        requestStop(preserveContinuitySnapshot = true)
+                                        requestStop(
+                                            preserveContinuitySnapshot = true,
+                                            finalMessage = status
+                                        )
                                     }
                                 },
                                 initialPrompt = effectiveInitialPrompt,
@@ -355,7 +358,10 @@ class JuanitaVoiceService : Service() {
      * Stop audio first. Memory extraction is best-effort cleanup and must never
      * keep the microphone open while a network request is pending.
      */
-    private fun requestStop(preserveContinuitySnapshot: Boolean = false) {
+    private fun requestStop(
+        preserveContinuitySnapshot: Boolean = false,
+        finalMessage: String? = null
+    ) {
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
         if (stopJob?.isActive == true) {
@@ -402,7 +408,7 @@ class JuanitaVoiceService : Service() {
                 activeAlarmId = null
                 releaseCpuWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                _state.value = "Conversazione terminata"
+                _state.value = finalMessage ?: "Conversazione terminata"
                 stopSelf()
             }
         }
