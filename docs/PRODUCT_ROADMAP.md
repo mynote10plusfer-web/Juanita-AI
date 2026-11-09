@@ -1,6 +1,34 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-09 — cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. Current candidate: 0.11.7 / versionCode 46. This is a power-management maintenance release following the 0.11.6 source audit: alarm-owned Live cleanup, stale lock-screen activity closure, lifecycle-aware periodic UI refresh and failed-reconnect cleanup. Fresh CI and physical-device verification are required. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
+Last updated: 2026-11-09 — cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. Current candidate: 0.11.7 / versionCode 46, with voice reconnect and continuity mitigations now under validation. Fresh CI and physical-device verification are required. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
+
+## 2026-11-09 — voice reconnect, device slowdown and continuity audit
+
+**STATUS: APP-SIDE MITIGATIONS COMMITTED; CI AND PHYSICAL-DEVICE VALIDATION REQUIRED. NOT YET DECLARED FIXED.**
+
+User-reported incident: during a Live voice conversation, Juanita intermittently freezes and resumes; the phone then slows down, and the resumed/new session may lose the immediately preceding topic.
+
+Findings:
+- The app's reconnect path recreated Firebase Live audio pipelines after `goAway` or a closed WebSocket, with up to three connection attempts per recovery and no lifetime cap.
+- Service shutdown called the SDK's synchronous audio-capture teardown from its caller thread. This could place device audio release work on Android's main thread.
+- On unexpected reconnect exhaustion, the service cleared the active encrypted continuity snapshot; the next session also cleared snapshots before building its context. This could discard the most recent conversation context even when earlier archived turns remained.
+- Firebase BoM 35.1.0 maps Firebase AI Logic to 18.1.0. The older GoogleAI Live-session startup failure fixed in 17.10.1 is therefore not the direct dependency-version issue here.
+- A separate Firebase Android SDK report (#7942) describes AudioRecord worker-thread accumulation and high CPU after repeated Live audio reconnects. Its reproduction was on rk3588 Android 12, not a Samsung phone, so it is a relevant upstream risk, not proof of the same hardware defect on Note10+/S22 Ultra. The proposed SDK change #8030 switches AudioRecord reads to non-blocking mode but remains an open PR; current upstream source still contains the blocking read path.
+
+App-side mitigations committed:
+- Carry the latest encrypted continuity snapshot into the next Live session instead of deleting it before session setup.
+- Preserve the snapshot when an unexpected reconnect failure stops the service; clear it only on an explicit user stop.
+- Run synchronous SDK audio teardown on Dispatchers.IO, not Android's main thread, including service destruction.
+- Limit automatic Live audio rollover to one per service instance to avoid unbounded recreation of SDK audio pipelines. If the limit is reached, stop safely and preserve context for a manual restart.
+- Add an instrumentation test verifying that the newest interrupted-session snapshot is carried forward and extended by the next session.
+
+Release gates:
+- Debug APK build and API 31 instrumentation tests must pass on the exact final commit.
+- Signed Release must verify the permanent signing certificate, package ID and upgrade version.
+- Physical tests are mandatory on Note10+ Android 12 and S22 Ultra Android 15: repeated conversation interruptions, one automatic recovery, manual restart and context continuity, audio thread/CPU behavior, screen responsiveness, fingerprint access and normal shutdown.
+- These app-side changes reduce known risks but cannot prove that Firebase's internal AudioRecord worker leak is absent on Samsung hardware. Do not claim the incident resolved until physical-device validation confirms it.
+
+References: Firebase issue https://github.com/firebase/firebase-android-sdk/issues/7942 ; proposed SDK fix https://github.com/firebase/firebase-android-sdk/pull/8030 ; Firebase Live session documentation https://firebase.google.com/docs/ai-logic/live-api/sessions .
 
 ## Progressive personal knowledge — candidate 0.10.8
 
