@@ -32,6 +32,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import android.util.Log
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -44,6 +45,9 @@ class GeminiLiveAssistant {
     @Volatile private var session: LiveSession? = null
     @Volatile private var manualStop = true
     private var healthJob: Job? = null
+    // Repeated SDK audio-pipeline recreation can retain device audio worker threads on
+    // some Android audio stacks. Limit automatic rollovers until the SDK path is verified.
+    private var automaticRecoveryCount = 0
     private var sessionFactory: (suspend (String) -> LiveSession)? = null
     private var functionCallHandler: ((FunctionCallPart) -> FunctionResponsePart)? = null
     private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
@@ -63,6 +67,7 @@ class GeminiLiveAssistant {
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
     ) = lifecycleMutex.withLock {
         stopSessionLocked()
+        automaticRecoveryCount = 0
         synchronized(recentTranscript) { recentTranscript.clear() }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
             modelName = MODEL_NAME,
@@ -357,6 +362,15 @@ class GeminiLiveAssistant {
 
     private suspend fun recoverAfterServerDisconnect(expected: LiveSession) = recoveryMutex.withLock {
         if (manualStop || session !== expected) return@withLock
+        if (automaticRecoveryCount >= MAX_AUTOMATIC_RECOVERIES) {
+            Log.w(TAG, "Automatic Live recovery limit reached; stopping instead of creating more audio pipelines")
+            onConnectionState(
+                "Connessione vocale interrotta: limite di recupero automatico raggiunto. Riavvia la conversazione per continuare."
+            )
+            return@withLock
+        }
+        automaticRecoveryCount += 1
+        Log.i(TAG, "Starting controlled Live recovery #$automaticRecoveryCount")
         onConnectionState("La connessione vocale si sta rinnovando…")
         healthJob?.cancel()
         session = null
@@ -383,6 +397,10 @@ class GeminiLiveAssistant {
                 }
                 session = fresh
                 startAudioOnSession(fresh)
+                if (manualStop) return@withLock
+                if (session !== fresh || fresh.isClosed() || !fresh.isAudioConversationActive()) {
+                    throw IllegalStateException("La nuova sessione Live non ha mantenuto attivo il canale audio")
+                }
                 onConnectionState("Juanita è di nuovo in ascolto.")
                 return@withLock
             } catch (failure: Exception) {
@@ -435,6 +453,9 @@ class GeminiLiveAssistant {
     }
 
     companion object {
+        private const val TAG = "GeminiLiveAssistant"
+        private const val MAX_AUTOMATIC_RECOVERIES = 1
+
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
         const val DEFAULT_VOICE = "Kore"
     }
