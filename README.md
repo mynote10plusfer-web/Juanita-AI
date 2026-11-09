@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current development candidate: 0.11.3 (versionCode 42) — not yet released
+## Current development candidate: 0.11.6 (versionCode 45) — PR #31, draft
 
-Signed Release 0.10.8 adds progressive personal knowledge: a voice-led first meeting, optional name and birth date gathered naturally, a dedicated encrypted profile store connected to Gemini Live, and gradual learning from ordinary conversation. PR #23 has merged the timezone-safe Smart Alarm schedule model (not yet a working alarm). PR #24 is under CI review for automatic recovery after Gemini Live disconnects; it is not yet released or physically tested. Intermediate builds are not for installation.
+The cumulative 0.11.5/0.11.6 candidate includes the local multi-alarm manager, one-time and recurring alarms, voice-controlled stop, optional Gemini Live morning greeting, progressive personal profile, 30 gender-grouped Live voices, and the Juanita/José identity choice. The 0.11.6 source also hardens display/lock-screen lifecycle and aligns the alarm greeting and notifications with the selected assistant identity. The initial signed Release passed permanent-certificate verification; a final identity-consistency correction has since been committed, so the final branch head must pass a fresh signed Release and Android CI before installation. Physical-device verification remains separate. Do not install intermediate artifacts.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
@@ -75,18 +75,19 @@ The microphone is activated only after the user grants permission and starts a L
 
 ## Current engineering work (2026-11-08)
 
-- Smart Alarm schedule model: merged in PR #23. This is only the recurrence/time-zone calculation core; Android alarm delivery, persistence, controls and spoken greeting are still planned.
+- Smart Alarm: app-owned local multi-alarm scheduling, persistence, controls, recurrence, voice stop and optional Gemini Live morning greeting are implemented in the 0.11.5/0.11.6 candidate. Physical reliability testing on Note10+ Android 12 and S22 Ultra Android 15 is still required.
 - Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks, bounded reconnection and recent transcript context replay. It must pass CI and real-device testing before being called fixed or included in a Release APK.
 - Familiar-person speaker identification remains unimplemented. Voice transcription is not speaker recognition; local enrollment requires explicit consent and privacy/legal review.
 - Notification reading remains deferred; do not disable Play Protect.
 
 
-## Current candidate status — 2026-11-08
+## Current candidate status — 2026-11-09
 
-- PR #31 remains draft and unmerged. Candidate 0.11.2 (versionCode 41) completed signed Release CI and permanent certificate verification but was blocked by Google Play Protect during sideload installation; it is not physically validated.
-- Candidate 0.11.3 (versionCode 42) removes the notification reader from the shipped app while preserving the permanent package/signing identity and existing local data. It must pass a fresh signed Release workflow before distribution.
-- Current tabs: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. Do not remove or redesign these tabs as part of the notification deferral.
-- Next approved product area: Juanita Personal Organizer — validate multi-alarm and spoken morning greeting, then local reminders/tasks and calendar integration. No paid APIs, subscriptions or billing without explicit approval.
+- PR #31 remains draft and unmerged. Current cumulative candidate is 0.11.6 / versionCode 45. Keep the production application ID `ai.juanita.app`, permanent signing certificate and all local data unchanged.
+- The first 0.11.6 signed Release artifact passed permanent-certificate verification. A final correction aligning José/Juanita identity across the morning alarm greeting, alarm tab and ringing notification was committed afterward; fresh CI must pass on the latest branch head before the corrected APK is distributed.
+- Notification reading remains deferred after the earlier Play Protect block. Do not disable Play Protect or restore NotificationListenerService in this release.
+- Current tabs remain Home, Avatar, Sveglia, Settaggi, Memoria and Altro. The audit confirms their current functions and distinguishes implemented features from placeholders in the Improvement Lab and roadmap.
+- Next approved product area: Juanita Personal Organizer — after alarm validation, implement encrypted local reminders/tasks, then extend read-only Android calendar agenda. No paid APIs, subscriptions or billing without explicit approval.
 
 
 ## 0.11.4 candidate — voice-controlled alarm stop
@@ -111,6 +112,7 @@ The microphone is activated only after the user grants permission and starts a L
 - Persona instructions use matching grammatical gender and assistant name. The initial Gemini Live voice is aligned to the selected identity; a previously selected voice is retained when it already matches. The user can still choose any voice manually.
 - Existing installations default to the existing Juanita identity and retain their saved assistant name, voice and wake phrase. Switching identity updates the default wake phrase only when it still matches the previous app default; a custom phrase is preserved.
 - Identity switching does not clear memories, conversation archive, alarms, avatar profiles or other preferences.
+- The final source audit also updates the alarm screen's spoken instruction, retry buttons, alarm-tab labels and ringing notification to the selected assistant name and grammatical gender.
 - MainActivity now clears its keep-screen-on window flag while paused and restores it only when the active call screen requires it in the foreground. The alarm lock-screen activity clears show-when-locked, turn-screen-on and keep-screen-on overrides when it stops, then reapplies them only when visible.
 - The biometric symptom is not yet confirmed fixed: no overlay permission, accessibility service or fingerprint-control API is declared in the manifest. Validate on Note10+ Android 12 with the user's foreground/background/force-stop test sequence before claiming resolution.
 - No Android TTS, paid service, package ID or signing-key change.
