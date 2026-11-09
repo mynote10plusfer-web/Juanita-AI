@@ -203,7 +203,8 @@ class MainActivity : ComponentActivity() {
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
-                initialArchivedConversations = memoryStore.listArchivedConversations(),
+                // The archive is loaded asynchronously only when its tab is opened; do not scan/decrypt it during Activity composition.
+                initialArchivedConversations = emptyList(),
                 initialImprovementReports = memoryStore.listImprovementReports(),
                 onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
                     memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
