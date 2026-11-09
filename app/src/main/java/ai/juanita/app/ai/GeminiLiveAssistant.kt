@@ -420,7 +420,12 @@ class GeminiLiveAssistant {
         try {
             // Start the SDK audio pipeline at most once for this recovery cycle.
             startAudioOnSession(next)
-            if (manualStop) return@withLock
+            if (manualStop) {
+                if (session === next) session = null
+                runCatching { next.stopAudioConversation() }
+                withTimeoutOrNull(1_500L) { runCatching { next.close() } }
+                return@withLock
+            }
             if (session !== next || next.isClosed() || !next.isAudioConversationActive()) {
                 throw IllegalStateException("La nuova sessione Live non ha mantenuto attivo il canale audio")
             }
@@ -428,10 +433,10 @@ class GeminiLiveAssistant {
             return@withLock
         } catch (failure: Exception) {
             lastFailure = failure
-            if (manualStop) return@withLock
             if (session === next) session = null
             runCatching { next.stopAudioConversation() }
             withTimeoutOrNull(1_500L) { runCatching { next.close() } }
+            if (manualStop) return@withLock
         }
 
         onConnectionState(
