@@ -265,6 +265,35 @@ class EncryptedMemoryStore(context: Context) {
         writeRecords(kept, synchronous = true)
     }
 
+    /**
+     * Move the newest interrupted-session snapshot to the new session ID before a reconnect.
+     * This keeps the last known conversation context across a service restart without retaining
+     * multiple stale snapshots. The snapshot remains encrypted in the existing local store.
+     */
+    @Synchronized
+    fun carryForwardLatestContinuitySnapshot(newSessionId: String): String {
+        require(newSessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
+        val records = readRecords()
+        val latest = (0 until records.length())
+            .mapNotNull { records.optJSONObject(it) }
+            .filter { it.optString("kind") == "continuity_snapshot" }
+            .maxByOrNull { it.optLong("updatedAt") }
+            ?: return ""
+
+        val carried = JSONObject(latest.toString()).apply {
+            put("sessionId", newSessionId)
+            put("updatedAt", System.currentTimeMillis())
+        }
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "continuity_snapshot") kept.put(record)
+        }
+        kept.put(carried)
+        writeRecords(kept, synchronous = true)
+        return buildContinuityContext(newSessionId)
+    }
+
     /** Build a bounded chronological recovery packet from the encrypted active-session snapshot. */
     @Synchronized
     fun buildContinuityContext(sessionId: String, recentFallback: String = ""): String {
