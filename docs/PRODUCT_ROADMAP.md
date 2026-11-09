@@ -356,6 +356,17 @@ Next steps:
 - Provide review/edit, pause/resume, category controls, export and deletion. Keep transcript archive deletion separate from curated-memory deletion.
 - Never invent recollections. If retrieval finds no useful record, Juanita must say she cannot find it. Sensitive/intimate data must not be promoted automatically.
 
+### A.3 Active Live-session continuity across reconnects — USER-REQUESTED; IMPLEMENTATION SLICE IN PR #31
+
+- Keep a short-lived encrypted continuity snapshot for the currently active Live conversation, separate from the optional full transcript archive and durable personal memories.
+- Update the snapshot from merged USER and ASSISTANT transcription turns on the existing ordered IO worker; never block microphone capture or Gemini Live callbacks on encryption or disk I/O.
+- Keep a bounded chronological window (24 turns / 16,000 characters). The complete source transcript remains in the full archive when enabled; the continuity window is a recovery aid, not a replacement.
+- On GoAway/health-triggered reconnect, ask the Android service for the active session snapshot and supplement it only with recent transcript fragments not already represented. Inject it into the new Live session with explicit instructions not to repeat the greeting or invent missing context.
+- Snapshot persistence is independent of the archive pause switch, but it is session-scoped: clear it after a clean stop and remove stale snapshots before a new user-started session. It must never become a permanent personal memory or be included in unrelated sessions.
+- Preserve the existing audio capture path, model, signing identity, package ID and user data. Do not add services, paid APIs, billing, Android TTS or new permissions.
+- **Acceptance:** continuity survives a fresh EncryptedMemoryStore instance; still works when full transcript archiving is paused; preserves USER/ASSISTANT ordering; bounded retention; clean stop deletes the snapshot; reconnect uses the snapshot before opening audio; failed persistence falls back to the in-memory transcript and never crashes Live audio.
+- **Verification status:** source implementation and instrumentation coverage are being added to PR #31; do not call this fixed until latest-branch CI passes and the user confirms an interruption/recovery test on both Samsung devices.
+
 ### B. Reliability and privacy
 
 - Foreground microphone service and notification implemented in 0.8.6; verify screen-off behavior, reconnects and long sessions.

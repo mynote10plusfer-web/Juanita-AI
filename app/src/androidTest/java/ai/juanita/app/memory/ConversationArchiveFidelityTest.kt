@@ -61,4 +61,26 @@ class ConversationArchiveFidelityTest {
             EncryptedMemoryStore(context).deleteConversation(sessionId)
         }
     }
+    @Test
+    fun activeConversationContinuitySurvivesStoreRecreationAndIgnoresArchivePause() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "continuity-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val archiveWasEnabled = store.isConversationArchiveEnabled
+        try {
+            store.setConversationArchiveEnabled(false)
+            store.appendContinuityTurn(sessionId, "USER", "Stiamo progettando il promemoria locale cifrato.")
+            store.appendContinuityTurn(sessionId, "ASSISTANT", "Prima completiamo il recupero della conversazione.")
+            val restored = EncryptedMemoryStore(context).buildContinuityContext(sessionId)
+            assertTrue(restored.contains("promemoria locale cifrato"))
+            assertTrue(restored.contains("recupero della conversazione"))
+            assertTrue(EncryptedMemoryStore(context).listConversationTurns(sessionId).isEmpty())
+            EncryptedMemoryStore(context).clearContinuitySnapshot(sessionId)
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(sessionId).isBlank())
+        } finally {
+            store.clearContinuitySnapshot(sessionId)
+            store.setConversationArchiveEnabled(archiveWasEnabled)
+        }
+    }
+
 }

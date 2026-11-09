@@ -54,6 +54,7 @@ class JuanitaVoiceService : Service() {
     private var voicePreviewJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
     private var transcriptWorker: Job? = null
+    @Volatile private var activeConversationId: String? = null
     private var memoryWorkChannel: Channel<Unit>? = null
     private var memoryWorker: Job? = null
     private val videoFrameInFlight = AtomicBoolean(false)
@@ -129,6 +130,8 @@ class JuanitaVoiceService : Service() {
                         _state.value = "Connessione a Gemini Live…"
                         try {
                             val conversationId = UUID.randomUUID().toString()
+                            activeConversationId = conversationId
+                            withContext(Dispatchers.IO) { runCatching { memoryStore.clearContinuitySnapshots() } }
                             // Restore relevant local memories and recent turns before opening
                             // the new Live session. Nothing is uploaded to a separate memory store.
                             val localContext = withContext(Dispatchers.IO) {
@@ -196,6 +199,12 @@ class JuanitaVoiceService : Service() {
                                     } catch (archiveFailure: Exception) {
                                         _memoryState.value = "Archivio conversazione non riuscito: ${archiveFailure.localizedMessage ?: archiveFailure.javaClass.simpleName}"
                                     }
+                                    try {
+                                        // Session-only continuity persists even when full transcript archiving is paused.
+                                        memoryStore.appendContinuityTurn(conversationId, role, combinedText)
+                                    } catch (continuityFailure: Exception) {
+                                        _memoryState.value = "Continuità locale non aggiornata: " + continuityFailure.javaClass.simpleName
+                                    }
                                     if (role.equals("USER", ignoreCase = true)) {
                                         userTranscriptCount++
                                         _memoryState.value = "Trascrizione utente ricevuta ($userTranscriptCount) · memoria in elaborazione."
@@ -251,6 +260,11 @@ class JuanitaVoiceService : Service() {
                                         query,
                                         excludeSessionId = conversationId
                                     )
+                                },
+                                onContinuityContext = { recentTranscript ->
+                                    withContext(Dispatchers.IO) {
+                                        memoryStore.buildContinuityContext(conversationId, recentTranscript)
+                                    }
                                 },
                                 onProfileUpdate = { fields ->
                                     val saved = mutableListOf<String>()
@@ -344,6 +358,10 @@ class JuanitaVoiceService : Service() {
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                activeConversationId?.let { id ->
+                    withContext(Dispatchers.IO) { runCatching { memoryStore.clearContinuitySnapshot(id) } }
+                }
+                activeConversationId = null
                 withTimeoutOrNull(5_000L) { drainMemoryWorker() }
                 val flushedCount = withTimeoutOrNull(5_000L) {
                     withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }

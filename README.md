@@ -76,7 +76,7 @@ The microphone is activated only after the user grants permission and starts a L
 ## Current engineering work (2026-11-08)
 
 - Smart Alarm: app-owned local multi-alarm scheduling, persistence, controls, recurrence, voice stop and optional Gemini Live morning greeting are implemented in the 0.11.5/0.11.6 candidate. Physical reliability testing on Note10+ Android 12 and S22 Ultra Android 15 is still required.
-- Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks, bounded reconnection and recent transcript context replay. It must pass CI and real-device testing before being called fixed or included in a Release APK.
+- Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks and bounded reconnection. PR #31 adds a session-scoped encrypted continuity snapshot, independent of the optional archive, for recovery context; latest CI and real-device testing are still required before calling it fixed.
 - Familiar-person speaker identification remains unimplemented. Voice transcription is not speaker recognition; local enrollment requires explicit consent and privacy/legal review.
 - Notification reading remains deferred; do not disable Play Protect.
 

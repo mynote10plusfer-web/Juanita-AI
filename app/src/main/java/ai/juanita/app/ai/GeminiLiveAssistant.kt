@@ -48,6 +48,7 @@ class GeminiLiveAssistant {
     private var functionCallHandler: ((FunctionCallPart) -> FunctionResponsePart)? = null
     private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
     private var onConnectionState: (String) -> Unit = {}
+    private var onContinuityContext: suspend (String) -> String = { it }
     private val recentTranscript = ArrayDeque<String>()
 
     suspend fun start(
@@ -57,6 +58,7 @@ class GeminiLiveAssistant {
         onArchiveSearch: (query: String) -> String = { "" },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
         onConnectionState: (status: String) -> Unit = {},
+        onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
     ) = lifecycleMutex.withLock {
@@ -292,6 +294,7 @@ class GeminiLiveAssistant {
             }
         }
         this.onConnectionState = onConnectionState
+        this.onContinuityContext = onContinuityContext
         manualStop = false
         val connected = model.connect()
         session = connected
@@ -358,9 +361,13 @@ class GeminiLiveAssistant {
         runCatching { expected.stopAudioConversation() }
         withTimeoutOrNull(2_000L) { runCatching { expected.close() } }
 
-        val context = synchronized(recentTranscript) {
+        val recentContext = synchronized(recentTranscript) {
             recentTranscript.joinToString("\n").takeLast(5_000)
         }
+        // Prefer the encrypted active-session snapshot; volatile transcript is fallback.
+        val context = runCatching {
+            withTimeoutOrNull(2_000L) { onContinuityContext(recentContext) }
+        }.getOrNull().orEmpty().ifBlank { recentContext }.takeLast(16_000)
         var lastFailure: Throwable? = null
         for (attempt in 1..3) {
             if (manualStop) return@withLock
@@ -414,6 +421,7 @@ class GeminiLiveAssistant {
         manualStop = true
         healthJob?.cancel()
         sessionFactory = null
+        onContinuityContext = { it }
         val active = session ?: return
         // Detach first so a repeated stop is harmless and cannot revive this session.
         session = null
