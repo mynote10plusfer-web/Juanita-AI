@@ -102,7 +102,7 @@ class AlarmRingingActivity : ComponentActivity() {
             }
         } else if (!testMode && voiceEnabled) {
             statusText?.text = "Per il buongiorno vocale serve il permesso microfono. La sveglia sonora continua."
-            addRetryButton("Apri Juanita") {
+            addRetryButton("Apri ${AssistantPreferences(this).assistantName}") {
                 startActivity(Intent(this, ai.juanita.app.MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
             }
@@ -134,7 +134,7 @@ class AlarmRingingActivity : ComponentActivity() {
         val microphoneGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (!microphoneGranted) {
             statusText?.text = "Microfono non autorizzato: la sveglia sonora resta attiva."
-            addRetryButton("Apri Juanita") {
+            addRetryButton("Apri ${AssistantPreferences(this).assistantName}") {
                 startActivity(Intent(this, ai.juanita.app.MainActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP))
             }
@@ -147,14 +147,20 @@ class AlarmRingingActivity : ComponentActivity() {
                 MorningBriefingContext.build(this@AlarmRingingActivity)
             }
             val preferences = AssistantPreferences(this@AlarmRingingActivity)
+            val assistantName = preferences.assistantName.ifBlank { AssistantPreferences.DEFAULT_ASSISTANT_NAME }
+            val identityGuidance = if (preferences.assistantGender == "MASCHILE") {
+                "Sei $assistantName, un assistente vocale personale dell'utente. Usa sempre forme grammaticali maschili quando la lingua le prevede."
+            } else {
+                "Sei $assistantName, un'assistente vocale personale dell'utente. Usa sempre forme grammaticali femminili quando la lingua le prevede."
+            }
             val instruction = """
-                Sei Juanita, assistente vocale personale dell'utente. Questa è la sveglia del mattino
-                autorizzata dall'utente. Usa esclusivamente la voce Gemini Live configurata.
-                Sii dolce, naturale, luminosa e rassicurante. Non usare TTS Android.
+                $identityGuidance Questa è la sveglia del mattino autorizzata dall'utente.
+                Usa esclusivamente la voce Gemini Live configurata. Mantieni un tono caldo,
+                naturale, positivo e rassicurante. Non usare TTS Android.
                 Inizia con un buongiorno e un tono positivo. Comunica giorno, data e ora locali,
                 poi meteo e appuntamenti solo se presenti nei dati verificati. Se un dato non è
                 accessibile, dichiaralo senza inventare né dire che il calendario è vuoto.
-                Dopo il breve riepilogo lascia che l'utente possa risponderti.
+                Dopo il breve riepilogo resta disponibile per la conversazione.
             """.trimIndent()
             runCatching {
                 JuanitaVoiceService.start(
