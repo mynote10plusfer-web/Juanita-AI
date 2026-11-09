@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-09 — cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. Current candidate: 0.11.6 / versionCode 45. The first signed Release artifact passed permanent-certificate verification; a final identity-consistency correction was then added to the alarm UI, notification and morning greeting, so CI must be rerun on the latest branch head before distribution. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
+Last updated: 2026-11-09 — cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. Current candidate: 0.11.7 / versionCode 46. This is a power-management maintenance release following the 0.11.6 source audit: alarm-owned Live cleanup, stale lock-screen activity closure, lifecycle-aware periodic UI refresh and failed-reconnect cleanup. Fresh CI and physical-device verification are required. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
 
 ## Progressive personal knowledge — candidate 0.10.8
 
@@ -895,12 +895,12 @@ This is a distinct approach from the secretary-originated call/bridge above and 
 
 This sequence is the working plan; a roadmap entry is not evidence that a feature has shipped.
 
-### Priority 1 — finish and validate the 0.11.6 release
+### Priority 1 — finish and validate the 0.11.7 power-management release
 1. Run the full CI suite on the final branch head: debug build, API 31 instrumentation, signed Release, permanent certificate verification and artifact upload.
-2. Verify the exact production package `ai.juanita.app`, versionName 0.11.6, versionCode 45 and unchanged permanent signing certificate.
-3. Validate the identity choice end to end: onboarding, Settings switch, voice alignment, wake phrase preservation, alarm greeting and notification name, with all local data preserved.
-4. Investigate the fingerprint symptom with the user's foreground/background/force-stop tests on Note10+ Android 12. Do not claim it is fixed from source inspection alone.
-5. Physically validate alarm fire, snooze/dismiss, timed/ring-count stop, morning Live speech and background behavior on Note10+ and S22 Ultra.
+2. Verify the exact production package `ai.juanita.app`, versionName 0.11.7, versionCode 46 and unchanged permanent signing certificate.
+3. Validate alarm-owned voice cleanup on dismiss, snooze, timed stop and ring-count stop; confirm the microphone, foreground notification and CPU wake lock all terminate while unrelated manual calls remain unaffected.
+4. Confirm lifecycle-aware home/avatar/archive refresh pauses while the app is backgrounded; test that stale alarm full-screen intents cannot turn the display on.
+5. Physically validate alarm fire, snooze/dismiss, timed/ring-count stop, morning Live speech, reconnect failure cleanup, battery use and biometric behavior on Note10+ Android 12 and S22 Ultra Android 15.
 
 ### Priority 2 — local reminders and tasks (next new feature package)
 1. Add a dedicated encrypted local store, separate from conversation memories and Android calendar events.
@@ -1276,3 +1276,18 @@ The following issues were confirmed against 0.11.0 and were the reason for this 
 - No overlay permission, accessibility service or biometric API was added. The fingerprint symptom is not declared fixed until physical tests confirm foreground, background and force-stop behavior on the Note10+.
 - Release identity remains `ai.juanita.app`, permanent signing certificate unchanged, versionName `0.11.6`, versionCode `45`.
 - Gate: fresh CI on the final branch head, package/signature/version verification, then onboarding and identity-switch tests, data preservation, alarm greeting/notification identity, background call lifecycle and biometric tests on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+## 0.11.7 — background power and alarm-session cleanup (2026-11-09)
+
+**STATUS: SOURCE CHANGES COMMITTED; FRESH CI AND PHYSICAL VALIDATION REQUIRED.**
+
+Audit findings and fixes:
+- **Confirmed source defect:** alarm morning greeting started Gemini Live with the originating alarm ID, but the alarm dismiss path stopped only the ringtone. The Live microphone foreground service and its indefinite `PARTIAL_WAKE_LOCK` could remain active after the user dismissed the alarm. The service now tracks the alarm ID and exposes an alarm-scoped stop action. Snooze/dismiss and explicit timed/ring-count stop terminate only the matching alarm session. A normal first spoken response still stops the ringtone without terminating the greeting.
+- **Confirmed source risk:** the alarm notification's full-screen PendingIntent can outlive the ringing state. The alarm activity now listens for a package-private close event, clears its display flags and rejects stale intents when the alarm ID is no longer active.
+- **Confirmed source inefficiency:** MainActivity and AvatarCallScreen updated their displayed clock every second regardless of Activity lifecycle; the conversation archive polled every two seconds. These loops now run only while the owning Activity is RESUMED.
+- **Confirmed source risk:** after Gemini Live exhausted reconnect attempts, the service updated its status but did not initiate cleanup. It now requests service shutdown, microphone stop and wake-lock release.
+- The custom partial CPU wake lock remains intentionally available during a user-started Live session so screen-off conversations can continue. It is not a display wake lock and should not turn the display on. Do not remove it without validating background audio behavior.
+- The alarm activity's `FLAG_TURN_SCREEN_ON`, `FLAG_KEEP_SCREEN_ON` and lock-screen visibility are needed only while an active alarm UI is shown. No overlay permission or biometric API is present in the manifest.
+- **Remaining diagnostics:** the code cannot reveal whether a particular Note10+ wake event came from Juanita, Samsung's own alarm/biometric stack or another app. Compare Android battery usage and screen-on history after force-stop and after the corrected build. Do not claim the battery issue is resolved until physical measurements confirm it.
+- Release identity remains `ai.juanita.app`, permanent signing certificate unchanged, versionName `0.11.7`, versionCode `46`.
