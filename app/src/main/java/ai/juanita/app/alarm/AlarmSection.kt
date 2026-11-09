@@ -55,7 +55,7 @@ import java.util.Locale
 import java.util.UUID
 
 @Composable
-fun AlarmSection(panel: Color, gold: Color) {
+fun AlarmSection(panel: Color, gold: Color, assistantName: String) {
     val context = LocalContext.current
     val store = remember { JuanitaAlarmStore(context) }
     var alarms by remember {
@@ -143,7 +143,7 @@ fun AlarmSection(panel: Color, gold: Color) {
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("BUONGIORNO VOCALE DI JUANITA", color = gold, fontSize = 13.sp)
+        Text("BUONGIORNO VOCALE DI ${assistantName.uppercase()}", color = gold, fontSize = 13.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Parlami al risveglio", color = Color.White, fontSize = 14.sp)
@@ -162,7 +162,7 @@ fun AlarmSection(panel: Color, gold: Color) {
                 }
             })
         }
-        Text("Il microfono è necessario per parlare con Juanita. Calendario e posizione sono facoltativi e vengono richiesti separatamente quando servono.",
+        Text("Il microfono è necessario per parlare con $assistantName. Calendario e posizione sono facoltativi e vengono richiesti separatamente quando servono.",
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         Text("LE TUE SVEGLIE", color = gold, fontSize = 13.sp)
@@ -232,7 +232,7 @@ fun AlarmSection(panel: Color, gold: Color) {
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
         ) { Text("Apri anche le sveglie del telefono") }
-        Text("Android non permette a Juanita di leggere direttamente l'elenco privato delle sveglie Samsung. Può però aprire l'app Orologio; le sveglie create qui restano gestite da Juanita.",
+        Text("Android non permette a $assistantName di leggere direttamente l'elenco privato delle sveglie Samsung. Può però aprire l'app Orologio; le sveglie create qui restano gestite da $assistantName.",
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         Text("PROVA AUDIO", color = gold, fontSize = 13.sp)
