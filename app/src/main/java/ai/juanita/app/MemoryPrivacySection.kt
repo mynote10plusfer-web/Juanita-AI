@@ -47,6 +47,9 @@ import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.delay
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 internal fun MemoryPrivacySection(
@@ -299,13 +302,16 @@ private fun ConversationArchiveCalendar(
     var confirmSelectedDays by remember { mutableStateOf(false) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
-    // Refresh on entry and periodically while the archive is visible: the voice worker
-    // writes transcript turns asynchronously, so the initial activity snapshot can be stale.
-    LaunchedEffect(Unit) {
-        onRefresh()
-        while (true) {
-            delay(2_000L)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    // Refresh only while the archive is actually in the foreground. The transcript
+    // worker can update the archive asynchronously, but background polling wastes battery.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             onRefresh()
+            while (true) {
+                delay(2_000L)
+                onRefresh()
+            }
         }
     }
     val byDay = remember(conversations) {
