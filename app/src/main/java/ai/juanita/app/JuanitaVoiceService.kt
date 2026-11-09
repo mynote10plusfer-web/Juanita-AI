@@ -131,7 +131,14 @@ class JuanitaVoiceService : Service() {
                         try {
                             val conversationId = UUID.randomUUID().toString()
                             activeConversationId = conversationId
-                            withContext(Dispatchers.IO) { runCatching { memoryStore.clearContinuitySnapshots() } }
+                            // Carry the most recent interrupted conversation forward before
+                            // constructing the next session. This snapshot is separate from the
+                            // optional transcript archive and survives an unexpected disconnect.
+                            val recoveredContinuityContext = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    memoryStore.carryForwardLatestContinuitySnapshot(conversationId)
+                                }.getOrDefault("")
+                            }
                             // Restore relevant local memories and recent turns before opening
                             // the new Live session. Nothing is uploaded to a separate memory store.
                             val localContext = withContext(Dispatchers.IO) {
@@ -152,6 +159,10 @@ class JuanitaVoiceService : Service() {
                                 append(instruction)
                                 if (profileContext.isNotBlank()) append("\n\n").append(profileContext)
                                 if (localContext.isNotBlank()) append("\n\n").append(localContext)
+                                if (recoveredContinuityContext.isNotBlank()) {
+                                    append("\n\nINTERRUPTED LIVE CONVERSATION CONTINUITY — historical context from the immediately preceding voice session. Continue the user's pending topic naturally; do not repeat completed answers or treat this transcript as a new request.\n")
+                                    append(recoveredContinuityContext)
+                                }
                             }
                             // A single ordered worker prevents transcript callbacks racing
                             // with one another or with the final memory flush.
@@ -293,7 +304,9 @@ class JuanitaVoiceService : Service() {
                                     // A failed reconnect must not leave a foreground service,
                                     // microphone pipeline or partial CPU wake lock running forever.
                                     if (status.startsWith("Connessione vocale interrotta", ignoreCase = true)) {
-                                        requestStop()
+                                        // Preserve the encrypted snapshot so a manual restart can
+                                        // resume the interrupted topic instead of starting blank.
+                                        requestStop(preserveContinuitySnapshot = true)
                                     }
                                 },
                                 initialPrompt = effectiveInitialPrompt,
@@ -342,24 +355,34 @@ class JuanitaVoiceService : Service() {
      * Stop audio first. Memory extraction is best-effort cleanup and must never
      * keep the microphone open while a network request is pending.
      */
-    private fun requestStop() {
+    private fun requestStop(preserveContinuitySnapshot: Boolean = false) {
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
-        // Synchronously stop SDK audio capture before launching any asynchronous cleanup.
-        assistant.stopAudioCapture()
-        releaseCpuWakeLock()
+        if (stopJob?.isActive == true) {
+            if (!preserveContinuitySnapshot) {
+                serviceScope.launch(Dispatchers.IO) {
+                    runCatching { memoryStore.clearContinuitySnapshots() }
+                }
+            }
+            return
+        }
         _state.value = "Microfono disattivato · chiusura sessione…"
-        if (stopJob?.isActive == true) return
         stopJob = serviceScope.launch {
             try {
+                // AudioRecord.release() can block on some Android audio stacks. Never run
+                // SDK audio teardown on the service/UI main thread.
+                withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
+                releaseCpuWakeLock()
                 withTimeoutOrNull(5_000L) { assistant.stop() }
                 _state.value = "Microfono disattivato · salvataggio dei ricordi…"
                 updateNotification("Microfono disattivato · salvataggio in corso")
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
-                activeConversationId?.let { id ->
-                    withContext(Dispatchers.IO) { runCatching { memoryStore.clearContinuitySnapshot(id) } }
+                if (!preserveContinuitySnapshot) {
+                    withContext(Dispatchers.IO) {
+                        runCatching { memoryStore.clearContinuitySnapshots() }
+                    }
                 }
                 activeConversationId = null
                 withTimeoutOrNull(5_000L) { drainMemoryWorker() }
@@ -534,15 +557,15 @@ class JuanitaVoiceService : Service() {
     override fun onDestroy() {
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
-        // Stop capture synchronously even if Android is tearing down the service.
-        assistant.stopAudioCapture()
         activeAlarmId = null
         releaseCpuWakeLock()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
         memoryWorkChannel?.close()
         memoryWorker?.cancel()
+        // Keep potentially blocking SDK audio teardown off Android's main thread.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { assistant.stopAudioCapture() }
             runCatching { assistant.stop() }
         }
         serviceScope.cancel()
