@@ -45,9 +45,10 @@ class GeminiLiveAssistant {
     @Volatile private var session: LiveSession? = null
     @Volatile private var manualStop = true
     private var healthJob: Job? = null
+    private var stabilityJob: Job? = null
     // Repeated SDK audio-pipeline recreation can retain device audio worker threads on
     // some Android audio stacks. Limit automatic rollovers until the SDK path is verified.
-    private var automaticRecoveryCount = 0
+    @Volatile private var automaticRecoveryCount = 0
     private var sessionFactory: (suspend (String) -> LiveSession)? = null
     private var functionCallHandler: ((FunctionCallPart) -> FunctionResponsePart)? = null
     private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
@@ -334,7 +335,8 @@ class GeminiLiveAssistant {
             goAwayHandler = {
                 recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
             },
-            enableInterruptions = false
+            // Enable true full-duplex barge-in: user speech cancels Juanita's current reply.
+            enableInterruptions = true
         )
         // A user stop can race with an in-flight reconnect/start operation.
         // Re-check after the SDK has finished initializing its audio pipeline.
@@ -349,6 +351,24 @@ class GeminiLiveAssistant {
 
     private fun startHealthMonitor(activeSession: LiveSession) {
         healthJob?.cancel()
+        stabilityJob?.cancel()
+
+        // A successful connection must be allowed to recover again at the next normal
+        // Live API rollover (~10 minutes). Count only consecutive unstable recoveries:
+        // if this session remains healthy for 90 seconds, reset the circuit breaker.
+        stabilityJob = recoveryScope.launch {
+            delay(90_000L)
+            if (
+                !manualStop &&
+                session === activeSession &&
+                !activeSession.isClosed() &&
+                activeSession.isAudioConversationActive()
+            ) {
+                automaticRecoveryCount = 0
+                Log.i(TAG, "Live session stable; automatic recovery circuit breaker reset")
+            }
+        }
+
         healthJob = recoveryScope.launch {
             while (!manualStop && session === activeSession) {
                 delay(2_500L)
@@ -373,6 +393,7 @@ class GeminiLiveAssistant {
         Log.i(TAG, "Starting controlled Live recovery #$automaticRecoveryCount")
         onConnectionState("La connessione vocale si sta rinnovando…")
         healthJob?.cancel()
+        stabilityJob?.cancel()
         session = null
         runCatching { expected.stopAudioConversation() }
         withTimeoutOrNull(2_000L) { runCatching { expected.close() } }
@@ -456,6 +477,7 @@ class GeminiLiveAssistant {
     fun stopAudioCapture() {
         manualStop = true
         healthJob?.cancel()
+        stabilityJob?.cancel()
         session?.let { active ->
             runCatching { active.stopAudioConversation() }
         }
@@ -468,6 +490,7 @@ class GeminiLiveAssistant {
     private suspend fun stopSessionLocked() {
         manualStop = true
         healthJob?.cancel()
+        stabilityJob?.cancel()
         sessionFactory = null
         onContinuityContext = { it }
         val active = session ?: return
