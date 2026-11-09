@@ -385,32 +385,55 @@ class GeminiLiveAssistant {
             withTimeoutOrNull(2_000L) { onContinuityContext(recentContext) }
         }.getOrNull().orEmpty().ifBlank { recentContext }.takeLast(16_000)
         var lastFailure: Throwable? = null
-        for (attempt in 1..3) {
+        var fresh: LiveSession? = null
+
+        // Retry only the WebSocket handshake. Do not repeatedly initialize the SDK
+        // microphone pipeline after an audio-start failure: some device audio stacks
+        // can retain blocked recorder workers across repeated start/stop cycles.
+        for (attempt in 1..2) {
             if (manualStop) return@withLock
             delay(attempt * 700L)
             try {
-                val fresh = sessionFactory?.invoke(context)
+                fresh = sessionFactory?.invoke(context)
                     ?: throw IllegalStateException("Session recovery is not configured")
-                if (manualStop) {
-                    runCatching { fresh.close() }
-                    return@withLock
-                }
-                session = fresh
-                startAudioOnSession(fresh)
-                if (manualStop) return@withLock
-                if (session !== fresh || fresh.isClosed() || !fresh.isAudioConversationActive()) {
-                    throw IllegalStateException("La nuova sessione Live non ha mantenuto attivo il canale audio")
-                }
-                onConnectionState("Juanita è di nuovo in ascolto.")
-                return@withLock
+                break
             } catch (failure: Exception) {
                 lastFailure = failure
-                val failed = session
-                session = null
-                runCatching { failed?.stopAudioConversation() }
-                withTimeoutOrNull(1_500L) { runCatching { failed?.close() } }
+                if (manualStop) return@withLock
             }
         }
+
+        val next = fresh
+        if (next == null) {
+            onConnectionState(
+                "Connessione vocale interrotta. Riavvia la conversazione per riprovare." +
+                    (lastFailure?.let { " (${it.javaClass.simpleName})" } ?: "")
+            )
+            return@withLock
+        }
+        if (manualStop) {
+            withTimeoutOrNull(1_500L) { runCatching { next.close() } }
+            return@withLock
+        }
+
+        session = next
+        try {
+            // Start the SDK audio pipeline at most once for this recovery cycle.
+            startAudioOnSession(next)
+            if (manualStop) return@withLock
+            if (session !== next || next.isClosed() || !next.isAudioConversationActive()) {
+                throw IllegalStateException("La nuova sessione Live non ha mantenuto attivo il canale audio")
+            }
+            onConnectionState("Juanita è di nuovo in ascolto.")
+            return@withLock
+        } catch (failure: Exception) {
+            lastFailure = failure
+            if (manualStop) return@withLock
+            if (session === next) session = null
+            runCatching { next.stopAudioConversation() }
+            withTimeoutOrNull(1_500L) { runCatching { next.close() } }
+        }
+
         onConnectionState(
             "Connessione vocale interrotta. Riavvia la conversazione per riprovare." +
                 (lastFailure?.let { " (${it.javaClass.simpleName})" } ?: "")
