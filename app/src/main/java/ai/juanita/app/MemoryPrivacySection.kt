@@ -453,9 +453,14 @@ private fun ConversationArchiveCalendar(
             },
             confirmButton = { TextButton(enabled = from != null && until != null && until > from, onClick = {
                 if (from != null && until != null && until > from) {
-                    onDeleteTimeRange(session.sessionId, from, until + 60_000L)
-                    turns = onListTurns(session.sessionId)
-                    if (turns.isEmpty()) opened = null
+                    ioScope.launch {
+                        withContext(Dispatchers.IO) {
+                            onDeleteTimeRange(session.sessionId, from, until + 60_000L)
+                        }
+                        turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) }
+                        conversations = withContext(Dispatchers.IO) { onRefresh() }
+                        if (turns.isEmpty()) opened = null
+                    }
                 }
             }) { Text("Elimina intervallo", color = Color(0xFFB94A48)) } },
             dismissButton = { TextButton(onClick = { opened = null }) { Text("Chiudi", color = gold) } })
