@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current development candidate: 0.11.6 (versionCode 45) — PR #31, draft
+## Current development candidate: 0.11.7 (versionCode 46) — PR #31, draft
 
-The cumulative 0.11.5/0.11.6 candidate includes the local multi-alarm manager, one-time and recurring alarms, voice-controlled stop, optional Gemini Live morning greeting, progressive personal profile, 30 gender-grouped Live voices, and the Juanita/José identity choice. The 0.11.6 source also hardens display/lock-screen lifecycle and aligns the alarm greeting and notifications with the selected assistant identity. The initial signed Release passed permanent-certificate verification; a final identity-consistency correction has since been committed, so the final branch head must pass a fresh signed Release and Android CI before installation. Physical-device verification remains separate. Do not install intermediate artifacts.
+The cumulative 0.11.7 candidate retains the local multi-alarm manager, Gemini Live morning greeting, progressive personal profile, 30 gender-grouped Live voices and Juanita/José identity choice. This maintenance release fixes an alarm-owned Live session that could survive alarm dismissal and keep an indefinite partial CPU wake lock; it also closes stale full-screen alarm UI and stops periodic home, avatar and archive refresh loops while the app is backgrounded. It stops a failed Live reconnect from leaving the foreground service and wake lock running. Source changes are committed; fresh signed Release CI, instrumentation and physical Samsung tests are required before distribution. Do not install intermediate artifacts.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
@@ -116,3 +116,13 @@ The microphone is activated only after the user grants permission and starts a L
 - MainActivity now clears its keep-screen-on window flag while paused and restores it only when the active call screen requires it in the foreground. The alarm lock-screen activity clears show-when-locked, turn-screen-on and keep-screen-on overrides when it stops, then reapplies them only when visible.
 - The biometric symptom is not yet confirmed fixed: no overlay permission, accessibility service or fingerprint-control API is declared in the manifest. Validate on Note10+ Android 12 with the user's foreground/background/force-stop test sequence before claiming resolution.
 - No Android TTS, paid service, package ID or signing-key change.
+
+
+## 0.11.7 candidate — background power and alarm-session cleanup
+
+- VersionCode 46. An alarm-started Gemini Live session is now tagged to its originating alarm. Snoozing or dismissing that alarm stops only that matching voice session, releases its CPU partial wake lock and closes its foreground service; unrelated manually started voice calls are not stopped.
+- Explicit timed and ring-count alarm stops also stop the matching alarm-owned voice session. The normal first spoken morning response may stop the ringtone without stopping the conversation.
+- Alarm lock-screen activity listens for an alarm-closed event, clears its screen flags on stop, and refuses stale full-screen PendingIntents when the alarm is no longer active.
+- Main and avatar clocks update only while their Activity is RESUMED. Conversation archive refresh polling is also suspended outside the foreground.
+- If Gemini Live exhausts its reconnect attempts, the voice service now begins cleanup rather than retaining its foreground service and CPU wake lock indefinitely.
+- These are source-level fixes, not proof of battery improvement. Verify battery drain, screen wake behavior, microphone indicator and wake-lock release on Note10+ Android 12 and S22 Ultra Android 15.
