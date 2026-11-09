@@ -155,7 +155,7 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
-    private fun setCallScreenKeepAwake(enabled: Boolean) {
+    fun setCallScreenKeepAwake(enabled: Boolean) {
         keepScreenOnForCall = enabled
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -479,7 +479,7 @@ private fun JuanitaApp(
             val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
             JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
+                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, ${if (assistantGender == "MASCHILE") "pronto" else "pronta"} ad accompagnarti con calma e con il sorriso.",
                 previewDurationMillis = 15_000L)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
