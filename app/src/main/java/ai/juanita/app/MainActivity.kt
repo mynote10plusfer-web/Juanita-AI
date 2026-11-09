@@ -142,6 +142,24 @@ private val voiceLanguages = listOf(
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferences: AssistantPreferences
+    private var keepScreenOnForCall = false
+
+    override fun onResume() {
+        super.onResume()
+        if (keepScreenOnForCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    override fun onPause() {
+        // Never let an active call keep the display awake after Juanita leaves the foreground.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onPause()
+    }
+
+    private fun setCallScreenKeepAwake(enabled: Boolean) {
+        keepScreenOnForCall = enabled
+        if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -151,6 +169,7 @@ class MainActivity : ComponentActivity() {
 
         val savedPersona = PersonaProfile(
             name = preferences.assistantName,
+            gender = preferences.assistantGender,
             irony = preferences.irony,
             sweetness = preferences.sweetness,
             sensuality = preferences.sensuality,
@@ -174,6 +193,7 @@ class MainActivity : ComponentActivity() {
                 },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
+                initialAssistantGender = preferences.assistantGender,
                 initialLiveVoiceName = preferences.liveVoiceName,
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
@@ -214,6 +234,7 @@ class MainActivity : ComponentActivity() {
                     preferences.languageTag = languageTag
                 },
                 onNameChanged = { preferences.assistantName = it },
+                onIdentityChanged = { preferences.assistantGender = it },
                 onLiveVoiceChanged = { preferences.liveVoiceName = it },
                 onWakePhraseChanged = { preferences.wakePhrase = it },
                 onPersonaChanged = { profile ->
@@ -240,6 +261,7 @@ private fun JuanitaApp(
     onCompleteOnboarding: (List<String>) -> Unit,
     initialDialectId: String,
     initialName: String,
+    initialAssistantGender: String,
     initialLiveVoiceName: String,
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
@@ -275,6 +297,7 @@ private fun JuanitaApp(
     onLanguageSelected: (String) -> Unit,
     onDialectSelected: (String, String) -> Unit,
     onNameChanged: (String) -> Unit,
+    onIdentityChanged: (String) -> Unit,
     onLiveVoiceChanged: (String) -> Unit,
     onWakePhraseChanged: (String) -> Unit,
     onPersonaChanged: (PersonaProfile) -> Unit,
@@ -307,8 +330,35 @@ private fun JuanitaApp(
     var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
     var status by remember { mutableStateOf("Impostazioni salvate sul dispositivo") }
     var assistantName by remember { mutableStateOf(initialName) }
+    var assistantGender by remember { mutableStateOf(if (initialAssistantGender == "MASCHILE") "MASCHILE" else "FEMMINILE") }
+    var assistantGenderMenuExpanded by remember { mutableStateOf(false) }
     var wakePhrase by remember { mutableStateOf(initialWakePhrase) }
-    var persona by remember { mutableStateOf(initialPersona) }
+    var persona by remember { mutableStateOf(initialPersona.copy(name = initialName, gender = assistantGender)) }
+
+    val applyAssistantIdentity: (String) -> Unit = { requestedGender ->
+        val nextGender = if (requestedGender == "MASCHILE") "MASCHILE" else "FEMMINILE"
+        if (nextGender != assistantGender) {
+            val oldDefaultWakePhrase = if (assistantGender == "MASCHILE") "Hola José" else "Hola Juanita"
+            val nextName = if (nextGender == "MASCHILE") "José" else "Juanita"
+            val nextDefaultWakePhrase = "Hola $nextName"
+            if (wakePhrase.trim().equals(oldDefaultWakePhrase, ignoreCase = true)) {
+                wakePhrase = nextDefaultWakePhrase
+                onWakePhraseChanged(nextDefaultWakePhrase)
+            }
+            assistantGender = nextGender
+            onIdentityChanged(nextGender)
+            assistantName = nextName
+            onNameChanged(nextName)
+            persona = persona.copy(name = nextName, gender = nextGender)
+            onPersonaChanged(persona)
+            if (selectedLiveVoice.gender != nextGender) {
+                val nextVoice = liveVoices.first { it.gender == nextGender }
+                selectedLiveVoice = nextVoice
+                onLiveVoiceChanged(nextVoice.id)
+            }
+            status = "Identità $nextName salvata. Memorie e sveglie non sono state modificate."
+        }
+    }
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
@@ -346,9 +396,8 @@ private fun JuanitaApp(
     val hostActivity = context as? Activity
     DisposableEffect(hostActivity, callScreenVisible) {
         val window = hostActivity?.window
-        if (callScreenVisible) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        (hostActivity as? MainActivity)?.setCallScreenKeepAwake(callScreenVisible)
+        onDispose { (hostActivity as? MainActivity)?.setCallScreenKeepAwake(false) }
     }
     var showFirstMeeting by remember { mutableStateOf(!initialOnboardingCompleted) }
     var showPermissionOnboarding by remember {
@@ -430,7 +479,7 @@ private fun JuanitaApp(
             val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
             JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono Juanita. Sono qui, pronta ad accompagnarti con calma e con il sorriso.",
+                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
                 previewDurationMillis = 15_000L)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
@@ -441,7 +490,7 @@ private fun JuanitaApp(
             val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
             JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono Juanita. Sono qui, pronta ad accompagnarti con calma e con il sorriso.",
+                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
                 previewDurationMillis = 15_000L)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -533,10 +582,36 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Identità dell'assistente", color = Color.White)
+                            Text(
+                                if (assistantGender == "MASCHILE") "José · maschile" else "Juanita · femminile",
+                                color = Color(0xFF9A9DA4), fontSize = 12.sp
+                            )
+                        }
+                        TextButton(onClick = { assistantGenderMenuExpanded = true }) {
+                            Text("Cambia", color = gold)
+                        }
+                        DropdownMenu(
+                            expanded = assistantGenderMenuExpanded,
+                            onDismissRequest = { assistantGenderMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Juanita · femminile") },
+                                onClick = { applyAssistantIdentity("FEMMINILE"); assistantGenderMenuExpanded = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("José · maschile") },
+                                onClick = { applyAssistantIdentity("MASCHILE"); assistantGenderMenuExpanded = false }
+                            )
+                        }
+                    }
                     OutlinedTextField(
                         value = assistantName,
                         onValueChange = {
                             assistantName = it
+                            persona = persona.copy(name = it)
                             onNameChanged(it)
                         },
                         label = { Text("Nome dell'assistente") },
@@ -570,7 +645,7 @@ private fun JuanitaApp(
                     TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
                     TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
                     TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
-                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di Juanita.",
+                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di $assistantName.",
                         color = gold, fontSize = 11.sp)
                 }
 
@@ -642,7 +717,7 @@ private fun JuanitaApp(
                     }
                 }
 
-                SettingsCard(panel, gold, "VOCE DI JUANITA · GEMINI LIVE") {
+                SettingsCard(panel, gold, "VOCE DI $assistantName · GEMINI LIVE") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -850,8 +925,10 @@ private fun JuanitaApp(
               }
               if (showFirstMeeting) {
                   FirstMeetingOnboarding(
-                      onComplete = { entries ->
-                          onCompleteOnboarding(entries)
+                      initialGender = assistantGender,
+                      onComplete = { selectedGender ->
+                          applyAssistantIdentity(selectedGender)
+                          onCompleteOnboarding(emptyList())
                           memories = onRefreshMemories()
                           showFirstMeeting = false
                       },
