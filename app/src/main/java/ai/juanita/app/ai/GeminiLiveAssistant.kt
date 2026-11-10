@@ -3,6 +3,11 @@ package ai.juanita.app.ai
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import android.graphics.Bitmap
+import android.media.MediaRecorder
+import com.google.firebase.ai.type.ActivityDetectionConfig
+import com.google.firebase.ai.type.RealtimeInputConfig
+import com.google.firebase.ai.type.liveAudioConversationConfig
+import com.google.firebase.ai.type.realtimeInputConfig
 import com.google.firebase.ai.type.InlineData
 import com.google.firebase.ai.type.FunctionCallPart
 import com.google.firebase.ai.type.FunctionDeclaration
@@ -125,6 +130,18 @@ class GeminiLiveAssistant {
                 inputAudioTranscription = AudioTranscriptionConfig()
                 outputAudioTranscription = AudioTranscriptionConfig()
                 speechConfig = SpeechConfig(voice = Voice(voiceName.ifBlank { DEFAULT_VOICE }))
+
+                // Server-side VAD tuned to reject faint room noise and tolerate natural pauses.
+                realtimeInputConfig = realtimeInputConfig {
+                    automaticActivityDetection = ActivityDetectionConfig.builder()
+                        .setStartSensitivity(ActivityDetectionConfig.Sensitivity.LOW)
+                        .setEndSensitivity(ActivityDetectionConfig.Sensitivity.LOW)
+                        .setPrefixPaddingMs(40)
+                        .setSilenceDurationMs(700)
+                        .build()
+                    activityHandling = RealtimeInputConfig.ActivityHandling.INTERRUPT
+                    turnCoverage = RealtimeInputConfig.TurnCoverage.ONLY_ACTIVITY
+                }
             },
             tools = listOf(
                 Tool.functionDeclarations(
@@ -330,13 +347,22 @@ class GeminiLiveAssistant {
      */
     private suspend fun startAudioOnSession(activeSession: LiveSession) {
         activeSession.startAudioConversation(
-            functionCallHandler = functionCallHandler,
-            transcriptHandler = transcriptHandler,
-            goAwayHandler = {
-                recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
-            },
-            // Enable true full-duplex barge-in: user speech cancels Juanita's current reply.
-            enableInterruptions = true
+            liveAudioConversationConfig {
+                functionCallHandler = this@GeminiLiveAssistant.functionCallHandler
+                transcriptHandler = this@GeminiLiveAssistant.transcriptHandler
+                goAwayHandler = {
+                    recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
+                }
+                // Keep natural barge-in, but rely on LOW-sensitivity server VAD above.
+                enableInterruptions = true
+
+                // Ask Android's voice-communication capture path for hardware/platform
+                // acoustic echo cancellation (speaker bleed) and noise suppression.
+                // This is device/HAL dependent; do not force AGC, which can amplify room noise.
+                initializationHandler = { audioRecordBuilder, _ ->
+                    audioRecordBuilder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                }
+            }
         )
         // A user stop can race with an in-flight reconnect/start operation.
         // Re-check after the SDK has finished initializing its audio pipeline.
