@@ -934,12 +934,20 @@ This is a distinct approach from the secretary-originated call/bridge above and 
 
 This sequence is the working plan; a roadmap entry is not evidence that a feature has shipped.
 
-### Priority 1 — finish and validate the 0.11.7 power-management release
-1. Run the full CI suite on the final branch head: debug build, API 31 instrumentation, signed Release, permanent certificate verification and artifact upload.
-2. Verify the exact production package `ai.juanita.app`, versionName 0.11.7, versionCode 46 and unchanged permanent signing certificate.
-3. Validate alarm-owned voice cleanup on dismiss, snooze, timed stop and ring-count stop; confirm the microphone, foreground notification and CPU wake lock all terminate while unrelated manual calls remain unaffected.
-4. Confirm lifecycle-aware home/avatar/archive refresh pauses while the app is backgrounded; test that stale alarm full-screen intents cannot turn the display on.
-5. Physically validate alarm fire, snooze/dismiss, timed/ring-count stop, morning Live speech, reconnect failure cleanup, battery use and biometric behavior on Note10+ Android 12 and S22 Ultra Android 15.
+### Priority 1 — resolve speakerphone self-interruption and validate the 0.11.10 audio path
+1. Reproduce and instrument the confirmed route-dependent failure: speakerphone repeatedly interrupts Juanita; headphones remain stable.
+2. Audit the Firebase SDK-managed AudioRecord lifecycle and Android audio routing. Verify whether the device exposes AEC and NS and whether they are active for the actual capture session; do not infer activation from the requested `VOICE_COMMUNICATION` source.
+3. Verify Android communication mode, selected communication device, playback attributes and teardown/restore behavior. Add diagnostics that do not capture or persist raw audio.
+4. Prototype the smallest safe correction first. Preserve intentional barge-in; do not permanently disable interruptions to hide false positives. If the SDK does not expose the recorder session needed for explicit effects, prepare a separate custom AudioRecord/AEC/NS + Gemini Live pipeline prototype with a rollback path.
+5. Acceptance on Note10+ Android 12 and S22 Ultra Android 15: at least 30 minutes stable speakerphone conversation, no false self-interruptions, intentional user interruption still works, headphones remain stable, and all audio resources/routes are restored after stop, reconnect and service destruction.
+6. Separately complete alarm physical validation and the signed Release gate: exact package `ai.juanita.app`, monotonically increasing versionCode, permanent certificate SHA-256 match, install-over-existing-app test without uninstall or data clearing. CI success alone is not device validation.
+
+### Priority 2 — local reminders and tasks (next new feature package)
+1. Add a dedicated encrypted local store, separate from conversation memories and Android calendar events.
+2. Support one-time and recurring reminders, task/checklist items, due dates, advance alerts, upcoming/overdue/completed views, complete/snooze/reschedule/delete.
+3. Add duplicate-delivery protection and recovery after process death, reboot, time-zone changes and exact-alarm permission changes.
+4. Add Gemini Live structured tools for create/list/update/complete/delete. Ask for confirmation whenever date, time, recurrence, task or action is ambiguous; never turn casual conversation into a reminder automatically.
+5. Integrate the manager into the existing Sveglia tab without removing or renaming any of the six tabs.
 
 ### Priority 2 — local reminders and tasks (next new feature package)
 1. Add a dedicated encrypted local store, separate from conversation memories and Android calendar events.
