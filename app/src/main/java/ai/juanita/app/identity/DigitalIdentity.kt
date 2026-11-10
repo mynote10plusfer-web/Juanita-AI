@@ -2,6 +2,9 @@ package ai.juanita.app.identity
 
 import java.util.UUID
 
+/** Shared memory is intentional: only the character configuration changes when switching identity. */
+const val SHARED_IDENTITY_MEMORY_NAMESPACE = "shared"
+
 /** Presentation used for self-reference and voice matching; it does not define personality. */
 enum class IdentityPresentation { FEMININE, MASCULINE }
 
@@ -62,7 +65,7 @@ data class DigitalIdentity(
     val personality: IdentityPersonality = IdentityPersonality(),
     val biography: String = "",
     val culturalDossier: CulturalDossier? = null,
-    val memoryNamespace: String = id,
+    val memoryNamespace: String = SHARED_IDENTITY_MEMORY_NAMESPACE,
     val createdAtMillis: Long = System.currentTimeMillis(),
     val updatedAtMillis: Long = System.currentTimeMillis(),
     val schemaVersion: Int = 1
