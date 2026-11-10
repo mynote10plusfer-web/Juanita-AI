@@ -52,8 +52,8 @@ data class CulturalDossier(
 )
 
 /**
- * One independently persisted digital identity. Its memory namespace is bound
- * to its immutable UUID and cannot be reassigned to another identity.
+ * One of at most two separately configured characters. Identity settings are
+ * stored independently; both intentionally use the common user-memory namespace.
  */
 data class DigitalIdentity(
     val id: String = UUID.randomUUID().toString(),
