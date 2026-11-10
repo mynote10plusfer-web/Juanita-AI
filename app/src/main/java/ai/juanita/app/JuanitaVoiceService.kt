@@ -384,9 +384,10 @@ class JuanitaVoiceService : Service() {
                 // AudioRecord.release() can block on some Android audio stacks. Never run
                 // SDK audio teardown on the service/UI main thread.
                 withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
+                // Restore Android routing immediately after the SDK releases its recorder.
+                audioRouteController.end()
                 releaseCpuWakeLock()
                 withTimeoutOrNull(5_000L) { assistant.stop() }
-                audioRouteController.end()
                 _state.value = "Microfono disattivato · salvataggio dei ricordi…"
                 updateNotification("Microfono disattivato · salvataggio in corso")
             } finally {
