@@ -10,6 +10,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -140,12 +141,12 @@ class DigitalIdentityStoreTest {
         val profile = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
             .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f))
         val instruction = profile.toSystemInstruction()
-        assert(instruction.contains("directness 90"))
-        assert(instruction.contains("patience 80"))
-        assert(instruction.contains("playfulness 20"))
-        assert(instruction.contains("does not determine personality"))
-        assert(instruction.contains("without aggression"))
-        assert(instruction.contains("never turn warmth or empathy into flattery"))
+        assertTrue(instruction.contains("directness 90"))
+        assertTrue(instruction.contains("patience 80"))
+        assertTrue(instruction.contains("playfulness 20"))
+        assertTrue(instruction.contains("does not determine personality"))
+        assertTrue(instruction.contains("without aggression"))
+        assertTrue(instruction.contains("never turn warmth or empathy into flattery"))
     }
 
     private fun identity(
