@@ -12,8 +12,8 @@ import android.util.Log
  * Places the app in Android's voice-communication mode for the lifetime of a
  * Gemini Live audio session, then restores the exact mode observed beforehand.
  *
- * We deliberately do not force speakerphone or select an output device: Android
- * and the user retain control of the current route (speaker, wired headset, BT).
+ * On Android 12+ we choose an available communication output, preferring a connected
+ * headset and falling back to the built-in speaker. The original selection is restored.
  */
 class VoiceAudioRouteController(context: Context) {
     private val audioManager = context.applicationContext.getSystemService(AudioManager::class.java)
@@ -27,6 +27,9 @@ class VoiceAudioRouteController(context: Context) {
             previousMode = audioManager.mode
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 previousCommunicationDevice = audioManager.communicationDevice
+            }
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 // Keep a connected headset when present; otherwise explicitly select the
                 // built-in loudspeaker so voice-communication playback and capture share
                 // Android's communication route and its available echo-processing path.
@@ -46,7 +49,6 @@ class VoiceAudioRouteController(context: Context) {
                     Log.w(TAG, "Android refused communication output route type=${selected.type}")
                 }
             }
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
 
             val outputs = runCatching {
                 audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
@@ -58,7 +60,10 @@ class VoiceAudioRouteController(context: Context) {
                 "Effect availability does not prove attachment to Firebase's recorder.")
         } catch (error: Exception) {
             Log.w(TAG, "Could not enter Android communication audio mode", error)
+            val restoreMode = previousMode
             previousMode = null
+            previousCommunicationDevice = null
+            if (restoreMode != null) runCatching { audioManager.mode = restoreMode }
         }
     }
 
