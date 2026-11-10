@@ -83,6 +83,30 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
+    fun regionalOriginAndCharacterTraitsRemainSeparateWhileMemoryNamespaceIsShared() {
+        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+            .copy(personality = IdentityPersonality(warmth = 0.95f, humour = 0.8f))
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Canarias", "Tenerife", "Canario")
+            .copy(personality = IdentityPersonality(warmth = 0.35f, humour = 0.2f))
+        store.create(juanita)
+        store.create(jose)
+
+        store.update(juanita.copy(
+            origin = CulturalOrigin("ES", "España", "Canarias", "Tenerife", "Canario"),
+            personality = juanita.personality.copy(warmth = 0.99f)
+        ))
+
+        val updatedJuanita = store.get(juanita.id)!!
+        val unchangedJose = store.get(jose.id)!!
+        assertEquals("Canarias", updatedJuanita.origin.region)
+        assertEquals(0.99f, updatedJuanita.personality.warmth, 0.001f)
+        assertEquals("Canarias", unchangedJose.origin.region)
+        assertEquals(0.35f, unchangedJose.personality.warmth, 0.001f)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, updatedJuanita.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, unchangedJose.memoryNamespace)
+    }
+
+    @Test
     fun onlyOneConfigurationPerCharacterIsAllowedAndBothUseSharedMemory() {
         val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
         val secondJuanita = identity("Juanita paisa", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
