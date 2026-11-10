@@ -69,6 +69,14 @@ fun DigitalIdentitySection(
     var humour by remember { mutableStateOf(0.6f) }
     var curiosity by remember { mutableStateOf(0.8f) }
     var seriousness by remember { mutableStateOf(0.5f) }
+    var directness by remember { mutableStateOf(0.55f) }
+    var sociability by remember { mutableStateOf(0.6f) }
+    var spontaneity by remember { mutableStateOf(0.55f) }
+    var patience by remember { mutableStateOf(0.7f) }
+    var optimism by remember { mutableStateOf(0.65f) }
+    var assertiveness by remember { mutableStateOf(0.5f) }
+    var playfulness by remember { mutableStateOf(0.6f) }
+    var discretion by remember { mutableStateOf(0.75f) }
 
     fun resetForm() {
         editingId = null
@@ -86,6 +94,14 @@ fun DigitalIdentitySection(
         humour = 0.6f
         curiosity = 0.8f
         seriousness = 0.5f
+        directness = 0.55f
+        sociability = 0.6f
+        spontaneity = 0.55f
+        patience = 0.7f
+        optimism = 0.65f
+        assertiveness = 0.5f
+        playfulness = 0.6f
+        discretion = 0.75f
     }
 
     fun loadForEdit(identity: DigitalIdentity) {
@@ -104,6 +120,14 @@ fun DigitalIdentitySection(
         humour = identity.personality.humour
         curiosity = identity.personality.curiosity
         seriousness = identity.personality.seriousness
+        directness = identity.personality.directness
+        sociability = identity.personality.sociability
+        spontaneity = identity.personality.spontaneity
+        patience = identity.personality.patience
+        optimism = identity.personality.optimism
+        assertiveness = identity.personality.assertiveness
+        playfulness = identity.personality.playfulness
+        discretion = identity.personality.discretion
         message = "Stai modificando ${identity.displayName}."
     }
 
@@ -182,6 +206,15 @@ fun DigitalIdentitySection(
                 TraitControl("Umorismo", humour, { humour = it })
                 TraitControl("Curiosità", curiosity, { curiosity = it })
                 TraitControl("Serietà", seriousness, { seriousness = it })
+                Text("MODO DI RELAZIONARSI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                TraitControl("Franchezza", directness, { directness = it })
+                TraitControl("Socievolezza", sociability, { sociability = it })
+                TraitControl("Spontaneità", spontaneity, { spontaneity = it })
+                TraitControl("Pazienza", patience, { patience = it })
+                TraitControl("Ottimismo realistico", optimism, { optimism = it })
+                TraitControl("Assertività", assertiveness, { assertiveness = it })
+                TraitControl("Giocosità", playfulness, { playfulness = it })
+                TraitControl("Riservatezza", discretion, { discretion = it })
                 Button(
                     onClick = {
                         if (name.isBlank() || countryName.isBlank() || languageTag.isBlank()) {
@@ -196,7 +229,12 @@ fun DigitalIdentitySection(
                                 origin = CulturalOrigin(countryCode.trim(), countryName.trim(), region.trim(), locality.trim(), community.trim()),
                                 preferredLanguageTag = languageTag.trim(),
                                 languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
-                                personality = IdentityPersonality(warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness),
+                                personality = IdentityPersonality(
+                                    warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness,
+                                    directness = directness, sociability = sociability, spontaneity = spontaneity,
+                                    patience = patience, optimism = optimism, assertiveness = assertiveness,
+                                    playfulness = playfulness, discretion = discretion
+                                ),
                                 biography = biography.trim(),
                                 culturalDossier = existing?.culturalDossier,
                                 memoryNamespace = identityId,
