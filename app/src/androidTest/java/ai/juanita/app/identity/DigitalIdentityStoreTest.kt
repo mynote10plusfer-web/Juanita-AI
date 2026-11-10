@@ -169,7 +169,7 @@ class DigitalIdentityStoreTest {
         assertFalse(base.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
         val approved = base.copy(culturalDossier = dossiers.first().copy(approvedAtMillis = 123L))
         assertTrue(approved.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
-        assertTrue(approved.toSystemInstruction().contains("vos, tú e usted"))
+        assertTrue(approved.toSystemInstruction().contains("Vos, tú e usted"))
     }
 
     @Test
@@ -198,8 +198,8 @@ class DigitalIdentityStoreTest {
 
         val feminineInstruction = feminine.toSystemInstruction()
         val masculineInstruction = masculine.toSystemInstruction()
-        assertTrue(feminineInstruction.contains("vos, tú e usted"))
-        assertTrue(masculineInstruction.contains("vos, tú e usted"))
+        assertTrue(feminineInstruction.contains("Vos, tú e usted"))
+        assertTrue(masculineInstruction.contains("Vos, tú e usted"))
         assertTrue(feminineInstruction.contains("feminine grammatical self-reference"))
         assertTrue(masculineInstruction.contains("masculine grammatical self-reference"))
         assertEquals(feminine.culturalDossier, masculine.culturalDossier)
