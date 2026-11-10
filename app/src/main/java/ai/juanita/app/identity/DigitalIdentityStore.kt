@@ -31,6 +31,11 @@ class DigitalIdentityStore(context: Context) {
         val normalized = normalize(identity)
         val file = fileFor(normalized.id)
         require(!file.exists()) { "Esiste già un'identità con questo ID." }
+        val saved = list()
+        require(saved.size < 2) { "Sono consentite soltanto due configurazioni: Juanita e José." }
+        require(saved.none { it.presentation == normalized.presentation }) {
+            "Esiste già la configurazione ${canonicalName(normalized.presentation)}. Modificala per cambiare origine o carattere regionale."
+        }
         writeEncrypted(file, identityToJson(normalized))
         return normalized
     }
@@ -40,6 +45,9 @@ class DigitalIdentityStore(context: Context) {
         val normalized = normalize(identity.copy(updatedAtMillis = System.currentTimeMillis()))
         val file = fileFor(normalized.id)
         require(file.exists()) { "L'identità da modificare non esiste." }
+        require(list().none { it.id != normalized.id && it.presentation == normalized.presentation }) {
+            "Esiste già la configurazione ${canonicalName(normalized.presentation)}."
+        }
         writeEncrypted(file, identityToJson(normalized))
         return normalized
     }
@@ -82,11 +90,12 @@ class DigitalIdentityStore(context: Context) {
         require(identity.displayName.isNotBlank()) { "Il nome dell'identità è obbligatorio." }
         require(identity.origin.countryName.isNotBlank()) { "Il paese di origine è obbligatorio." }
         require(identity.preferredLanguageTag.isNotBlank()) { "La lingua preferita è obbligatoria." }
-        require(identity.memoryNamespace == identity.id) { "Lo spazio di memoria deve appartenere all'ID dell'identità." }
+        require(identity.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE || identity.memoryNamespace == identity.id) { "Spazio di memoria non riconosciuto." }
         require(identity.schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata." }
         val traits = identity.personality
         return identity.copy(
-            displayName = identity.displayName.trim(),
+            displayName = canonicalName(identity.presentation),
+            memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             preferredLanguageTag = identity.preferredLanguageTag.trim(),
             languages = identity.languages.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
             biography = identity.biography.trim(),
@@ -109,6 +118,9 @@ class DigitalIdentityStore(context: Context) {
             )
         )
     }
+
+    private fun canonicalName(presentation: IdentityPresentation): String =
+        if (presentation == IdentityPresentation.MASCULINE) "José" else "Juanita"
 
     private fun fileFor(identityId: String): File {
         UUID.fromString(identityId)
@@ -250,7 +262,8 @@ class DigitalIdentityStore(context: Context) {
             ),
             biography = json.optString("biography"),
             culturalDossier = dossierJson?.let(::dossierFromJson),
-            memoryNamespace = json.optString("memoryNamespace", json.getString("id")),
+            // Older C2 profiles used an identity UUID here. Normalize them to the shared namespace.
+            memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             createdAtMillis = json.optLong("createdAtMillis", 0L),
             updatedAtMillis = json.optLong("updatedAtMillis", 0L),
             schemaVersion = SCHEMA_VERSION
