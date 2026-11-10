@@ -2,15 +2,15 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona" ]
   pull_request:
-    branches: [ "main", "feature/digital-character-engine-phase-c1" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence" ]
   workflow_dispatch:
 
 concurrency:
   group: android-build-${{ github.ref }}
   # Keep only the newest validation run for a branch/PR.
-  # Phase C1-C3 validate character, cultural dossier approval and controlled-presence policy.
+  # Phase C1-C3 plus shared-memory/single-active-character invariants are validated.
   cancel-in-progress: true
 
 permissions:
