@@ -117,8 +117,10 @@ class JuanitaVoiceService : Service() {
                     this,
                     NOTIFICATION_ID,
                     buildNotification("Connessione a Gemini Live…"),
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                    } else 0
                 )
                 if (stopJob?.isActive == true) {
                     _state.value = "Attendi la chiusura della conversazione precedente"
@@ -357,7 +359,13 @@ class JuanitaVoiceService : Service() {
                 return START_NOT_STICKY
             }
         }
-        return START_NOT_STICKY
+        // If Android reclaims the process, ask it to redeliver the explicit user-started
+        // session intent. The encrypted continuity snapshot is loaded by the normal start path.
+        return if (intent?.action == ACTION_START && startRequested) {
+            START_REDELIVER_INTENT
+        } else {
+            START_NOT_STICKY
+        }
     }
 
     /**
@@ -500,8 +508,9 @@ class JuanitaVoiceService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Swiping Juanita away from Recents is an explicit end-of-session action.
-        requestStop()
+        // Removing the launcher task is not an explicit request to end a voice conversation.
+        // The started foreground service must keep running while another app is in front
+        // or the display is off. The notification's "Termina" action remains the stop control.
         super.onTaskRemoved(rootIntent)
     }
 
