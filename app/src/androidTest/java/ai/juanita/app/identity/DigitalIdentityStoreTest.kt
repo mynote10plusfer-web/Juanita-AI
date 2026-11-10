@@ -188,6 +188,24 @@ class DigitalIdentityStoreTest {
         assertFalse(revoked.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
     }
 
+    @Test
+    fun sameRegionalDossierAppliesToMasculineAndFeminineIdentitiesWithoutChangingTheirPresentation() {
+        val dossier = CulturalDossierCatalog.dossiers.first().copy(approvedAtMillis = 123L)
+        val feminine = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(culturalDossier = dossier)
+        val masculine = identity("Jose", IdentityPresentation.MASCULINE, "CO", "Colombia")
+            .copy(culturalDossier = dossier)
+
+        val feminineInstruction = feminine.toSystemInstruction()
+        val masculineInstruction = masculine.toSystemInstruction()
+        assertTrue(feminineInstruction.contains("Vos, tú e usted"))
+        assertTrue(masculineInstruction.contains("Vos, tú e usted"))
+        assertTrue(feminineInstruction.contains("feminine grammatical self-reference"))
+        assertTrue(masculineInstruction.contains("masculine grammatical self-reference"))
+        assertEquals(feminine.culturalDossier, masculine.culturalDossier)
+        assertEquals(feminine.origin, masculine.origin)
+    }
+
     private fun identity(
         name: String,
         presentation: IdentityPresentation,
