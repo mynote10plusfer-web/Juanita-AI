@@ -2,9 +2,9 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1" ]
   workflow_dispatch:
 
 concurrency:
