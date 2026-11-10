@@ -125,13 +125,27 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
-    fun existingIdentityDefaultsRemainCompatible() {
+    fun newIdentityReceivesDefinedCharacterDefaults() {
         val original = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
         store.create(original)
         val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
         assertEquals(0.55f, restored.personality.directness, 0.001f)
         assertEquals(0.6f, restored.personality.sociability, 0.001f)
         assertEquals(0.75f, restored.personality.discretion, 0.001f)
+    }
+
+
+    @Test
+    fun systemInstructionTurnsCharacterTraitsIntoBehaviorAndRejectsStereotypes() {
+        val profile = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+            .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f))
+        val instruction = profile.toSystemInstruction()
+        assert(instruction.contains("directness 90"))
+        assert(instruction.contains("patience 80"))
+        assert(instruction.contains("playfulness 20"))
+        assert(instruction.contains("does not determine personality"))
+        assert(instruction.contains("without aggression"))
+        assert(instruction.contains("never turn warmth or empathy into flattery"))
     }
 
     private fun identity(
