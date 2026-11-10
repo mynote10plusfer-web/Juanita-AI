@@ -176,6 +176,8 @@ class DigitalIdentityStoreTest {
         assertTrue(instruction.contains("patience 80"))
         assertTrue(instruction.contains("playfulness 20"))
         assertTrue(instruction.contains("does not determine personality"))
+        assertTrue(instruction.contains("same encrypted knowledge"))
+        assertTrue(instruction.contains("does not merge character personalities"))
         assertTrue(instruction.contains("without aggression"))
         assertTrue(instruction.contains("never turn warmth or empathy into flattery"))
     }
