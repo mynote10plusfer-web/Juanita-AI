@@ -4,6 +4,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import android.graphics.Bitmap
 import android.media.MediaRecorder
+import android.media.AudioAttributes
 import com.google.firebase.ai.type.ActivityDetectionConfig
 import com.google.firebase.ai.type.RealtimeInputConfig
 import com.google.firebase.ai.type.liveAudioConversationConfig
@@ -359,8 +360,17 @@ class GeminiLiveAssistant {
                 // Ask Android's voice-communication capture path for hardware/platform
                 // acoustic echo cancellation (speaker bleed) and noise suppression.
                 // This is device/HAL dependent; do not force AGC, which can amplify room noise.
-                initializationHandler = { audioRecordBuilder, _ ->
+                initializationHandler = { audioRecordBuilder, audioTrackBuilder ->
+                    // Input: ask Android's communication capture path for its voice-processing
+                    // chain. Output: tag Gemini speech as communication audio as well, so the
+                    // platform AEC can use the rendered assistant signal as its echo reference.
                     audioRecordBuilder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                    audioTrackBuilder.setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
                 }
             }
         )
