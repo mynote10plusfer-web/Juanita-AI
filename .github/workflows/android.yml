@@ -10,6 +10,7 @@ on:
 concurrency:
   group: android-build-${{ github.ref }}
   # Keep only the newest validation run for a branch/PR.
+  # Phase C1 includes encrypted character-profile persistence and prompt regression tests.
   cancel-in-progress: true
 
 permissions:
