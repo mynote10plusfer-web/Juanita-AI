@@ -97,7 +97,15 @@ class DigitalIdentityStore(context: Context) {
                 expressiveness = traits.expressiveness.coerceIn(0f, 1f),
                 formality = traits.formality.coerceIn(0f, 1f),
                 empathy = traits.empathy.coerceIn(0f, 1f),
-                seriousness = traits.seriousness.coerceIn(0f, 1f)
+                seriousness = traits.seriousness.coerceIn(0f, 1f),
+                directness = traits.directness.coerceIn(0f, 1f),
+                sociability = traits.sociability.coerceIn(0f, 1f),
+                spontaneity = traits.spontaneity.coerceIn(0f, 1f),
+                patience = traits.patience.coerceIn(0f, 1f),
+                optimism = traits.optimism.coerceIn(0f, 1f),
+                assertiveness = traits.assertiveness.coerceIn(0f, 1f),
+                playfulness = traits.playfulness.coerceIn(0f, 1f),
+                discretion = traits.discretion.coerceIn(0f, 1f)
             )
         )
     }
@@ -168,6 +176,14 @@ class DigitalIdentityStore(context: Context) {
             put("formality", identity.personality.formality.toDouble())
             put("empathy", identity.personality.empathy.toDouble())
             put("seriousness", identity.personality.seriousness.toDouble())
+            put("directness", identity.personality.directness.toDouble())
+            put("sociability", identity.personality.sociability.toDouble())
+            put("spontaneity", identity.personality.spontaneity.toDouble())
+            put("patience", identity.personality.patience.toDouble())
+            put("optimism", identity.personality.optimism.toDouble())
+            put("assertiveness", identity.personality.assertiveness.toDouble())
+            put("playfulness", identity.personality.playfulness.toDouble())
+            put("discretion", identity.personality.discretion.toDouble())
         })
         put("biography", identity.biography)
         put("culturalDossier", identity.culturalDossier?.let(::dossierToJson) ?: JSONObject.NULL)
@@ -222,7 +238,15 @@ class DigitalIdentityStore(context: Context) {
                 expressiveness = personality.optDouble("expressiveness", 0.7).toFloat(),
                 formality = personality.optDouble("formality", 0.3).toFloat(),
                 empathy = personality.optDouble("empathy", 0.8).toFloat(),
-                seriousness = personality.optDouble("seriousness", 0.5).toFloat()
+                seriousness = personality.optDouble("seriousness", 0.5).toFloat(),
+                directness = personality.optDouble("directness", 0.55).toFloat(),
+                sociability = personality.optDouble("sociability", 0.6).toFloat(),
+                spontaneity = personality.optDouble("spontaneity", 0.55).toFloat(),
+                patience = personality.optDouble("patience", 0.7).toFloat(),
+                optimism = personality.optDouble("optimism", 0.65).toFloat(),
+                assertiveness = personality.optDouble("assertiveness", 0.5).toFloat(),
+                playfulness = personality.optDouble("playfulness", 0.6).toFloat(),
+                discretion = personality.optDouble("discretion", 0.75).toFloat()
             ),
             biography = json.optString("biography"),
             culturalDossier = dossierJson?.let(::dossierFromJson),
