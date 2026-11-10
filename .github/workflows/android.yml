@@ -2,14 +2,15 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1" ]
   workflow_dispatch:
 
 concurrency:
   group: android-build-${{ github.ref }}
   # Keep only the newest validation run for a branch/PR.
+  # Phase C1 includes encrypted character-profile persistence and prompt regression tests.
   cancel-in-progress: true
 
 permissions:
