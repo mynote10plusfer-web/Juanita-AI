@@ -1398,3 +1398,18 @@ Audit findings and fixes:
 - Declared the service as both `microphone` and `mediaPlayback` foreground types because Gemini Live is a full-duplex audio session.
 - Active explicit start intents use `START_REDELIVER_INTENT` so Android can restart and redeliver the session request after reclaiming the process. The service re-enters its normal startup path and carries forward the encrypted continuity snapshot. This does not promise recovery after force-stop, user-initiated stop, or OEM battery restrictions.
 - Device acceptance: test foreground → Home → another app → screen off → screen on → reopen Juanita; separately remove the task from Recents; verify the voice session and stop notification remain active. Test on Note10+ Android 12 and S22 Ultra Android 15. Check Samsung app battery mode if audio still stops.
+
+
+## 2026-11-10 — Digital Identity Engine Phase A/B
+
+**PHASE A CI: PASSED. PHYSICAL DEVICE ACCEPTANCE: PENDING. PHASE B: ARCHITECTURE AUDIT COMPLETE; IMPLEMENTATION PLAN OPEN.**
+
+- PR #35 adds encrypted identity metadata and the local identity manager. GitHub Actions run [42876603252](https://github.com/mynote10plusfer-web/Juanita-AI/actions/runs/42876603252) completed successfully: debug APK build, instrumentation-test compilation and API 31 instrumentation execution all passed.
+- This does not establish physical Samsung behavior or release-signature compatibility.
+- A source audit found that Phase A's identity cards are not yet connected to Gemini Live. The current voice runtime still receives one global PersonaProfile instruction and one global EncryptedMemoryStore.
+- Connecting a selector before isolating the conversation store would cause identity memory leakage. Phase B therefore begins with namespaced encrypted memory storage, preserving the exact legacy namespace for the existing user data.
+- Phase B plan: `docs/DIGITAL_IDENTITY_PHASE_B_PLAN.md`, branch `feature/digital-identity-engine-phase-b`.
+- Implementation order: B1 isolated storage → B2 persisted active identity selector → B3 Live session binding at the instruction/context boundary → B4 inspectable/deletable identity memories.
+- Preserve all six existing tabs (Home, Avatar, Sveglia, Settaggi, Memoria, Altro), the package/signing identity, the existing personal profile and the SDK-managed audio pipeline.
+- No language expansion, online cultural research, emotional-state engine or avatar work is mixed into Phase B. No paid services or billing.
+- PR #35 remains draft/unmerged; Phase B is a separate branch based on its exact head. No merge, release or replacement APK without explicit user approval.
