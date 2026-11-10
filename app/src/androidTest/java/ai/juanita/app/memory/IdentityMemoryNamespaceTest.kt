@@ -1,11 +1,12 @@
 package ai.juanita.app.memory
 
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import java.util.UUID
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -13,55 +14,54 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class IdentityMemoryNamespaceTest {
     @Test
-    fun identityNamespacesDoNotShareMemoriesOrConversationArchives() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val juanitaId = UUID.randomUUID().toString()
-        val joseId = UUID.randomUUID().toString()
-        val sessionId = "identity-session-${UUID.randomUUID()}"
-        val juanita = EncryptedMemoryStore(context, juanitaId)
-        val jose = EncryptedMemoryStore(context, joseId)
+    fun everyCharacterConfigurationReadsAndWritesTheSameEncryptedMemory() {
+        val context = isolatedContext()
+        val juanitaMemory = EncryptedMemoryStore(context)
+        val joseMemory = EncryptedMemoryStore(context)
+        val tokenFromJuanita = "Conoscenza condivisa Juanita ${UUID.randomUUID()}"
+        val tokenFromJose = "Conoscenza condivisa Jose ${UUID.randomUUID()}"
+        val sessionId = "shared-session-${UUID.randomUUID()}"
 
         try {
-            juanita.addMemory("Ricordo esclusivo Juanita ${UUID.randomUUID()}")
-            juanita.appendConversationTurn(sessionId, "USER", "Conversazione privata Juanita")
+            juanitaMemory.addMemory(tokenFromJuanita)
+            juanitaMemory.appendConversationTurn(sessionId, "USER", "Conversazione iniziata con Juanita")
 
-            assertEquals(1, juanita.listMemories().size)
-            assertTrue(juanita.listMemories().single().text.startsWith("Ricordo esclusivo Juanita"))
-            assertTrue(jose.listMemories().isEmpty())
-            assertTrue(juanita.listConversationTurns(sessionId).isNotEmpty())
-            assertTrue(jose.listConversationTurns(sessionId).isEmpty())
+            assertTrue(joseMemory.listMemories().any { it.text == tokenFromJuanita })
+            assertTrue(joseMemory.listConversationTurns(sessionId).any { it.text == "Conversazione iniziata con Juanita" })
 
-            jose.addMemory("Ricordo esclusivo José ${UUID.randomUUID()}")
-            assertEquals(1, jose.listMemories().size)
-            assertEquals(1, juanita.listMemories().size)
+            joseMemory.addMemory(tokenFromJose)
+            joseMemory.appendConversationTurn(sessionId, "ASSISTANT", "Risposta di José")
+
+            assertTrue(juanitaMemory.listMemories().any { it.text == tokenFromJose })
+            assertTrue(juanitaMemory.listConversationTurns(sessionId).any { it.text == "Risposta di José" })
+            assertEquals(2, juanitaMemory.listMemories().count { it.text.startsWith("Conoscenza condivisa") })
         } finally {
-            juanita.clearAll()
-            jose.clearAll()
+            juanitaMemory.clearAll()
         }
     }
 
     @Test
-    fun identityNamespaceSurvivesStoreRecreationAndDoesNotChangeLegacyStore() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val identityId = UUID.randomUUID().toString()
-        val token = "Persistenza identità ${UUID.randomUUID()}"
-        val identityStore = EncryptedMemoryStore(context, identityId)
-        val legacyStore = EncryptedMemoryStore(context)
-
+    fun sharedMemorySurvivesStoreRecreationAndRemainsIndependentFromCharacterProfiles() {
+        val context = isolatedContext()
+        val token = "Persistenza memoria comune ${UUID.randomUUID()}"
         try {
-            identityStore.addMemory(token)
-            assertTrue(EncryptedMemoryStore(context, identityId).listMemories().any { it.text == token })
-            assertFalse(legacyStore.listMemories().any { it.text == token })
+            EncryptedMemoryStore(context).addMemory(token)
+            assertTrue(EncryptedMemoryStore(isolatedContext()).listMemories().any { it.text == token })
         } finally {
-            EncryptedMemoryStore(context, identityId).clearAll()
+            EncryptedMemoryStore(context).clearAll()
         }
     }
 
-    @Test
-    fun malformedIdentityNamespaceIsRejectedInsteadOfFallingBackToLegacy() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        assertThrows(IllegalArgumentException::class.java) {
-            EncryptedMemoryStore(context, "not-a-uuid")
+    private fun isolatedContext(): Context {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = File(target.cacheDir, "shared-memory-test").apply {
+            mkdirs()
+        }
+        return object : ContextWrapper(target) {
+            override fun getFilesDir(): File = directory
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                target.getSharedPreferences("test_shared_memory_${name}", mode)
         }
     }
 }
