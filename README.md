@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current development candidate: 0.11.10 (versionCode 49) — PR #31, draft
+## Current development candidate: 0.11.11 (versionCode 50) — PR #31, draft
 
-The cumulative 0.11.10 candidate includes the local multi-alarm manager, Gemini Live morning greeting, progressive personal profile, 30 gender-grouped Live voices, Juanita/José identity choice, background power cleanup and session-continuity recovery. Its audio candidate lowers server VAD sensitivity, uses a 700 ms silence window and requests Android `VOICE_COMMUNICATION` microphone capture while retaining voice interruptions. CI debug build and API 31 instrumentation tests passed, but the user reproduced self-interruption on the phone loudspeaker and confirmed stable conversation with headphones. This strongly implicates the speakerphone acoustic/routing path; it is not yet a proven AEC diagnosis or a completed fix. PR #31 remains draft/unmerged. Signed Release verification and physical tests are still required. Never install a debug APK as an in-place production update.
+The cumulative 0.11.11 candidate includes the local multi-alarm manager, Gemini Live morning greeting, progressive personal profile, 30 gender-grouped Live voices, Juanita/José identity choice, background power cleanup and session-continuity recovery. The 0.11.11 audio test candidate retains low-sensitivity server VAD and user interruptions, requests `VOICE_COMMUNICATION` capture, tags assistant playback as `USAGE_VOICE_COMMUNICATION`, and scopes `MODE_IN_COMMUNICATION` plus communication-device routing to the Live session with restoration at teardown. The route controller prefers an available headset, otherwise the built-in speaker. These changes aim to put both capture and playback on Android's communication path so supported platform echo processing can reference the assistant playback. The user must validate speakerphone stability and intentional barge-in on both Samsung phones; AEC attachment remains device/SDK-dependent and is not claimed as proven. PR #31 remains draft/unmerged. Signed Release verification and physical tests are still required. Never install a debug APK as an in-place production update.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
@@ -83,9 +83,9 @@ The microphone is activated only after the user grants permission and starts a L
 
 ## Current candidate status — 2026-11-10
 
-- PR #31 remains draft and unmerged. Current cumulative candidate is 0.11.10 / versionCode 49. Keep production application ID `ai.juanita.app`, permanent signing certificate and all local data unchanged.
-- The latest debug CI run (42776672921) passed Android debug APK build and API 31 instrumentation tests. It is not a signed production update; verify the permanent certificate and release artifact separately.
-- User device test: loudspeaker causes repeated self-interruptions; headphones do not. The confirmed observation is recorded in the canonical roadmap. Speakerphone echo/routing/AEC diagnostics are the immediate blocker; do not claim the voice fix complete.
+- PR #31 remains draft and unmerged. Current cumulative candidate is 0.11.11 / versionCode 50. Keep production application ID `ai.juanita.app`, permanent signing certificate and all local data unchanged.
+- The 0.11.11 audio-route changes are awaiting fresh CI validation. Any debug artifact is separate from the permanent-certificate-signed production update; verify the certificate and release artifact independently.
+- User device test on 2026-11-10: loudspeaker causes repeated self-interruptions; headphones do not. Candidate 0.11.11 now aligns Android input source, assistant playback usage and communication routing/mode, with route restoration. Physical testing remains the release gate; do not claim the voice fix complete before it passes.
 - Notification reading remains deferred after the earlier Play Protect block. Do not disable Play Protect or restore NotificationListenerService in this release.
 - Current tabs remain Home, Avatar, Sveglia, Settaggi, Memoria and Altro. Their source-level functions and remaining gaps are documented in the roadmap.
 - Next approved product area remains Juanita Personal Organizer: after voice/alarm reliability validation, implement encrypted local reminders/tasks, then extend the read-only Android calendar agenda. No paid APIs, subscriptions or billing without explicit approval.
