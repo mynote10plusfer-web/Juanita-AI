@@ -621,6 +621,7 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
         const val EXTRA_ALARM_ID = "extra_alarm_id"
         const val EXTRA_PREVIEW_DURATION_MS = "extra_preview_duration_ms"
+        const val EXTRA_IDENTITY_ID = "extra_digital_identity_id"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
 
