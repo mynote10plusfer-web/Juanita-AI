@@ -135,18 +135,14 @@ class JuanitaVoiceService : Service() {
                     sessionJob = serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
                         try {
-                            // Resolve and bind the persona-specific encrypted memory namespace
-                            // before loading continuity, archive or semantic context.
+                            // Resolve the one selected character for this session. All characters
+                            // intentionally read and write the same encrypted user-memory archive.
                             val selectedIdentity = identityId?.let { requestedId ->
                                 withContext(Dispatchers.IO) {
                                     DigitalIdentityStore(applicationContext).get(requestedId)
                                 } ?: throw IllegalStateException("L'identità selezionata non esiste più. Selezionala di nuovo nelle impostazioni.")
                             }
-                            memoryStore = if (selectedIdentity != null) {
-                                EncryptedMemoryStore(applicationContext, selectedIdentity.id)
-                            } else {
-                                EncryptedMemoryStore(applicationContext)
-                            }
+                            memoryStore = EncryptedMemoryStore(applicationContext)
                             automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
 
                             val conversationId = UUID.randomUUID().toString()
