@@ -20,6 +20,7 @@ import ai.juanita.app.audio.VoiceAudioRouteController
 import ai.juanita.app.alarm.JuanitaAlarmRingingService
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
+import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.profile.PersonalProfile
 import ai.juanita.app.profile.PersonalProfileStore
 import java.time.LocalDate
@@ -108,6 +109,7 @@ class JuanitaVoiceService : Service() {
                 val initialPrompt = intent.getStringExtra(EXTRA_INITIAL_PROMPT).orEmpty()
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
+                val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
                 if (instruction.isBlank()) {
                     _state.value = "Impossibile avviare: istruzioni mancanti"
                     stopSelf(startId)
@@ -133,6 +135,20 @@ class JuanitaVoiceService : Service() {
                     sessionJob = serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
                         try {
+                            // Resolve and bind the persona-specific encrypted memory namespace
+                            // before loading continuity, archive or semantic context.
+                            val selectedIdentity = identityId?.let { requestedId ->
+                                withContext(Dispatchers.IO) {
+                                    DigitalIdentityStore(applicationContext).get(requestedId)
+                                } ?: throw IllegalStateException("L'identità selezionata non esiste più. Selezionala di nuovo nelle impostazioni.")
+                            }
+                            memoryStore = if (selectedIdentity != null) {
+                                EncryptedMemoryStore(applicationContext, selectedIdentity.id)
+                            } else {
+                                EncryptedMemoryStore(applicationContext)
+                            }
+                            automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
+
                             val conversationId = UUID.randomUUID().toString()
                             activeConversationId = conversationId
                             // Carry the most recent interrupted conversation forward before
@@ -618,7 +634,7 @@ class JuanitaVoiceService : Service() {
         val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
         fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "",
-                  alarmId: String? = null, previewDurationMillis: Long = 0L) {
+                  alarmId: String? = null, previewDurationMillis: Long = 0L, identityId: String? = null) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_INSTRUCTION, instruction)
@@ -626,6 +642,7 @@ class JuanitaVoiceService : Service() {
                 putExtra(EXTRA_INITIAL_PROMPT, initialPrompt)
                 if (alarmId != null) putExtra(EXTRA_ALARM_ID, alarmId)
                 if (previewDurationMillis > 0L) putExtra(EXTRA_PREVIEW_DURATION_MS, previewDurationMillis)
+                if (identityId != null) putExtra(EXTRA_IDENTITY_ID, identityId)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }
