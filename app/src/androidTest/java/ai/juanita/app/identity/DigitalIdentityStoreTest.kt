@@ -40,7 +40,7 @@ class DigitalIdentityStoreTest {
     @Test
     fun identitiesPersistIndependentlyAcrossStoreRecreation() {
         val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
-        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Canarias", "Tenerife", "Canario")
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Andalucía", "Sevilla", "Andaluz")
 
         store.create(juanita)
         store.create(jose)
@@ -100,7 +100,7 @@ class DigitalIdentityStoreTest {
         val unchangedJose = store.get(jose.id)!!
         assertEquals("Canarias", updatedJuanita.origin.region)
         assertEquals(0.99f, updatedJuanita.personality.warmth, 0.001f)
-        assertEquals("Canarias", unchangedJose.origin.region)
+        assertEquals("Andalucía", unchangedJose.origin.region)
         assertEquals(0.35f, unchangedJose.personality.warmth, 0.001f)
         assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, updatedJuanita.memoryNamespace)
         assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, unchangedJose.memoryNamespace)
