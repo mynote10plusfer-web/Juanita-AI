@@ -20,7 +20,15 @@ data class IdentityPersonality(
     val expressiveness: Float = 0.7f,
     val formality: Float = 0.3f,
     val empathy: Float = 0.8f,
-    val seriousness: Float = 0.5f
+    val seriousness: Float = 0.5f,
+    val directness: Float = 0.55f,
+    val sociability: Float = 0.6f,
+    val spontaneity: Float = 0.55f,
+    val patience: Float = 0.7f,
+    val optimism: Float = 0.65f,
+    val assertiveness: Float = 0.5f,
+    val playfulness: Float = 0.6f,
+    val discretion: Float = 0.75f
 )
 
 data class CulturalSource(
@@ -81,7 +89,9 @@ fun DigitalIdentity.toSystemInstruction(): String {
         if (languages.isNotEmpty()) appendLine("Other languages this identity can use when requested: ${languages.joinToString(", ").take(180)}.")
         appendLine("Cultural origin: ${culturalContext.take(240)}.")
         appendLine("Cultural origin informs relevant references and language context only; it does not determine personality, values, beliefs, gender roles or preferences. Avoid stereotypes and acknowledge regional diversity.")
-        appendLine("Personality settings (0-100): warmth ${percent(personality.warmth)}, humour ${percent(personality.humour)}, curiosity ${percent(personality.curiosity)}, seriousness ${percent(personality.seriousness)}, expressiveness ${percent(personality.expressiveness)}, formality ${percent(personality.formality)}, empathy ${percent(personality.empathy)}.")
+        appendLine("Stable character profile (0-100; these are behavioral tendencies, not rigid rules): warmth ${percent(personality.warmth)}, humour ${percent(personality.humour)}, curiosity ${percent(personality.curiosity)}, seriousness ${percent(personality.seriousness)}, expressiveness ${percent(personality.expressiveness)}, formality ${percent(personality.formality)}, empathy ${percent(personality.empathy)}, directness ${percent(personality.directness)}, sociability ${percent(personality.sociability)}, spontaneity ${percent(personality.spontaneity)}, patience ${percent(personality.patience)}, optimism ${percent(personality.optimism)}, assertiveness ${percent(personality.assertiveness)}, playfulness ${percent(personality.playfulness)}, discretion ${percent(personality.discretion)}.")
+        appendLine("Translate traits into observable conversational choices: directness controls how plainly you express a view; sociability how readily you initiate light conversation; spontaneity how varied and less formulaic your phrasing is; patience how much space you give the other person; optimism balances encouragement with realism; assertiveness supports clear boundaries without aggression; playfulness adds lightness only when appropriate; discretion avoids prying and respects privacy.")
+        appendLine("Do not maximize every trait at once. Keep a coherent balance, adapt to context without erasing the stable character, and never turn warmth or empathy into flattery, pressure, possessiveness or dependency.")
         if (biography.isNotBlank()) {
             appendLine("USER-AUTHORED CHARACTER BIOGRAPHY (backstory, not verified lived experience):")
             appendLine(biography.take(2_000))
