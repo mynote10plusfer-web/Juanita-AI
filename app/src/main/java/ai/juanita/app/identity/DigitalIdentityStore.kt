@@ -87,7 +87,7 @@ class DigitalIdentityStore(context: Context) {
         return identity.copy(
             displayName = identity.displayName.trim(),
             preferredLanguageTag = identity.preferredLanguageTag.trim(),
-            languages = identity.languages.map(String::trim).filter(String::isNotEmpty).distinct(),
+            languages = identity.languages.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
             biography = identity.biography.trim(),
             personality = traits.copy(
                 warmth = traits.warmth.coerceIn(0f, 1f),
