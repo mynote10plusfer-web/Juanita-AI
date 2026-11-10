@@ -53,7 +53,8 @@ fun DigitalIdentitySection(
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
-    var deleteCandidate by remember { mutableStateOf<DigitalIdentity?>(null) }\n    var dossierTarget by remember { mutableStateOf<DigitalIdentity?>(null) }
+    var deleteCandidate by remember { mutableStateOf<DigitalIdentity?>(null) }
+    var dossierTarget by remember { mutableStateOf<DigitalIdentity?>(null) }
 
     var name by remember { mutableStateOf("Juanita") }
     var presentation by remember { mutableStateOf(IdentityPresentation.FEMININE) }
@@ -157,13 +158,17 @@ fun DigitalIdentitySection(
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(identity.displayName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         Text("${if (identity.presentation == IdentityPresentation.FEMININE) "Femminile" else "Maschile"} · ${identity.origin.countryName}${if (identity.origin.region.isNotBlank()) " · ${identity.origin.region}" else ""}${if (identity.origin.community.isNotBlank()) " · ${identity.origin.community}" else ""}", color = Color(0xFFB9BBC1), fontSize = 12.sp)
-                        if (identity.biography.isNotBlank()) Text(identity.biography, color = Color(0xFF9A9DA4), fontSize = 12.sp, maxLines = 3)\n                        identity.culturalDossier?.takeIf { it.approvedAtMillis != null }?.let { dossier ->\n                            Text("DOSSIER CULTURALE APPROVATO · v${dossier.version} · ${dossier.sources.size} fonti", color = Color(0xFF9BC7A5), fontSize = 10.sp, fontWeight = FontWeight.Bold)\n                        }
+                        if (identity.biography.isNotBlank()) Text(identity.biography, color = Color(0xFF9A9DA4), fontSize = 12.sp, maxLines = 3)
+                        identity.culturalDossier?.takeIf { it.approvedAtMillis != null }?.let { dossier ->
+                            Text("DOSSIER CULTURALE APPROVATO · v${dossier.version} · ${dossier.sources.size} fonti", color = Color(0xFF9BC7A5), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                         Text(
                             if (activeIdentityId == identity.id) "IDENTITÀ ATTIVA · usata nella prossima conversazione" else "Non attiva",
                             color = if (activeIdentityId == identity.id) gold else Color(0xFF9A9DA4),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        TextButton(onClick = { dossierTarget = identity }) { Text(if (identity.culturalDossier?.approvedAtMillis != null) "Esamina / modifica dossier culturale" else "Esamina dossier culturali") }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (activeIdentityId != identity.id) {
                                 TextButton(onClick = { onActiveIdentityChanged(identity.id); message = "${identity.displayName} sarà usata nella prossima conversazione." }) {
@@ -174,7 +179,7 @@ fun DigitalIdentitySection(
                                     Text("Usa profilo standard", color = gold)
                                 }
                             }
-                            TextButton(onClick = { dossierTarget = identity }) { Text(if (identity.culturalDossier?.approvedAtMillis != null) "Dossier culturale" else "Cultura") }\n                            TextButton(onClick = { loadForEdit(identity) }) { Text("Modifica", color = gold) }
+                            TextButton(onClick = { loadForEdit(identity) }) { Text("Modifica", color = gold) }
                             TextButton(onClick = { deleteCandidate = identity }) { Text("Elimina", color = Color(0xFFFF8A80)) }
                         }
                     }
