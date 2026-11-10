@@ -56,10 +56,11 @@ class DigitalIdentityStore(context: Context) {
     @Synchronized
     fun list(): List<DigitalIdentity> {
         if (!identitiesDirectory.exists()) return emptyList()
-        val files = identitiesDirectory.listFiles()
-            ?.filter { it.isFile && it.name.endsWith(FILE_SUFFIX) }
-            ?.sortedBy { it.name }
-            ?: return emptyList()
+        val listedFiles = identitiesDirectory.listFiles()
+            ?: throw IllegalStateException("Impossibile elencare l'archivio delle identità.")
+        val files = listedFiles
+            .filter { it.isFile && it.name.endsWith(FILE_SUFFIX) }
+            .sortedBy { it.name }
         // Fail closed if a stored identity cannot be decrypted; never silently discard it.
         return files.map { file ->
             val identity = identityFromJson(readEncrypted(file))
