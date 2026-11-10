@@ -127,3 +127,11 @@ The microphone is activated only after the user grants permission and starts a L
 - Main and avatar clocks update only while their Activity is RESUMED. Conversation archive refresh polling is also suspended outside the foreground.
 - If Gemini Live exhausts its reconnect attempts, the voice service now begins cleanup rather than retaining its foreground service and CPU wake lock indefinitely.
 - These are source-level fixes, not proof of battery improvement. Verify battery drain, screen wake behavior, microphone indicator and wake-lock release on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+## 0.11.12 candidate — background Live session continuity
+
+- A user-started Gemini Live session is not stopped when the launcher task is removed from Recents; the foreground service continues until the user taps **Termina** or explicitly ends the conversation in Juanita.
+- The voice foreground service declares both microphone capture and media playback, matching its duplex voice-call behavior.
+- The service returns `START_REDELIVER_INTENT` for an active explicit start so Android can redeliver the session start intent after reclaiming the app process. The normal startup path then restores the encrypted continuity snapshot before opening a fresh Live session.
+- This is best-effort recovery, not a guarantee against force-stop, user stop, Samsung deep sleep/power restrictions, loss of network, or server-side session expiry. Validate on Note10+ Android 12 and S22 Ultra Android 15 with Home, Recents removal, screen-off and long-duration tests. The service notification remains the visible stop control.
