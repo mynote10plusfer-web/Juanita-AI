@@ -1352,3 +1352,12 @@ Audit findings and fixes:
 - **Upstream risk:** Firebase issue #7942 describes AudioRecord worker-thread retention and CPU growth across reconnects on an RK3588 Android 12 device. It is not evidence that the Samsung devices have the same defect. Upstream PR #8030 proposes non-blocking AudioRecord reads and remains open; the app does not patch Firebase internals.
 - **Release identity:** `ai.juanita.app`, permanent signing certificate and local data remain unchanged. Candidate versionName `0.11.9`, versionCode `48`.
 - **Acceptance:** CI build and API 31 instrumentation must pass. Then run at least 30 minutes of continuous speech, including two planned Live renewals, user interruptions during assistant playback, and a temporary network loss. Repeat on Note10+ Android 12 and S22 Ultra Android 15. Check that the microphone indicator, CPU, thread count, audio and transcript continuity remain healthy. Do not call this fixed until physical tests pass.
+
+
+## Candidate 0.11.10 — physical audio validation (2026-11-10)
+- Candidate build: versionName `0.11.10`, versionCode `49`.
+- CI debug build and API 31 instrumentation passed; this is not a signed release.
+- Audio changes: Gemini Live VAD start/end sensitivity LOW, 40 ms prefix padding, 700 ms silence duration, interruptions retained, and Android `VOICE_COMMUNICATION` capture source requested through Firebase's audio initialization callback.
+- Device validation required before declaring the audio fix complete: install the permanent-certificate-signed APK as an in-place update on Galaxy Note10+ (Android 12) and Galaxy S22 Ultra (Android 15); test a 30-minute conversation, two session renewals, speaking over Juanita during playback, environmental noise, temporary network loss, and microphone release.
+- Do not uninstall the existing app, clear app data, change the package ID, or replace the permanent signing identity.
+- Do not claim that Samsung multi-microphone beamforming, explicit AEC, or NS is active merely because `VOICE_COMMUNICATION` was requested; verify on physical devices.
