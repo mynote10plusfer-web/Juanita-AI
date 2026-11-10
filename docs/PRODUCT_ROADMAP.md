@@ -1,6 +1,19 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-09 — cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. Current candidate: 0.11.8 / versionCode 47, with voice reconnect and continuity mitigations now under validation. Fresh CI and physical-device verification are required. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
+Last updated: 2026-11-10 — current stable candidate: 0.11.12 / versionCode 51 on PR #31. Voice continuity changes are in the candidate; CI passed, while extended physical-device validation remains ongoing. Fresh CI and physical-device verification are required. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
+
+
+## 2026-11-10 — Czech and Moravian language profiles
+
+**STATUS: IMPLEMENTED IN AN ISOLATED FEATURE BRANCH; CI AND NATIVE-SPEAKER/DEVICE VALIDATION PENDING.**
+
+Branch: `feature/czech-moravian-language-profiles`, based on the 0.11.12 candidate. The existing Czech language option (`cs-CZ`) is retained and two selectable regional profiles are added:
+- Standard Czech (spisovná čeština): contemporary grammar, diacritics, idiomatic word order and clear everyday phrasing.
+- Moravian Czech: subtle, context-appropriate regional vocabulary and colloquial phrasing, without treating Moravia as one uniform dialect, drifting into Slovak or caricaturing local speech.
+
+Both profiles guide Gemini Live comprehension/replies through the existing system-instruction architecture. The existing Spanish Canarian, Colombian Paisa and Sicilian profiles remain intact. The profile does not install a new acoustic voice model; actual spoken accent remains dependent on the selected Gemini voice and cannot be guaranteed by prompt instructions alone. Native-speaker review and physical voice tests are required before marking the feature fully verified.
+
+No new paid API, subscription, service, permission, data store or microphone/audio pipeline is introduced. Existing language preference storage is reused. No stable branch, package identity, signing key or user data is changed.
 
 ## 2026-11-09 — voice reconnect, device slowdown and continuity audit
 
