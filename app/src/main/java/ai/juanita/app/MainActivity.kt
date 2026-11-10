@@ -39,6 +39,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
 import androidx.compose.material3.TextButton
@@ -59,6 +60,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.juanita.app.ai.GeminiLiveAssistant
 import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.avatar.AvatarProfile
@@ -88,16 +92,47 @@ private data class RegionalDialect(
     val note: String
 )
 
-private data class LiveVoice(val id: String, val label: String, val quality: String)
+private data class LiveVoice(
+    val id: String,
+    val label: String,
+    val quality: String,
+    val gender: String
+)
 
 private val liveVoices = listOf(
-    LiveVoice("Kore", "Kore", "Equilibrata"),
-    LiveVoice("Aoede", "Aoede", "Fresca e leggera"),
-    LiveVoice("Sulafat", "Sulafat", "Calda e avvolgente"),
-    LiveVoice("Achernar", "Achernar", "Morbida e delicata"),
-    LiveVoice("Vindemiatrix", "Vindemiatrix", "Dolce e gentile"),
-    LiveVoice("Zephyr", "Zephyr", "Vivace e luminosa"),
-    LiveVoice("Pulcherrima", "Pulcherrima", "Decisa e presente")
+    // Voci femminili — catalogo Gemini Live
+    LiveVoice("Kore", "Kore", "Ferma ed equilibrata", "FEMMINILE"),
+    LiveVoice("Aoede", "Aoede", "Fresca e ariosa", "FEMMINILE"),
+    LiveVoice("Sulafat", "Sulafat", "Calda e avvolgente", "FEMMINILE"),
+    LiveVoice("Achernar", "Achernar", "Morbida e delicata", "FEMMINILE"),
+    LiveVoice("Vindemiatrix", "Vindemiatrix", "Dolce e gentile", "FEMMINILE"),
+    LiveVoice("Zephyr", "Zephyr", "Vivace e luminosa", "FEMMINILE"),
+    LiveVoice("Pulcherrima", "Pulcherrima", "Decisa e presente", "FEMMINILE"),
+    LiveVoice("Autonoe", "Autonoe", "Brillante", "FEMMINILE"),
+    LiveVoice("Callirrhoe", "Callirrhoe", "Rilassata e naturale", "FEMMINILE"),
+    LiveVoice("Despina", "Despina", "Morbida e fluida", "FEMMINILE"),
+    LiveVoice("Erinome", "Erinome", "Chiara", "FEMMINILE"),
+    LiveVoice("Gacrux", "Gacrux", "Matura", "FEMMINILE"),
+    LiveVoice("Laomedeia", "Laomedeia", "Vivace ed energica", "FEMMINILE"),
+    LiveVoice("Leda", "Leda", "Giovane e fresca", "FEMMINILE"),
+
+    // Voci maschili — catalogo Gemini Live
+    LiveVoice("Achird", "Achird", "Amichevole", "MASCHILE"),
+    LiveVoice("Algenib", "Algenib", "Profonda e roca", "MASCHILE"),
+    LiveVoice("Algieba", "Algieba", "Morbida e fluida", "MASCHILE"),
+    LiveVoice("Alnilam", "Alnilam", "Ferma e decisa", "MASCHILE"),
+    LiveVoice("Charon", "Charon", "Informativa e chiara", "MASCHILE"),
+    LiveVoice("Enceladus", "Enceladus", "Bassa e ariosa", "MASCHILE"),
+    LiveVoice("Fenrir", "Fenrir", "Energica", "MASCHILE"),
+    LiveVoice("Iapetus", "Iapetus", "Chiara", "MASCHILE"),
+    LiveVoice("Orus", "Orus", "Ferma e autorevole", "MASCHILE"),
+    LiveVoice("Puck", "Puck", "Vivace", "MASCHILE"),
+    LiveVoice("Rasalgethi", "Rasalgethi", "Informativa", "MASCHILE"),
+    LiveVoice("Sadachbia", "Sadachbia", "Vivace e dinamica", "MASCHILE"),
+    LiveVoice("Sadaltager", "Sadaltager", "Esperta e sicura", "MASCHILE"),
+    LiveVoice("Schedar", "Schedar", "Neutra ed equilibrata", "MASCHILE"),
+    LiveVoice("Umbriel", "Umbriel", "Rilassata e colloquiale", "MASCHILE"),
+    LiveVoice("Zubenelgenubi", "Zubenelgenubi", "Disinvolta e naturale", "MASCHILE")
 )
 
 private val voiceLanguages = listOf(
@@ -110,6 +145,24 @@ private val voiceLanguages = listOf(
 
 class MainActivity : ComponentActivity() {
     private lateinit var preferences: AssistantPreferences
+    private var keepScreenOnForCall = false
+
+    override fun onResume() {
+        super.onResume()
+        if (keepScreenOnForCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    override fun onPause() {
+        // Never let an active call keep the display awake after Juanita leaves the foreground.
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onPause()
+    }
+
+    fun setCallScreenKeepAwake(enabled: Boolean) {
+        keepScreenOnForCall = enabled
+        if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -119,6 +172,7 @@ class MainActivity : ComponentActivity() {
 
         val savedPersona = PersonaProfile(
             name = preferences.assistantName,
+            gender = preferences.assistantGender,
             irony = preferences.irony,
             sweetness = preferences.sweetness,
             sensuality = preferences.sensuality,
@@ -142,13 +196,15 @@ class MainActivity : ComponentActivity() {
                 },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
+                initialAssistantGender = preferences.assistantGender,
                 initialLiveVoiceName = preferences.liveVoiceName,
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
-                initialArchivedConversations = memoryStore.listArchivedConversations(),
+                // The archive is loaded asynchronously only when its tab is opened; do not scan/decrypt it during Activity composition.
+                initialArchivedConversations = emptyList(),
                 initialImprovementReports = memoryStore.listImprovementReports(),
                 onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
                     memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
@@ -182,6 +238,7 @@ class MainActivity : ComponentActivity() {
                     preferences.languageTag = languageTag
                 },
                 onNameChanged = { preferences.assistantName = it },
+                onIdentityChanged = { preferences.assistantGender = it },
                 onLiveVoiceChanged = { preferences.liveVoiceName = it },
                 onWakePhraseChanged = { preferences.wakePhrase = it },
                 onPersonaChanged = { profile ->
@@ -208,6 +265,7 @@ private fun JuanitaApp(
     onCompleteOnboarding: (List<String>) -> Unit,
     initialDialectId: String,
     initialName: String,
+    initialAssistantGender: String,
     initialLiveVoiceName: String,
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
@@ -243,6 +301,7 @@ private fun JuanitaApp(
     onLanguageSelected: (String) -> Unit,
     onDialectSelected: (String, String) -> Unit,
     onNameChanged: (String) -> Unit,
+    onIdentityChanged: (String) -> Unit,
     onLiveVoiceChanged: (String) -> Unit,
     onWakePhraseChanged: (String) -> Unit,
     onPersonaChanged: (PersonaProfile) -> Unit,
@@ -275,16 +334,51 @@ private fun JuanitaApp(
     var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
     var status by remember { mutableStateOf("Impostazioni salvate sul dispositivo") }
     var assistantName by remember { mutableStateOf(initialName) }
+    var assistantGender by remember { mutableStateOf(if (initialAssistantGender == "MASCHILE") "MASCHILE" else "FEMMINILE") }
+    var assistantGenderMenuExpanded by remember { mutableStateOf(false) }
     var wakePhrase by remember { mutableStateOf(initialWakePhrase) }
-    var persona by remember { mutableStateOf(initialPersona) }
+    var persona by remember { mutableStateOf(initialPersona.copy(name = initialName, gender = assistantGender)) }
+
+    val applyAssistantIdentity: (String) -> Unit = { requestedGender ->
+        val nextGender = if (requestedGender == "MASCHILE") "MASCHILE" else "FEMMINILE"
+        if (nextGender != assistantGender) {
+            val oldDefaultWakePhrase = if (assistantGender == "MASCHILE") "Hola José" else "Hola Juanita"
+            val nextName = if (nextGender == "MASCHILE") "José" else "Juanita"
+            val nextDefaultWakePhrase = "Hola $nextName"
+            if (wakePhrase.trim().equals(oldDefaultWakePhrase, ignoreCase = true)) {
+                wakePhrase = nextDefaultWakePhrase
+                onWakePhraseChanged(nextDefaultWakePhrase)
+            }
+            assistantGender = nextGender
+            onIdentityChanged(nextGender)
+            assistantName = nextName
+            onNameChanged(nextName)
+            persona = persona.copy(name = nextName, gender = nextGender)
+            onPersonaChanged(persona)
+            if (selectedLiveVoice.gender != nextGender) {
+                val nextVoice = liveVoices.first { it.gender == nextGender }
+                selectedLiveVoice = nextVoice
+                onLiveVoiceChanged(nextVoice.id)
+            }
+            status = "Identità $nextName salvata. Memorie e sveglie non sono state modificate."
+        }
+    }
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var selectedSection by remember { mutableStateOf("HOME") }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
-    LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                deviceDateTime = ZonedDateTime.now()
+                delay(1_000L)
+            }
+        }
+    }
     var cameraServiceBinder by remember { mutableStateOf<JuanitaVoiceService.LocalBinder?>(null) }
     val cameraServiceConnection = remember(context) {
         object : ServiceConnection {
@@ -314,11 +408,14 @@ private fun JuanitaApp(
     val hostActivity = context as? Activity
     DisposableEffect(hostActivity, callScreenVisible) {
         val window = hostActivity?.window
-        if (callScreenVisible) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+        (hostActivity as? MainActivity)?.setCallScreenKeepAwake(callScreenVisible)
+        onDispose { (hostActivity as? MainActivity)?.setCallScreenKeepAwake(false) }
     }
     var showFirstMeeting by remember { mutableStateOf(!initialOnboardingCompleted) }
+    var showPermissionOnboarding by remember {
+        mutableStateOf(!context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
+            .getBoolean("onboarding_completed", false))
+    }
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
@@ -351,16 +448,7 @@ private fun JuanitaApp(
             locationContext = result.orEmpty()
             locationStatus = if (result.isNullOrBlank()) "Permesso attivo · posizione non ancora disponibile" else "Posizione disponibile per Juanita"
         } else {
-            val permissionPrefs = context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
-            if (!permissionPrefs.getBoolean("location_permission_requested", false)) {
-                permissionPrefs.edit().putBoolean("location_permission_requested", true).apply()
-                locationPermissionLauncher.launch(arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                ))
-            } else {
-                locationStatus = "Permesso posizione non concesso · puoi abilitarlo dalle impostazioni Android"
-            }
+            locationStatus = "Posizione facoltativa non autorizzata · puoi abilitarla in Permessi e accessi"
         }
     }
     val livePermissionLauncher = rememberLauncherForActivityResult(
@@ -398,6 +486,27 @@ private fun JuanitaApp(
         } else liveStartError = "Permesso microfono negato"
     }
 
+    val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
+                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
+            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
+                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, ${if (assistantGender == "MASCHILE") "pronto" else "pronta"} ad accompagnarti con calma e con il sorriso.",
+                previewDurationMillis = 15_000L)
+            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
+        } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
+    }
+    val startVoicePreview = {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
+                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
+            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
+                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
+                previewDurationMillis = 15_000L)
+            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
+        } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
     val speechLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -455,11 +564,66 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "SETTINGS") {
+                SettingsCard(panel, gold, "PERMESSI E ACCESSI") {
+                    fun permissionState(permission: String): String =
+                        if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) "Autorizzato" else "Non autorizzato"
+                    Text("Microfono: ${permissionState(Manifest.permission.RECORD_AUDIO)}", color = Color.White, fontSize = 12.sp)
+                    Text("Posizione: ${if (permissionState(Manifest.permission.ACCESS_FINE_LOCATION) == "Autorizzato" || permissionState(Manifest.permission.ACCESS_COARSE_LOCATION) == "Autorizzato") "Autorizzata" else "Facoltativa · non autorizzata"}", color = Color.White, fontSize = 12.sp)
+                    Text("Calendario: ${permissionState(Manifest.permission.READ_CALENDAR)}", color = Color.White, fontSize = 12.sp)
+                    Text("Fotocamera: ${permissionState(Manifest.permission.CAMERA)}", color = Color.White, fontSize = 12.sp)
+                    Text("Notifiche: ${if (android.os.Build.VERSION.SDK_INT < 33 || permissionState(Manifest.permission.POST_NOTIFICATIONS) == "Autorizzato") "Autorizzate" else "Non autorizzate"}", color = Color.White, fontSize = 12.sp)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        Text("Orari esatti: ${if (context.getSystemService(android.app.AlarmManager::class.java).canScheduleExactAlarms()) "Autorizzati" else "Da autorizzare"}", color = Color.White, fontSize = 12.sp)
+                    }
+                    if (android.os.Build.VERSION.SDK_INT >= 34) {
+                        Text("Sveglia a schermo intero: ${if (context.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()) "Autorizzata" else "Da autorizzare"}", color = Color.White, fontSize = 12.sp)
+                    }
+                    Button(onClick = { showPermissionOnboarding = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Rivedi guida permessi") }
+                    Button(onClick = {
+                        val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = android.net.Uri.parse("package:${context.packageName}")
+                        }
+                        runCatching { context.startActivity(intent) }
+                    }, modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Apri impostazioni permessi") }
+                    Text("Puoi revocare o modificare gli accessi in qualsiasi momento. Le funzioni facoltative non bloccano il resto dell'app.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                }
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Identità dell'assistente", color = Color.White)
+                            Text(
+                                if (assistantGender == "MASCHILE") "José · maschile" else "Juanita · femminile",
+                                color = Color(0xFF9A9DA4), fontSize = 12.sp
+                            )
+                        }
+                        TextButton(onClick = { assistantGenderMenuExpanded = true }) {
+                            Text("Cambia", color = gold)
+                        }
+                        DropdownMenu(
+                            expanded = assistantGenderMenuExpanded,
+                            onDismissRequest = { assistantGenderMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Juanita · femminile") },
+                                onClick = { applyAssistantIdentity("FEMMINILE"); assistantGenderMenuExpanded = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("José · maschile") },
+                                onClick = { applyAssistantIdentity("MASCHILE"); assistantGenderMenuExpanded = false }
+                            )
+                        }
+                    }
                     OutlinedTextField(
                         value = assistantName,
                         onValueChange = {
                             assistantName = it
+                            persona = persona.copy(name = it)
                             onNameChanged(it)
                         },
                         label = { Text("Nome dell'assistente") },
@@ -493,7 +657,7 @@ private fun JuanitaApp(
                     TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
                     TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
                     TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
-                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di Juanita.",
+                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di $assistantName.",
                         color = gold, fontSize = 11.sp)
                 }
 
@@ -565,7 +729,7 @@ private fun JuanitaApp(
                     }
                 }
 
-                SettingsCard(panel, gold, "VOCE DI JUANITA · GEMINI LIVE") {
+                SettingsCard(panel, gold, "VOCE DI $assistantName · GEMINI LIVE") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -573,7 +737,37 @@ private fun JuanitaApp(
                         }
                         TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
                         DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
-                            liveVoices.forEach { voice ->
+                            Text(
+                                "VOCI FEMMINILI",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = gold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            liveVoices.filter { it.gender == "FEMMINILE" }.forEach { voice ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(voice.label)
+                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                        }
+                                    },
+                                    onClick = {
+                                        selectedLiveVoice = voice
+                                        onLiveVoiceChanged(voice.id)
+                                        liveVoiceMenuExpanded = false
+                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+                                    }
+                                )
+                            }
+                            Text(
+                                "VOCI MASCHILI",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                color = gold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
                                 DropdownMenuItem(
                                     text = {
                                         Column {
@@ -591,8 +785,14 @@ private fun JuanitaApp(
                             }
                         }
                     }
-                    Text("La scelta viene salvata sul telefono. Per applicarla, termina e riavvia la conversazione vocale.",
-                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
+                        enabled = !liveState.contains("in ascolto", ignoreCase = true) &&
+                            !liveState.contains("connessione", ignoreCase = true),
+                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                    ) { Text("Ascolta un campione della voce") }
+                    Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Text(liveStartError ?: liveState, color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
 
                 }
@@ -681,16 +881,12 @@ private fun JuanitaApp(
 
                 if (selectedSection == "ALARM") {
                     SettingsCard(panel, gold, "SVEGLIA") {
-                        AlarmSection(panel = panel, gold = gold)
+                        AlarmSection(panel = panel, gold = gold, assistantName = assistantName)
                     }
                 }
 
                 if (selectedSection == "MORE") {
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
-
-                SettingsCard(panel, gold, "FUNZIONI IN SVILUPPO") {
-                    Text("La lettura delle notifiche è stata rinviata alla fase finale del progetto. In questa versione Juanita non richiede l’accesso alle notifiche e non legge i messaggi del telefono.", color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                }
 
                 ImprovementLabSection(
                     panel = panel,
@@ -741,8 +937,10 @@ private fun JuanitaApp(
               }
               if (showFirstMeeting) {
                   FirstMeetingOnboarding(
-                      onComplete = { entries ->
-                          onCompleteOnboarding(entries)
+                      initialGender = assistantGender,
+                      onComplete = { selectedGender ->
+                          applyAssistantIdentity(selectedGender)
+                          onCompleteOnboarding(emptyList())
                           memories = onRefreshMemories()
                           showFirstMeeting = false
                       },
@@ -751,6 +949,13 @@ private fun JuanitaApp(
                           showFirstMeeting = false
                       }
                   )
+              }
+              if (showPermissionOnboarding) {
+                  PermissionOnboarding {
+                      context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
+                          .edit().putBoolean("onboarding_completed", true).apply()
+                      showPermissionOnboarding = false
+                  }
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "ALARM" to "Sveglia", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->

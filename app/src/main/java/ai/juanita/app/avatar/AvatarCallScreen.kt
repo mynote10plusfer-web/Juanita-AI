@@ -56,6 +56,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.io.File
 import java.util.concurrent.Executors
@@ -80,11 +82,19 @@ fun AvatarCallScreen(
     onEndCall: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var cameraEnabled by remember { mutableStateOf(false) }
     var frontCamera by remember { mutableStateOf(true) }
     var cameraError by remember { mutableStateOf<String?>(null) }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
-    LaunchedEffect(Unit) { while (true) { deviceDateTime = ZonedDateTime.now(); delay(1_000L) } }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            while (true) {
+                deviceDateTime = ZonedDateTime.now()
+                delay(1_000L)
+            }
+        }
+    }
     val cameraPermissionGranted = remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==

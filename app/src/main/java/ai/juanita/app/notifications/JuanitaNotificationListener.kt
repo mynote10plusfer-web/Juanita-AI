@@ -23,6 +23,13 @@ data class NotificationEntry(
 object NotificationInbox {
     private val mutableEntries = MutableStateFlow<List<NotificationEntry>>(emptyList())
     val entries: StateFlow<List<NotificationEntry>> = mutableEntries.asStateFlow()
+    private val mutableConnected = MutableStateFlow(false)
+    val connected: StateFlow<Boolean> = mutableConnected.asStateFlow()
+
+    internal fun setConnected(value: Boolean) { mutableConnected.value = value }
+    internal fun remove(key: String) {
+        mutableEntries.value = mutableEntries.value.filterNot { it.key == key }
+    }
 
     internal fun add(entry: NotificationEntry) {
         mutableEntries.value = (listOf(entry) + mutableEntries.value.filterNot { it.key == entry.key })
@@ -39,6 +46,7 @@ class JuanitaNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        NotificationInbox.setConnected(true)
         // Populate the temporary inbox with notifications already active
         // when the user grants access or Android reconnects the listener.
         runCatching {
@@ -48,12 +56,17 @@ class JuanitaNotificationListener : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        NotificationInbox.setConnected(false)
         // Do not keep stale private notification content after Android revokes/disconnects access.
         NotificationInbox.clear()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         captureNotification(sbn)
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        NotificationInbox.remove(sbn.key)
     }
 
     private fun captureNotification(sbn: StatusBarNotification) {

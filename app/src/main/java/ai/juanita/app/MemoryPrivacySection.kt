@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,12 @@ import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 internal fun MemoryPrivacySection(
@@ -87,8 +93,10 @@ internal fun MemoryPrivacySection(
     var archiveRangeStart by remember { mutableStateOf("") }
     var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(memoryStatus) {
-        memories = onRefreshMemories()
+    val ioScope = rememberCoroutineScope()
+    // Refresh once when the Memory tab is opened, never on every streaming status update.
+    LaunchedEffect(Unit) {
+        memories = withContext(Dispatchers.IO) { onRefreshMemories() }
     }
     val rangeStartDate = runCatching { LocalDate.parse(archiveRangeStart.trim()) }.getOrNull()
     val rangeEndDate = runCatching { LocalDate.parse(archiveRangeEnd.trim()) }.getOrNull()
@@ -128,7 +136,7 @@ internal fun MemoryPrivacySection(
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${memories.size}/100 ricordi · ${memories.sumOf { it.text.length }}/32.000 caratteri", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
-                TextButton(onClick = { memories = onRefreshMemories() }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
+                TextButton(onClick = { ioScope.launch { memories = withContext(Dispatchers.IO) { onRefreshMemories() } } }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
             }
             OutlinedTextField(
                 value = memoryDraft, onValueChange = { memoryDraft = it },
@@ -177,21 +185,20 @@ internal fun MemoryPrivacySection(
             }
 
             ConversationArchiveCalendar(
-                panel = panel, gold = gold, conversations = conversations,
+                panel = panel, gold = gold, initialConversations = conversations,
                 archiveEnabled = archiveEnabled, retentionLabel = retentionLabel,
                 onArchiveEnabledChanged = { archiveEnabled = it; onArchiveEnabledChanged(it) },
                 onRetentionChanged = { retentionDays = it; onRetentionChanged(it) },
-                onRefresh = { conversations = onRefreshArchive() },
+                onRefresh = onRefreshArchive,
                 onDeleteConversation = { confirmAction = "conversation:" + it },
                 onDeleteDay = { day ->
                     val zone = ZoneId.systemDefault()
                     onDeleteArchiveRange(day.atStartOfDay(zone).toInstant().toEpochMilli(),
                         day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
-                    conversations = onRefreshArchive()
                 },
                 onListTurns = onListConversationTurns,
                 onDeleteTimeRange = { id, from, until ->
-                    onDeleteConversationRange(id, from, until); conversations = onRefreshArchive()
+                    onDeleteConversationRange(id, from, until)
                 },
                 onClearArchive = { confirmAction = "clear_archive" }
             )
@@ -278,10 +285,10 @@ internal fun MemoryPrivacySection(
 @Composable
 private fun ConversationArchiveCalendar(
     panel: Color, gold: Color,
-    conversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     archiveEnabled: Boolean, retentionLabel: String,
     onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionChanged: (Int) -> Unit,
-    onRefresh: () -> Unit, onDeleteConversation: (String) -> Unit,
+    onRefresh: () -> List<EncryptedMemoryStore.ArchivedConversation>, onDeleteConversation: (String) -> Unit,
     onDeleteDay: (LocalDate) -> Unit,
     onListTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
     onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit
@@ -297,15 +304,17 @@ private fun ConversationArchiveCalendar(
     var selectingDays by remember { mutableStateOf(false) }
     var selectedDays by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var confirmSelectedDays by remember { mutableStateOf(false) }
+    var conversations by remember(initialConversations) { mutableStateOf(initialConversations) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
-    // Refresh on entry and periodically while the archive is visible: the voice worker
-    // writes transcript turns asynchronously, so the initial activity snapshot can be stale.
-    LaunchedEffect(Unit) {
-        onRefresh()
-        while (true) {
-            delay(2_000L)
-            onRefresh()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val ioScope = rememberCoroutineScope()
+    // Load once when the archive tab becomes visible. Repeated two-second scans
+    // decrypted every archived session and could compete with the live transcript writer.
+    // The user can refresh explicitly; disk work always stays off the UI thread.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            conversations = withContext(Dispatchers.IO) { onRefresh() }
         }
     }
     val byDay = remember(conversations) {
@@ -323,7 +332,7 @@ private fun ConversationArchiveCalendar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = archiveEnabled, onCheckedChange = onArchiveEnabledChanged)
                 Text(if (archiveEnabled) "Archiviazione attiva" else "Archiviazione in pausa", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                TextButton(onClick = onRefresh) { Text("Aggiorna", color = gold) }
+                TextButton(onClick = { ioScope.launch { conversations = withContext(Dispatchers.IO) { onRefresh() } } }) { Text("Aggiorna", color = gold) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Conservazione: " + retentionLabel, color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
@@ -389,9 +398,10 @@ private fun ConversationArchiveCalendar(
                             " · " + session.turnCount + " messaggi", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                         Row {
                             TextButton(onClick = {
-                                opened = session; turns = onListTurns(session.sessionId)
+                                opened = session
                                 fromText = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
                                 toText = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
+                                ioScope.launch { turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) } }
                             }) { Text("Apri", color = gold) }
                             TextButton(onClick = { onDeleteConversation(session.sessionId) }) { Text("Elimina", color = Color(0xFFE6A0A0)) }
                         }
@@ -406,12 +416,25 @@ private fun ConversationArchiveCalendar(
     if (confirmSelectedDays) AlertDialog(onDismissRequest = { confirmSelectedDays = false },
         title = { Text("Eliminare i giorni selezionati?") },
         text = { Text("Saranno cancellate tutte le trascrizioni di ${selectedDays.size} giornate selezionate. I giorni non selezionati e i ricordi personali resteranno intatti.") },
-        confirmButton = { TextButton(onClick = { selectedDays.sorted().forEach(onDeleteDay); selectedDays = emptySet(); selectingDays = false; confirmSelectedDays = false }) { Text("Elimina", color = Color(0xFFB94A48)) } },
+        confirmButton = { TextButton(onClick = {
+            val days = selectedDays.sorted()
+            ioScope.launch {
+                withContext(Dispatchers.IO) { days.forEach(onDeleteDay) }
+                conversations = withContext(Dispatchers.IO) { onRefresh() }
+                selectedDays = emptySet(); selectingDays = false; confirmSelectedDays = false
+            }
+        }) { Text("Elimina", color = Color(0xFFB94A48)) } },
         dismissButton = { TextButton(onClick = { confirmSelectedDays = false }) { Text("Annulla") } })
     if (confirmDay) AlertDialog(onDismissRequest = { confirmDay = false },
         title = { Text("Eliminare l'intera giornata?") },
         text = { Text("Saranno cancellate le trascrizioni del giorno " + day + ". I ricordi personali resteranno intatti.") },
-        confirmButton = { TextButton(onClick = { onDeleteDay(day); confirmDay = false }) { Text("Elimina", color = Color(0xFFB94A48)) } },
+        confirmButton = { TextButton(onClick = {
+            ioScope.launch {
+                withContext(Dispatchers.IO) { onDeleteDay(day) }
+                conversations = withContext(Dispatchers.IO) { onRefresh() }
+                confirmDay = false
+            }
+        }) { Text("Elimina", color = Color(0xFFB94A48)) } },
         dismissButton = { TextButton(onClick = { confirmDay = false }) { Text("Annulla") } })
     opened?.let { session ->
         val from = runCatching { LocalDateTime.parse(fromText, fmt).atZone(zone).toInstant().toEpochMilli() }.getOrNull()
@@ -434,9 +457,14 @@ private fun ConversationArchiveCalendar(
             },
             confirmButton = { TextButton(enabled = from != null && until != null && until > from, onClick = {
                 if (from != null && until != null && until > from) {
-                    onDeleteTimeRange(session.sessionId, from, until + 60_000L)
-                    turns = onListTurns(session.sessionId)
-                    if (turns.isEmpty()) opened = null
+                    ioScope.launch {
+                        withContext(Dispatchers.IO) {
+                            onDeleteTimeRange(session.sessionId, from, until + 60_000L)
+                        }
+                        turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) }
+                        conversations = withContext(Dispatchers.IO) { onRefresh() }
+                        if (turns.isEmpty()) opened = null
+                    }
                 }
             }) { Text("Elimina intervallo", color = Color(0xFFB94A48)) } },
             dismissButton = { TextButton(onClick = { opened = null }) { Text("Chiudi", color = gold) } })

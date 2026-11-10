@@ -11,6 +11,8 @@ import com.google.firebase.initialize
 class JuanitaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        // Recover the previous alarm-stream level if Android killed the ringing service.
+        runCatching { ai.juanita.app.alarm.AlarmVolumeController.restoreIfNoActiveAlarm(this) }
         Firebase.initialize(context = this)
         val provider = if (BuildConfig.DEBUG) {
             // Keep the debug-only implementation out of the release compile classpath.

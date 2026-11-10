@@ -225,6 +225,133 @@ class EncryptedMemoryStore(context: Context) {
         purgeExpiredArchive()
     }
 
+    /** Short-lived active-session continuity, encrypted and independent of the optional archive. */
+    @Synchronized
+    fun appendContinuityTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis()) {
+        if (text.isBlank()) return
+        require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
+        val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
+        val records = readRecords()
+        val previous = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
+            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId
+        }
+        val turns = mutableListOf<ArchivedTurn>()
+        val oldTurns = previous?.optJSONArray("turns") ?: JSONArray()
+        for (index in 0 until oldTurns.length()) {
+            val item = oldTurns.optJSONObject(index) ?: continue
+            turns += ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt"))
+        }
+        turns += ArchivedTurn(UUID.randomUUID().toString(), safeRole, text.take(MAX_CONTINUITY_TURN_CHARS), timestampMillis)
+        while (turns.size > MAX_CONTINUITY_TURNS || turns.sumOf { it.text.length } > MAX_CONTINUITY_CHARS) {
+            if (turns.size <= 1) break
+            turns.removeAt(0)
+        }
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "continuity_snapshot" && record.optString("sessionId") == sessionId) continue
+            kept.put(record)
+        }
+        kept.put(JSONObject().apply {
+            put("kind", "continuity_snapshot"); put("sessionId", sessionId); put("updatedAt", timestampMillis)
+            put("turns", JSONArray().apply {
+                turns.forEach { turn ->
+                    put(JSONObject().apply {
+                        put("id", turn.id); put("role", turn.role); put("text", turn.text); put("createdAt", turn.timestampMillis)
+                    })
+                }
+            })
+        })
+        writeRecords(kept, synchronous = true)
+    }
+
+    /**
+     * Move the newest interrupted-session snapshot to the new session ID before a reconnect.
+     * This keeps the last known conversation context across a service restart without retaining
+     * multiple stale snapshots. The snapshot remains encrypted in the existing local store.
+     */
+    @Synchronized
+    fun carryForwardLatestContinuitySnapshot(newSessionId: String): String {
+        require(newSessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
+        val records = readRecords()
+        val latest = (0 until records.length())
+            .mapNotNull { records.optJSONObject(it) }
+            .filter { it.optString("kind") == "continuity_snapshot" }
+            .maxByOrNull { it.optLong("updatedAt") }
+            ?: return ""
+
+        val carried = JSONObject(latest.toString()).apply {
+            put("sessionId", newSessionId)
+            put("updatedAt", System.currentTimeMillis())
+        }
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "continuity_snapshot") kept.put(record)
+        }
+        kept.put(carried)
+        writeRecords(kept, synchronous = true)
+        return buildContinuityContext(newSessionId)
+    }
+
+    /** Build a bounded chronological recovery packet from the encrypted active-session snapshot. */
+    @Synchronized
+    fun buildContinuityContext(sessionId: String, recentFallback: String = ""): String {
+        val records = readRecords()
+        val record = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
+            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId
+        }
+        val turnsJson = record?.optJSONArray("turns") ?: JSONArray()
+        val turns = buildList {
+            for (index in 0 until turnsJson.length()) {
+                val item = turnsJson.optJSONObject(index) ?: continue
+                val role = item.optString("role").takeIf { it == "USER" || it == "ASSISTANT" } ?: continue
+                val text = item.optString("text").takeIf { it.isNotBlank() } ?: continue
+                add("$role: $text")
+            }
+        }
+        val persisted = turns.joinToString("\n")
+        val fallback = recentFallback.lineSequence().map { it.trim() }.filter { it.isNotBlank() }.filter { line ->
+            val content = line.substringAfter(":").trim()
+            content.isNotBlank() && !persisted.contains(content, ignoreCase = true)
+        }.toList()
+        return buildString {
+            if (persisted.isNotBlank()) {
+                append("PERSISTED ACTIVE-CONVERSATION CONTINUITY (encrypted local snapshot; chronological):\n")
+                append(persisted)
+            }
+            if (fallback.isNotEmpty()) {
+                if (isNotEmpty()) append("\n")
+                append("LATEST LIVE TRANSCRIPT FRAGMENTS (may be partial; use only when not covered above):\n")
+                append(fallback.joinToString("\n"))
+            }
+        }.takeLast(MAX_CONTINUITY_CONTEXT_CHARS)
+    }
+
+    @Synchronized
+    fun clearContinuitySnapshot(sessionId: String) {
+        if (sessionId.isBlank()) return
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "continuity_snapshot" && record.optString("sessionId") == sessionId) continue
+            kept.put(record)
+        }
+        writeRecords(kept, synchronous = true)
+    }
+
+    @Synchronized
+    fun clearContinuitySnapshots() {
+        val records = readRecords()
+        val kept = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "continuity_snapshot") kept.put(record)
+        }
+        writeRecords(kept, synchronous = true)
+    }
+
     /** Saves an automatically curated, non-sensitive memory; duplicate facts are not added twice. */
     @Synchronized
     fun addAutomaticMemory(text: String, category: String, confidence: Float, expectedClearVersion: Long = memoryClearVersion): MemoryItem? {
@@ -412,7 +539,10 @@ class EncryptedMemoryStore(context: Context) {
         get() = preferences.getInt(KEY_ARCHIVE_RETENTION_DAYS, 0).coerceIn(0, 90)
         set(value) {
             require(value in ALLOWED_RETENTION_DAYS) { "Unsupported archive retention period" }
-            preferences.edit().putInt(KEY_ARCHIVE_RETENTION_DAYS, value).apply()
+            preferences.edit()
+                .putInt(KEY_ARCHIVE_RETENTION_DAYS, value)
+                .putLong(KEY_LAST_ARCHIVE_PURGE_AT, 0L)
+                .apply()
             purgeExpiredArchive()
         }
 
@@ -672,12 +802,18 @@ class EncryptedMemoryStore(context: Context) {
     private fun purgeExpiredArchive() {
         val days = archiveRetentionDays
         if (days == 0) return
-        val cutoff = System.currentTimeMillis() - days * MILLIS_PER_DAY
+        val now = System.currentTimeMillis()
+        val lastPurge = preferences.getLong(KEY_LAST_ARCHIVE_PURGE_AT, 0L)
+        // Archive listing is used by the UI; never rescan and rewrite every session on each refresh.
+        // Retention is enforced at most once per day, or immediately after the user changes it.
+        if (lastPurge > 0L && (now - lastPurge).coerceAtLeast(0L) < MILLIS_PER_DAY) return
+        val cutoff = now - days * MILLIS_PER_DAY
         filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
         sessionArchiveFiles().forEach { file ->
             val turns = runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).filter { it.timestampMillis >= cutoff }
             if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
         }
+        preferences.edit().putLong(KEY_LAST_ARCHIVE_PURGE_AT, now).apply()
     }
 
     /** Merge encrypted per-session archives with legacy transcript records. */
@@ -894,6 +1030,7 @@ class EncryptedMemoryStore(context: Context) {
         private const val KEY_AUTO_MEMORY_ENABLED = "automatic_memory_enabled"
         private const val KEY_MEMORY_CLEAR_VERSION = "memory_clear_version"
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
+        private const val KEY_LAST_ARCHIVE_PURGE_AT = "conversation_archive_last_purge_at"
         private const val MILLIS_PER_DAY = 86_400_000L
         private val ALLOWED_RETENTION_DAYS = setOf(0, 7, 30, 90)
         private const val KEY_ENCRYPTED_DATA = "encrypted_records"
@@ -907,5 +1044,9 @@ class EncryptedMemoryStore(context: Context) {
         private const val MAX_MEMORY_CHARS = 32_000
         private const val MAX_ARCHIVE_RECORDS = 300
         private const val MAX_IMPROVEMENT_REPORTS = 50
+        private const val MAX_CONTINUITY_TURNS = 24
+        private const val MAX_CONTINUITY_TURN_CHARS = 3_600
+        private const val MAX_CONTINUITY_CHARS = 16_000
+        private const val MAX_CONTINUITY_CONTEXT_CHARS = 16_000
     }
 }

@@ -61,4 +61,54 @@ class ConversationArchiveFidelityTest {
             EncryptedMemoryStore(context).deleteConversation(sessionId)
         }
     }
+    @Test
+    fun carriesForwardLatestInterruptedSnapshotToNewSession() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val olderSession = "interrupted-old-" + UUID.randomUUID()
+        val latestSession = "interrupted-latest-" + UUID.randomUUID()
+        val nextSession = "interrupted-next-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        try {
+            store.appendContinuityTurn(olderSession, "USER", "Argomento precedente non più attuale.", 1_800_000_000_000L)
+            store.appendContinuityTurn(latestSession, "USER", "Stavamo correggendo la riconnessione vocale.", 1_800_000_000_100L)
+            store.appendContinuityTurn(latestSession, "ASSISTANT", "Dobbiamo conservare il contesto dopo una caduta.", 1_800_000_000_200L)
+
+            val recovered = EncryptedMemoryStore(context).carryForwardLatestContinuitySnapshot(nextSession)
+
+            assertTrue(recovered.contains("riconnessione vocale"))
+            assertTrue(recovered.contains("conservare il contesto"))
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(latestSession).isBlank())
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(olderSession).isBlank())
+
+            store.appendContinuityTurn(nextSession, "USER", "Riprendiamo da dove eravamo rimasti.")
+            val continued = EncryptedMemoryStore(context).buildContinuityContext(nextSession)
+            assertTrue(continued.contains("riconnessione vocale"))
+            assertTrue(continued.contains("Riprendiamo da dove eravamo rimasti"))
+        } finally {
+            store.clearContinuitySnapshots()
+        }
+    }
+
+    @Test
+    fun activeConversationContinuitySurvivesStoreRecreationAndIgnoresArchivePause() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "continuity-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val archiveWasEnabled = store.isConversationArchiveEnabled
+        try {
+            store.setConversationArchiveEnabled(false)
+            store.appendContinuityTurn(sessionId, "USER", "Stiamo progettando il promemoria locale cifrato.")
+            store.appendContinuityTurn(sessionId, "ASSISTANT", "Prima completiamo il recupero della conversazione.")
+            val restored = EncryptedMemoryStore(context).buildContinuityContext(sessionId)
+            assertTrue(restored.contains("promemoria locale cifrato"))
+            assertTrue(restored.contains("recupero della conversazione"))
+            assertTrue(EncryptedMemoryStore(context).listConversationTurns(sessionId).isEmpty())
+            EncryptedMemoryStore(context).clearContinuitySnapshot(sessionId)
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(sessionId).isBlank())
+        } finally {
+            store.clearContinuitySnapshot(sessionId)
+            store.setConversationArchiveEnabled(archiveWasEnabled)
+        }
+    }
+
 }
