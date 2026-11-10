@@ -1390,3 +1390,11 @@ Audit findings and fixes:
 - No second microphone recorder, no AGC, no permanent barge-in disable, no forced speaker route when a headset is available, no package/signing/data changes.
 - **Physical acceptance gate:** run the same 30+ minute conversation on Note10+ Android 12 and S22 Ultra Android 15 using built-in speaker; verify no self-interruptions, then deliberately speak over Juanita and verify playback stops promptly. Repeat with wired/Bluetooth headphones, connect/disconnect during a session if practical, and confirm normal media/audio routing is restored after stopping Juanita. Collect `JuanitaAudioRoute` log lines if speakerphone still fails.
 - If the Samsung HAL does not provide working echo cancellation for this communication route, the next step is a separately scoped custom capture pipeline (AudioRecord + explicit AEC/NS + Gemini Live streaming), not further arbitrary VAD tuning.
+
+
+## 0.11.12 candidate — background voice session reliability
+
+- Fixed the task-removal handler so swiping the launcher task from Recents no longer explicitly terminates an active user-started voice conversation. The persistent foreground service and notification remain active; the user can stop it from the in-app control or notification action.
+- Declared the service as both `microphone` and `mediaPlayback` foreground types because Gemini Live is a full-duplex audio session.
+- Active explicit start intents use `START_REDELIVER_INTENT` so Android can restart and redeliver the session request after reclaiming the process. The service re-enters its normal startup path and carries forward the encrypted continuity snapshot. This does not promise recovery after force-stop, user-initiated stop, or OEM battery restrictions.
+- Device acceptance: test foreground → Home → another app → screen off → screen on → reopen Juanita; separately remove the task from Recents; verify the voice session and stop notification remain active. Test on Note10+ Android 12 and S22 Ultra Android 15. Check Samsung app battery mode if audio still stops.
