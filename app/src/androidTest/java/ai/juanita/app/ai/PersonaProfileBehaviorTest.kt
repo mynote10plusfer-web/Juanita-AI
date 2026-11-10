@@ -47,6 +47,25 @@ class PersonaProfileBehaviorTest {
         assertTrue(instruction.contains("You are Juanita"))
     }
     @Test
+    fun moravianProfileUsesSubtleCzechGuidanceWithoutCaricature() {
+        val instruction = PersonaProfile().toSystemInstruction("Čeština", "Moravská čeština · moravo")
+
+        assertTrue(instruction.contains("natural Moravian regional flavour"))
+        assertTrue(instruction.contains("do not drift into Slovak"))
+        assertTrue(instruction.contains("do not pretend there is one uniform Moravian dialect"))
+        assertTrue(instruction.contains("prefer standard Czech"))
+    }
+
+    @Test
+    fun standardCzechProfilePreservesCorrectContemporaryCzech() {
+        val instruction = PersonaProfile().toSystemInstruction("Čeština", "Čeština · ceco standard")
+
+        assertTrue(instruction.contains("contemporary standard Czech"))
+        assertTrue(instruction.contains("correct Czech grammar, diacritics"))
+        assertTrue(instruction.contains("Avoid unnecessary slang, Slovak mixing"))
+    }
+
+    @Test
     fun systemInstructionMakesPersonalKnowledgeGradualNotAnInterview() {
         val instruction = PersonaProfile().toSystemInstruction("Italiano", "Italiano")
 

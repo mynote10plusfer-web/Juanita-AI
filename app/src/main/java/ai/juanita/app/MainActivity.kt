@@ -324,7 +324,13 @@ private fun JuanitaApp(
             "Profilo sperimentale: spagnolo canario colloquiale, ritmo rilassato e lessico delle isole; timbro nativo non garantito."),
         RegionalDialect("paisa", "Colombiano paisa", "es-CO",
             "¡Qué más pues! ¿Cómo vamos? Nos damos una vueltica, ¿o qué?",
-            "Profilo sperimentale: spagnolo paisa di Antioquia/Medellín, espressioni locali e tono cordiale; timbro nativo non garantito.")
+            "Profilo sperimentale: spagnolo paisa di Antioquia/Medellín, espressioni locali e tono cordiale; timbro nativo non garantito."),
+        RegionalDialect("czech-standard", "Čeština · ceco standard", "cs-CZ",
+            "Ahoj, jak se dnes máš? Můžeme si v klidu popovídat.",
+            "Ceco standard contemporaneo: grammatica, lessico e formulazioni naturali e chiare. La pronuncia dipende dalla voce Gemini selezionata."),
+        RegionalDialect("czech-moravian", "Moravská čeština · moravo", "cs-CZ",
+            "Ahoj, jak sa máš? Dneska je pěkně, tož by stálo za to vyrazit ven.",
+            "Profilo moravo sperimentale: sfumature lessicali e colloquiali morave con moderazione. La Moravia ha varianti locali diverse; nessuna caricatura né promessa di accento nativo.")
     )
     var selectedDialect by remember {
         mutableStateOf(dialects.firstOrNull { it.id == initialDialectId } ?: dialects[1])
