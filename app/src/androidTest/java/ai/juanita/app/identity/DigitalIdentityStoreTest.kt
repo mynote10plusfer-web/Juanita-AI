@@ -101,6 +101,39 @@ class DigitalIdentityStoreTest {
         assertEquals("not-valid-ciphertext", encryptedFile.readText())
     }
 
+
+    @Test
+    fun expandedCharacterTraitsPersistAcrossStoreRecreation() {
+        val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia").copy(
+            personality = IdentityPersonality(
+                warmth = 0.91f, humour = 0.82f, curiosity = 0.73f, expressiveness = 0.64f,
+                formality = 0.15f, empathy = 0.88f, seriousness = 0.42f, directness = 0.77f,
+                sociability = 0.69f, spontaneity = 0.83f, patience = 0.92f, optimism = 0.71f,
+                assertiveness = 0.58f, playfulness = 0.86f, discretion = 0.79f
+            )
+        )
+        store.create(original)
+        val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
+        assertEquals(0.77f, restored.personality.directness, 0.001f)
+        assertEquals(0.69f, restored.personality.sociability, 0.001f)
+        assertEquals(0.83f, restored.personality.spontaneity, 0.001f)
+        assertEquals(0.92f, restored.personality.patience, 0.001f)
+        assertEquals(0.71f, restored.personality.optimism, 0.001f)
+        assertEquals(0.58f, restored.personality.assertiveness, 0.001f)
+        assertEquals(0.86f, restored.personality.playfulness, 0.001f)
+        assertEquals(0.79f, restored.personality.discretion, 0.001f)
+    }
+
+    @Test
+    fun existingIdentityDefaultsRemainCompatible() {
+        val original = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
+        store.create(original)
+        val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
+        assertEquals(0.55f, restored.personality.directness, 0.001f)
+        assertEquals(0.6f, restored.personality.sociability, 0.001f)
+        assertEquals(0.75f, restored.personality.discretion, 0.001f)
+    }
+
     private fun identity(
         name: String,
         presentation: IdentityPresentation,
