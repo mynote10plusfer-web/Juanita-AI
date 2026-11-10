@@ -519,11 +519,11 @@ private fun JuanitaApp(
     val startVoicePreview = {
         if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            val instruction = activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
+            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
             JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
                 "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L)
+                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
