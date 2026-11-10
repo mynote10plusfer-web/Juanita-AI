@@ -147,7 +147,7 @@ fun DigitalIdentitySection(
         Text("IDENTITÀ DIGITALI", color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Text("Crea personaggi indipendenti. Ognuno avrà una propria biografia, personalità, origine culturale e memoria separata.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
         Text("IDENTITÀ DIGITALI · SELEZIONE E ARCHIVIO CIFRATO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("Seleziona quale identità userà la prossima conversazione. Le memorie vengono conservate in archivi cifrati distinti. La ricerca culturale online arriverà in una fase successiva.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+        Text("Seleziona quale identità userà la prossima conversazione. Le memorie vengono conservate in archivi cifrati distinti. I dossier culturali documentati possono essere esaminati e approvati; restano disponibili offline.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         if (loading) Text("Caricamento identità…", color = Color.White, fontSize = 13.sp)
         if (identities.isNotEmpty()) {
@@ -297,7 +297,7 @@ fun DigitalIdentitySection(
                                         val approved = proposal.copy(
                                             version = (target.culturalDossier?.version ?: 0) + 1,
                                             approvedAtMillis = System.currentTimeMillis(),
-                                            sources = proposal.sources.map { it.copy(retrievedAtMillis = System.currentTimeMillis()) }
+                                            sources = proposal.sources
                                         )
                                         scope.launch {
                                             saving = true
