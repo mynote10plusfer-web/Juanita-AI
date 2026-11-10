@@ -143,3 +143,16 @@ Evaluate at least one independent real-time avatar provider (for example, HeyGen
 - Automatic upload of the user's photo or conversation without consent.
 - Any paid provider, paid subscription, billing activation, hosted GPU or API-key purchase without fresh explicit approval.
 - Merge to main, APK release or signing-key changes.
+
+
+## CameraX regression boundary retained from the previous avatar design
+
+The existing call UI's CameraX work is separate from the new assistant-avatar renderer and must remain unchanged:
+- Camera access is explicit and revocable; it is separate from microphone permission.
+- Preview and ImageAnalysis use cases are owned and released by the call screen. Never call a global CameraX `unbindAll()` from a reusable composable.
+- When Live is connected and camera permission is granted, sample at a bounded cadence (currently about one frame per second), apply `imageInfo.rotationDegrees`, and forward upright frames to Gemini Live.
+- Allow at most one image upload in flight. Do not queue unbounded frames, persist camera frames, or add them to memory/archive.
+- If Live disconnects, stop frame upload; a local preview may remain with an honest status.
+- Denying camera permission must leave voice-only conversation available. Closing the call or revoking permission releases only the call screen's own camera use cases.
+- The earlier orientation correction is present in source, but physical-device orientation still requires confirmation on Note10+ Android 12 and S22 Ultra Android 15.
+- The prior roadmap proposed local/open-source TalkingHead/GLB/WebGL exploration. The user's latest explicit decision is now online avatar creation/processing; that supersedes the earlier generation-location preference. It does not waive the no-paid-service approval gate.
