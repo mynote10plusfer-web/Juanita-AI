@@ -166,8 +166,9 @@ fun DigitalIdentitySection(panel: Color, gold: Color) {
                             message = "Nome, paese e lingua preferita sono obbligatori."
                         } else {
                             val existing = editingId?.let { id -> identities.firstOrNull { it.id == id } }
+                            val identityId = existing?.id ?: java.util.UUID.randomUUID().toString()
                             val identity = DigitalIdentity(
-                                id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                                id = identityId,
                                 displayName = name.trim(),
                                 presentation = presentation,
                                 origin = CulturalOrigin(countryCode.trim(), countryName.trim(), region.trim(), locality.trim(), community.trim()),
@@ -176,10 +177,10 @@ fun DigitalIdentitySection(panel: Color, gold: Color) {
                                 personality = IdentityPersonality(warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness),
                                 biography = biography.trim(),
                                 culturalDossier = existing?.culturalDossier,
-                                memoryNamespace = existing?.memoryNamespace ?: (existing?.id ?: ""),
+                                memoryNamespace = identityId,
                                 createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis(),
                                 updatedAtMillis = System.currentTimeMillis()
-                            ).let { candidate -> if (existing == null) candidate.copy(memoryNamespace = candidate.id) else candidate }
+                            )
                             scope.launch {
                                 saving = true
                                 runCatching { withContext(Dispatchers.IO) { if (existing == null) store.create(identity) else store.update(identity) } }
