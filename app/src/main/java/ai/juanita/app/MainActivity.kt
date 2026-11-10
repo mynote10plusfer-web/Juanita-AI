@@ -75,6 +75,9 @@ import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import ai.juanita.app.memory.ImprovementReport
 import ai.juanita.app.identity.DigitalIdentitySection
+import ai.juanita.app.identity.DigitalIdentity
+import ai.juanita.app.identity.DigitalIdentityStore
+import ai.juanita.app.identity.toSystemInstruction
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -170,6 +173,13 @@ class MainActivity : ComponentActivity() {
         preferences = AssistantPreferences(applicationContext)
         val memoryStore = EncryptedMemoryStore(applicationContext)
         val avatarStore = AvatarProfileStore(applicationContext)
+        val digitalIdentityStore = DigitalIdentityStore(applicationContext)
+        val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
+        val initialActiveDigitalIdentityId = preferences.activeDigitalIdentityId
+            ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId } }
+            .also { validId ->
+                if (preferences.activeDigitalIdentityId != validId) preferences.activeDigitalIdentityId = validId
+            }
 
         val savedPersona = PersonaProfile(
             name = preferences.assistantName,
@@ -201,6 +211,9 @@ class MainActivity : ComponentActivity() {
                 initialLiveVoiceName = preferences.liveVoiceName,
                 initialWakePhrase = preferences.wakePhrase,
                 initialPersona = savedPersona,
+                initialDigitalIdentities = initialDigitalIdentities,
+                initialActiveDigitalIdentityId = initialActiveDigitalIdentityId,
+                onActiveDigitalIdentityChanged = { preferences.activeDigitalIdentityId = it },
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = memoryStore.listMemories(),
@@ -270,6 +283,9 @@ private fun JuanitaApp(
     initialLiveVoiceName: String,
     initialWakePhrase: String,
     initialPersona: PersonaProfile,
+    initialDigitalIdentities: List<DigitalIdentity>,
+    initialActiveDigitalIdentityId: String?,
+    onActiveDigitalIdentityChanged: (String?) -> Unit,
     initialArchiveEnabled: Boolean,
     initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
@@ -312,6 +328,9 @@ private fun JuanitaApp(
     val gold = Color(0xFFE4BD69)
     val initialLanguage = voiceLanguages.firstOrNull { it.tag == initialLanguageTag } ?: voiceLanguages.first()
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
+    var digitalIdentities by remember { mutableStateOf(initialDigitalIdentities) }
+    var activeDigitalIdentityId by remember { mutableStateOf(initialActiveDigitalIdentityId) }
+    val activeDigitalIdentity = digitalIdentities.firstOrNull { it.id == activeDigitalIdentityId }
     var selectedLiveVoice by remember {
         mutableStateOf(liveVoices.firstOrNull { it.id == initialLiveVoiceName } ?: liveVoices.first())
     }
@@ -468,7 +487,7 @@ private fun JuanitaApp(
                 }
                 try {
                     val instruction = buildString {
-                        append(persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                        append(activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
                         val sessionNow = ZonedDateTime.now()
                         append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
                         if (locationContext.isNotBlank()) {
@@ -479,7 +498,7 @@ private fun JuanitaApp(
                             append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
                         }
                     }
-                    JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id)
+                    JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id, identityId = activeDigitalIdentity?.id)
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
                 }
@@ -489,22 +508,22 @@ private fun JuanitaApp(
 
     val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
-            val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
+            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
             JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
                 "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, ${if (assistantGender == "MASCHILE") "pronto" else "pronta"} ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L)
+                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
     }
     val startVoicePreview = {
         if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            val instruction = persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label) +
+            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
             JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
                 "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L)
+                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
@@ -646,7 +665,16 @@ private fun JuanitaApp(
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
 
-                DigitalIdentitySection(panel = panel, gold = gold)
+                DigitalIdentitySection(
+                    panel = panel,
+                    gold = gold,
+                    activeIdentityId = activeDigitalIdentityId,
+                    onActiveIdentityChanged = { id ->
+                        activeDigitalIdentityId = id
+                        onActiveDigitalIdentityChanged(id)
+                    },
+                    onIdentitiesChanged = { digitalIdentities = it }
+                )
 
                 SettingsCard(panel, gold, "CARATTERE E PERSONALITÀ") {
                     Text("Regola ogni tratto da 0 a 100%. Le preferenze vengono salvate automaticamente.",

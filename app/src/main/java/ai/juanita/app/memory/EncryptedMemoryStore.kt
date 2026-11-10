@@ -33,9 +33,15 @@ data class MemoryItem(
  * Stores text-only records encrypted with AES-256-GCM using a non-exportable
  * Android Keystore key. Raw microphone audio is never stored.
  */
-class EncryptedMemoryStore(context: Context) {
+class EncryptedMemoryStore(context: Context, identityNamespace: String? = null) {
     private val appContext = context.applicationContext
-    private val preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    // Null preserves the exact legacy store for the human user's existing data.
+    // A persona namespace must be a UUID; malformed IDs never fall back to shared data.
+    private val namespaceSuffix = identityNamespace?.let {
+        UUID.fromString(it)
+        "_identity_$it"
+    }.orEmpty()
+    private val preferences = appContext.getSharedPreferences(PREFS_NAME + namespaceSuffix, Context.MODE_PRIVATE)
 
     val isConversationArchiveEnabled: Boolean
         get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, true)
@@ -835,7 +841,7 @@ class EncryptedMemoryStore(context: Context) {
         return result
     }
 
-    private fun sessionArchiveDirectory(): File = File(appContext.filesDir, "conversation_archive").apply { mkdirs() }
+    private fun sessionArchiveDirectory(): File = File(appContext.filesDir, "conversation_archive$namespaceSuffix").apply { mkdirs() }
     private fun sessionArchiveFile(sessionId: String): File = File(sessionArchiveDirectory(), "$sessionId.enc")
     private fun sessionArchiveFiles(): List<File> =
         sessionArchiveDirectory().listFiles { file -> file.isFile && file.name.endsWith(".enc") }?.toList().orEmpty()
@@ -980,10 +986,10 @@ class EncryptedMemoryStore(context: Context) {
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
-        (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+        (keyStore.getKey(KEY_ALIAS + namespaceSuffix, null) as? SecretKey)?.let { return it }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
-            KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            KeyGenParameterSpec.Builder(KEY_ALIAS + namespaceSuffix, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setKeySize(256)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)

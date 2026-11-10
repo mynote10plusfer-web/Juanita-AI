@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.juanita.app.memory.EncryptedMemoryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -37,7 +38,13 @@ import java.util.Locale
 
 /** Phase A UI: local identity management only; no voice-session switching yet. */
 @Composable
-fun DigitalIdentitySection(panel: Color, gold: Color) {
+fun DigitalIdentitySection(
+    panel: Color,
+    gold: Color,
+    activeIdentityId: String?,
+    onActiveIdentityChanged: (String?) -> Unit,
+    onIdentitiesChanged: (List<DigitalIdentity>) -> Unit
+) {
     val context = LocalContext.current
     val store = remember(context) { DigitalIdentityStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -115,8 +122,8 @@ fun DigitalIdentitySection(panel: Color, gold: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("IDENTITÀ DIGITALI", color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Text("Crea personaggi indipendenti. Ognuno avrà una propria biografia, personalità, origine culturale e memoria separata.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
-        Text("FASE A · ARCHIVIO LOCALE CIFRATO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("In questa fase gestisci le schede sul telefono. La ricerca culturale online e il collegamento alla conversazione vocale arriveranno dopo i test dell'archivio.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+        Text("IDENTITÀ DIGITALI · SELEZIONE E ARCHIVIO CIFRATO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text("Seleziona quale identità userà la prossima conversazione. Le memorie vengono conservate in archivi cifrati distinti. La ricerca culturale online arriverà in una fase successiva.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         if (loading) Text("Caricamento identità…", color = Color.White, fontSize = 13.sp)
         if (identities.isNotEmpty()) {
@@ -127,7 +134,22 @@ fun DigitalIdentitySection(panel: Color, gold: Color) {
                         Text(identity.displayName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         Text("${if (identity.presentation == IdentityPresentation.FEMININE) "Femminile" else "Maschile"} · ${identity.origin.countryName}${if (identity.origin.region.isNotBlank()) " · ${identity.origin.region}" else ""}${if (identity.origin.community.isNotBlank()) " · ${identity.origin.community}" else ""}", color = Color(0xFFB9BBC1), fontSize = 12.sp)
                         if (identity.biography.isNotBlank()) Text(identity.biography, color = Color(0xFF9A9DA4), fontSize = 12.sp, maxLines = 3)
+                        Text(
+                            if (activeIdentityId == identity.id) "IDENTITÀ ATTIVA · usata nella prossima conversazione" else "Non attiva",
+                            color = if (activeIdentityId == identity.id) gold else Color(0xFF9A9DA4),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (activeIdentityId != identity.id) {
+                                TextButton(onClick = { onActiveIdentityChanged(identity.id); message = "${identity.displayName} sarà usata nella prossima conversazione." }) {
+                                    Text("Usa questa identità", color = gold)
+                                }
+                            } else {
+                                TextButton(onClick = { onActiveIdentityChanged(null); message = "Tornato al profilo assistente standard." }) {
+                                    Text("Usa profilo standard", color = gold)
+                                }
+                            }
                             TextButton(onClick = { loadForEdit(identity) }) { Text("Modifica", color = gold) }
                             TextButton(onClick = { deleteCandidate = identity }) { Text("Elimina", color = Color(0xFFFF8A80)) }
                         }
@@ -186,6 +208,7 @@ fun DigitalIdentitySection(panel: Color, gold: Color) {
                                 runCatching { withContext(Dispatchers.IO) { if (existing == null) store.create(identity) else store.update(identity) } }
                                     .onSuccess { saved ->
                                         identities = withContext(Dispatchers.IO) { store.list() }
+                                        onIdentitiesChanged(identities)
                                         message = "${saved.displayName} è stata salvata in modo indipendente."
                                         resetForm()
                                     }
@@ -214,7 +237,14 @@ fun DigitalIdentitySection(panel: Color, gold: Color) {
                 deleteCandidate = null
                 scope.launch {
                     runCatching { withContext(Dispatchers.IO) { store.delete(target.id) } }
-                        .onSuccess { identities = withContext(Dispatchers.IO) { store.list() }; if (editingId == target.id) resetForm(); message = "Identità ${target.displayName} eliminata." }
+                        .onSuccess {
+                            withContext(Dispatchers.IO) { EncryptedMemoryStore(context.applicationContext, target.id).clearAll() }
+                            if (activeIdentityId == target.id) onActiveIdentityChanged(null)
+                            identities = withContext(Dispatchers.IO) { store.list() }
+                            onIdentitiesChanged(identities)
+                            if (editingId == target.id) resetForm()
+                            message = "Identità ${target.displayName} e relativo archivio eliminati."
+                        }
                         .onFailure { message = "Eliminazione non riuscita: ${it.localizedMessage ?: "errore"}" }
                 }
             }) { Text("Elimina", color = Color(0xFFFF8A80)) } },

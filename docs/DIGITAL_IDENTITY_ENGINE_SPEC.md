@@ -1,12 +1,12 @@
 # Juanita AI — Digital Identity Engine
 
-**Status:** Phase A implemented on this feature branch; CI and physical-device verification pending.
+**Status:** Phase A implementation committed on PR #35; GitHub Actions run 42876603252 passed both debug build and API 31 instrumentation jobs. Physical-device verification is still pending. Phase B isolation/runtime audit and implementation plan are on `feature/digital-identity-engine-phase-b`.
 **Baseline:** candidate 0.11.12 (`e82f61857c3d50f60cf642136831a119811bd365`).
 **Constraints:** preserve the stable app, package/signing identity and local data; no paid APIs, subscriptions, credits, billing or hosted GPUs.
 
 ## Implementation status — 2026-11-10
 
-Phase A has an initial implementation on this feature branch: domain models, a dedicated Android Keystore AES-GCM identity store, and an in-app local identity manager for create/list/edit/delete. Instrumentation tests cover persistence across store recreation, per-identity update/delete isolation, UUID namespace binding, unreadable-file preservation and ciphertext-at-rest checks. These tests are added but must not be considered passed until CI executes them. Identity selection is not yet connected to Gemini Live; cultural web research and learning/affect runtime remain later phases.
+Phase A has an initial implementation on this feature branch: domain models, a dedicated Android Keystore AES-GCM identity store, and an in-app local identity manager for create/list/edit/delete. Instrumentation tests cover persistence across store recreation, per-identity update/delete isolation, UUID namespace binding, unreadable-file preservation and ciphertext-at-rest checks. GitHub Actions run 42876603252 completed successfully on 2026-11-10: debug APK build, instrumentation-test compilation and Android API 31 instrumentation execution all passed. Physical Samsung verification remains outstanding. Identity selection is not yet connected to Gemini Live; cultural web research and learning/affect runtime remain later phases.
 
 ## 1. Product vision
 
