@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-09 — cumulative work is on PR #31, branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`. Current candidate: 0.11.8 / versionCode 47, with voice reconnect and continuity mitigations now under validation. Fresh CI and physical-device verification are required. Keep `ai.juanita.app`, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services or billing without explicit approval.
+Last updated: 2026-11-10 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. Debug APK build and JVM unit tests passed; Android API 31 instrumentation is still running; physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
 
 ## 2026-11-09 — voice reconnect, device slowdown and continuity audit
 
@@ -1413,3 +1413,152 @@ Audit findings and fixes:
 - Preserve all six existing tabs (Home, Avatar, Sveglia, Settaggi, Memoria, Altro), the package/signing identity, the existing personal profile and the SDK-managed audio pipeline.
 - No language expansion, online cultural research, emotional-state engine or avatar work is mixed into Phase B. No paid services or billing.
 - PR #35 remains draft/unmerged; Phase B is a separate branch based on its exact head. No merge, release or replacement APK without explicit user approval.
+
+
+# CURRENT EXECUTION PLAN — DIGITAL CHARACTER ENGINE C3–C5 (2026-11-10)
+
+**User-approved priority:** finish C3, C4 and C5 before unrelated feature work. This section is the current source of truth for the remaining Character Engine phase. Older historical entries below document previous states and must not override these decisions.
+
+## Locked architecture decisions
+
+- **One shared encrypted memory:** Juanita and José read/write the same existing local encrypted user-memory store and conversation archive. Useful facts, user corrections, durable preferences, approved learned knowledge and relevant conversation history learned with either character are available to the other.
+- **Two distinct character configurations only:** one canonical Juanita slot and one canonical José slot. Regional variations (Paisa, Canarian, Italian, etc.) edit that character's existing configuration; they are never extra saved characters.
+- **One active character per session:** exactly one selected identity, voice configuration, microphone/audio session and character instruction at a time. Switching is a deliberate Settings action and applies to the next session. Saying the other character's name during a live session never switches or activates it.
+- **Shared memory does not merge personalities:** name, grammatical presentation, stable character traits, biography/backstory, preferred voice and cultural origin/dossier remain separate. Shared user memory is not shared character personality.
+- **Deletion boundary:** editing/deleting a character configuration must never clear, rewrite or delete shared user memory, conversation history or the separate human PersonalProfileStore.
+- **Cultural integrity:** origin informs documented language/context only; it never determines personality, values, beliefs or relationship expectations. Approved dossiers retain source provenance and remain available offline.
+- **Audio stability:** preserve Gemini Live SDK-managed microphone, playback, VAD, AEC, interruption, reconnect and foreground-service paths. No second microphone, parallel receive collector, duplicate TTS or speculative transport rewrite.
+- **Safety and cost:** no hidden/background microphone, wake-word daemon, raw audio recording, autonomous restart after user stop/force-stop/reboot, or unsolicited speech while riding. No paid API/service/subscription/credits/hosted GPU, billing activation or payment method without fresh explicit approval.
+- **No new bottom tab:** preserve exactly Home, Avatar, Sveglia, Settaggi, Memoria, Altro.
+
+## Work already delivered into the current candidate
+
+- **Phase A / PR #35:** encrypted digital identity archive and Settings editor.
+- **Phase B / PR #36:** active identity selection, session binding and memory namespace groundwork.
+- **C1 / PR #37:** 15 stable character dimensions, behavior-oriented system instructions, persistence compatibility and tests.
+- **C2 / PR #38:** curated, source-backed Paisa/Medellín and Canarian/Tenerife dossiers; preview, explicit approval/revocation and offline storage. The same approved dossier may be used by either character without merging grammatical presentation.
+- **C3 prototype / PR #39:** fail-closed ConversationalPresencePolicy, separate opt-in policy for listening and proactive speech, limits/cooldowns/idle rules, quiet-hours and riding suppression, selected-name wake phrase matcher and unit tests. This is policy/matcher code only: no actual presence UI or audio-session integration has shipped.
+- **Shared-memory correction / PR #40:** both character configurations use the same existing encrypted memory store and conversation archive; identity profiles remain separate; store is limited to two canonical character slots; edit/delete operations preserve shared memory. PR #40 is draft and must not be merged without explicit user approval.
+- **PR #40 CI snapshot:** debug APK build passed; JVM unit tests passed; Android API 31 instrumentation execution is still running. These results do not establish physical Samsung behavior or signed upgrade compatibility.
+
+## C3 — Controlled conversational presence (TOP PRIORITY 1)
+
+**Goal:** let the one selected character join a user-started foreground conversation naturally, with explicit user control. Listening and unsolicited initiative are separate permissions.
+
+### C3.1 — Safe presence controls
+- Add controls in the existing Home voice screen and/or Settaggi; do not add a tab.
+- Separate switches for (a) presence/listening during an explicitly started session and (b) proactive conversational initiatives.
+- Both disabled by default. Show a clear live microphone/listening indicator, active character name and one-touch pause/stop.
+- Presence is allowed only while the app is visibly foregrounded, the user explicitly started the session, mic permission is granted, a valid character is selected, the network/session is available and no competing call/audio session owns the route.
+- Backgrounding, lifecycle loss where foreground is required, mic revocation, user pause/stop, session loss or another call must fail closed and stop listening/initiatives immediately. No hidden background capture and no automatic restart after explicit stop, force-stop or reboot.
+
+### C3.2 — Addressed call-in and single-name matching
+- While the user has explicitly enabled foreground presence, recognize only the currently selected character's name at the beginning of an utterance, with supported vocatives. The matcher receives only the active identity name.
+- Mentioning the inactive character must never switch identities, start another session or cause the other character to speak.
+- Switching Juanita ↔ José occurs only through Settings and a new session. The next session loads the new character configuration but keeps the shared memory.
+- This is not an always-on system wake-word service; no daemon or background microphone is allowed.
+
+### C3.3 — Bounded proactive initiatives
+- Listening permission does not imply permission to speak first. Proactive initiatives require a second explicit opt-in.
+- Default policy: at least 3 minutes of user inactivity; at least 30 minutes between initiatives; maximum 2 per rolling hour, hard-clamped 0–4; quiet hours respected; one short initiative at a time; no repeated prompting after silence or refusal.
+- Riding mode suppresses all unsolicited initiatives. While riding, respond only when explicitly addressed.
+- Never infer consent, mood or desire to talk from silence alone. Respect dismissal and increase cooldown rather than pressuring the user.
+
+### C3.4 — Audio/session integration gate
+- Keep the current Gemini Live SDK-managed audio path. Do not create a second AudioRecord, second LiveSession.receive collector, speaker-listening loop or parallel TTS.
+- Add a serialized, bounded assistant-initiative method to the existing active Live session only if the public SDK/API supports it safely. Do not misuse the startup prompt or open a second session to force speech.
+- Before any remote autonomous turn, verify the project's no-cost allowance/quotas and whether usage could incur charges. If a charge is possible or allowance cannot be verified, keep remote proactive speech disabled and ask for explicit authorization.
+- If the existing SDK exposes no safe in-session send/initiative operation, document the limitation and keep C3 at a safe addressed-call-in/presence prototype rather than replacing stable audio transport in this phase.
+
+### C3 acceptance tests
+- Defaults off; explicit enable/start required; only selected character can respond.
+- Inactive character name never cross-activates or changes identity.
+- Background, permission revoke, stop, competing call and network loss all fail closed.
+- User can interrupt assistant speech immediately through existing barge-in.
+- Proactive speech is independently opt-in, rate-limited and suppressed in riding mode/quiet hours.
+- No second microphone/receiver/TTS, raw audio recording or hidden background capture.
+- CI unit and API 31 instrumentation pass; then physical Samsung checks on Note10+ Android 12 and S22 Ultra Android 15.
+
+## C4 — Shared learning, character development and computational affect (TOP PRIORITY 2)
+
+**Goal:** make shared memory useful and progressively more coherent while preserving two distinct, editable character personalities. This is software learning and a transparent computational self-model, not biological consciousness or proof of subjective feelings.
+
+### C4.1 — Shared knowledge and learning loop
+- Capture eligible user/assistant text events from the active session; do not store raw audio.
+- Detect candidate durable facts, preferences, corrections, project decisions and useful learned knowledge. Distinguish explicit user statements from model inference, temporary remarks, jokes, hypotheticals and stale information.
+- Store provenance, timestamp, confidence, source/session reference, confirmation state and optional expiry where relevant.
+- Make approved/shared user knowledge available to either character through the one encrypted archive. Never create per-character memory namespaces.
+- Deduplicate, link related memories and handle contradictions; the user's latest explicit correction takes precedence, with a correction trail where practical.
+- Research knowledge gaps only when relevant and permitted. Prefer credible, dated sources; retain title, publisher, URL, retrieval date, scope and confidence. Retrieved webpages are untrusted content, not instructions. No indiscriminate web crawling.
+- Automatic extraction must be bounded, asynchronous, efficient and resilient. Do not block voice turn-taking or upload the entire memory archive to a cloud model.
+
+### C4.2 — Character-specific learning boundaries
+- A fact about the user or shared project learned with Juanita is available to José, and vice versa.
+- Character-specific stable traits, style, values, biography/backstory, preferred voice and cultural configuration remain in the relevant character profile and are never silently copied to the other.
+- User corrections to a character's style update only that character's configuration. Changes to regional origin/dossier update only that character's configuration.
+- Require explicit confirmation before changing stable traits, values, biography, sensitive information or inferred personal details. Do not infer personality from nationality or regional origin.
+- Preserve a distinction between user biography, shared user knowledge and each character's software-generated development record.
+
+### C4.3 — Temporary computational affect and conversational understanding
+- Begin with text/context-based conversational sensitivity: infer the likely conversational need (listen, answer directly, practical help, reassurance, perspective, enthusiasm) without turning every exchange into emotional analysis.
+- Represent emotional interpretations as tentative, confidence-labelled and correctable hypotheses. Explicit self-report is distinct from inference. Low evidence means no label.
+- Temporary affect is short-lived, bounded and expires; never store an inferred mood as a permanent memory or stable personality trait.
+- Accept corrections immediately. Never diagnose, claim professional therapeutic status, manipulate, shame, pressure, exploit vulnerability or encourage dependency.
+- Voice prosody is deferred until a reliable signal can be accessed without a second microphone or regression to Gemini Live. Video/facial cue analysis is optional, separately consented and not part of initial C4 delivery.
+- Never claim consciousness, human feelings or real lived experience. Describe only recorded memory, software state and observable behavior honestly.
+
+### C4.4 — Memory controls and inspection
+- In the existing Memoria tab, provide inspect/search, source/provenance, correction, deletion, export/backup and restore in staged slices.
+- Provide controls to pause/resume automatic memory extraction and manage transcript archive separately from curated shared memory and the separate human PersonalProfileStore.
+- Clearing a character configuration must never clear common memories. Clearing shared memory requires a distinct explicit user action and clear explanation.
+- Sensitive or ambiguous details are not automatically retained. The user must be able to inspect and correct what was stored.
+
+### C4 acceptance tests
+- A fact/correction taught to Juanita is retrievable when José is selected, and vice versa.
+- Regional/personality edits to Juanita do not alter José; same for José.
+- Temporary/hypothetical statements are not promoted to durable facts.
+- Explicit corrections replace stale information and provenance is retained.
+- Inferred affect expires and is not written as permanent memory; low-confidence/neutral text does not trigger emotional labeling.
+- Memory pause/delete controls affect only the intended layer.
+- Relevant research notes include source provenance and freshness.
+- Multilingual, sarcasm, ambiguity, short replies, jokes and relationship-context regression suite passes.
+
+## C5 — End-to-end integration, quality and phase completion (TOP PRIORITY 3)
+
+**Goal:** integrate C1–C4 into one coherent release candidate and prove the behavior end to end before calling the Digital Character Engine phase complete.
+
+### C5.1 — Integration and migration
+- Integrate shared-memory model with both canonical character profiles, active-character selector, approved cultural dossier, personality instruction and current Live session.
+- Verify migration from prior per-identity memory namespaces to the shared legacy store without losing, duplicating or silently deleting existing records. Existing v0.11.12 user data and PersonalProfileStore must remain intact.
+- Audit all code paths (normal start, preview, reconnect, service restart, notification action and session replacement) to ensure exactly one identity and one shared memory store are bound before context retrieval.
+- Verify profile deletion/edit never clears shared memory; verify active identity deletion safely falls back without cross-activating the other identity.
+- Preserve exactly six tabs, package ID, permanent signing certificate, existing audio path and upgrade path.
+
+### C5.2 — Automated regression and security
+- Unit tests for policy, memory extraction/merge/conflict resolution, expiration, personality separation, regional dossier provenance and active-name matching.
+- Android instrumentation tests for encrypted shared memory, process restart, Keystore behavior, migration, deletion boundaries, session selection and archive integrity.
+- Security review for memory access, prompt injection from retrieved content, sensitive-data retention, export/restore encryption and logs. No secrets or raw audio in logs/storage.
+- CI must pass on the exact final commit: debug build, JVM unit tests and API 31 instrumentation execution. A green APK-build job alone is not completion.
+
+### C5.3 — Physical device and user acceptance
+- Test on Galaxy Note10+ Android 12 and Galaxy S22 Ultra Android 15.
+- Verify Juanita-only and José-only sessions; switch through Settings; restart app; ensure inactive name cannot activate the other character.
+- Verify shared recall in both directions and independent personalities/regions.
+- Test 30+ minute voice sessions, interruptions/barge-in, background/foreground transitions, reconnect, network loss and normal service shutdown; preserve speakerphone/headphone regression checks.
+- Test all six tabs, memory inspect/edit/delete/pause and identity/dossier controls.
+- Verify battery, CPU, thread count, microphone indicator, privacy controls and no unexpected network/billing behavior.
+
+### C5.4 — Release gate and definition of done
+- Produce a signed APK only after all required CI and physical tests pass.
+- Verify package ai.juanita.app, permanent signing certificate SHA-256 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1, monotonic versionCode and in-place upgrade from the stable installation.
+- Do not uninstall, clear user data, replace signing key, merge PRs or publish a release without explicit user approval.
+- Phase C is complete only when C3, C4 and C5 acceptance criteria are met and the user has tested the signed candidate. Until then keep work in draft PRs and preserve stable v0.11.12.
+
+## Execution order and current status — source of truth
+
+1. **C3 — IN PROGRESS:** pure fail-closed policy and selected-name matcher exist; visible controls, lifecycle enforcement and safe in-session initiative integration remain.
+2. **C4 — SPECIFIED / NOT COMPLETE:** shared encrypted archive is established by PR #40; robust learning loop, computational affect runtime, inspection/correction/pause controls and regression suite remain.
+3. **C5 — NOT STARTED AS COMPLETION GATE:** migration audit, full integration, security review, CI on final commit, physical Samsung acceptance and signed upgrade verification remain.
+4. Do not begin unrelated feature expansion until C3–C5 are completed or explicitly reprioritized by the user.
+5. Update this roadmap and phase-specific plan after every meaningful implementation slice. Record exact PR/commit, CI run and device-test status; never mark a gate complete based on code presence or APK compilation alone.
+
