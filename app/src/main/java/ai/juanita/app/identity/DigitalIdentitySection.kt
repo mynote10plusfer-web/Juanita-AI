@@ -350,7 +350,7 @@ fun DigitalIdentitySection(
         AlertDialog(
             onDismissRequest = { deleteCandidate = null },
             title = { Text("Eliminare ${candidate.displayName}?") },
-            text = { Text("Verrà eliminata soltanto questa scheda di identità. Le altre identità e il profilo personale dell'utente non verranno toccati. Le memorie collegate non sono ancora integrate in questa fase.") },
+            text = { Text("Verrà eliminata soltanto questa configurazione. L'altra identità, la memoria comune e il profilo personale dell'utente resteranno intatti.") },
             confirmButton = { TextButton(onClick = {
                 val target = candidate
                 deleteCandidate = null
