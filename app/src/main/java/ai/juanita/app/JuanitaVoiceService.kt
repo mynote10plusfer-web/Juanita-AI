@@ -16,6 +16,7 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
+import ai.juanita.app.audio.VoiceAudioRouteController
 import ai.juanita.app.alarm.JuanitaAlarmRingingService
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.AutomaticMemoryEngine
@@ -43,6 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val assistant = GeminiLiveAssistant()
+    private val audioRouteController by lazy { VoiceAudioRouteController(applicationContext) }
     private lateinit var memoryStore: EncryptedMemoryStore
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private lateinit var personalProfileStore: PersonalProfileStore
@@ -251,6 +253,9 @@ class JuanitaVoiceService : Service() {
                                     }
                                 }
                             }
+                            // Use Android's communication audio mode while Live owns the mic/speaker.
+                            // The previous global mode is restored as soon as audio capture stops.
+                            audioRouteController.begin()
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
@@ -334,6 +339,7 @@ class JuanitaVoiceService : Service() {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {
+                            audioRouteController.end()
                             _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
                             updateNotification("Connessione non riuscita · apri Juanita per riprovare")
                             runCatching { assistant.stop() }
@@ -380,6 +386,7 @@ class JuanitaVoiceService : Service() {
                 withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
                 releaseCpuWakeLock()
                 withTimeoutOrNull(5_000L) { assistant.stop() }
+                audioRouteController.end()
                 _state.value = "Microfono disattivato · salvataggio dei ricordi…"
                 updateNotification("Microfono disattivato · salvataggio in corso")
             } finally {
@@ -573,6 +580,7 @@ class JuanitaVoiceService : Service() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { assistant.stopAudioCapture() }
             runCatching { assistant.stop() }
+            audioRouteController.end()
         }
         serviceScope.cancel()
         super.onDestroy()
