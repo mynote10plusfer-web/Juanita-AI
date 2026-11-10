@@ -49,8 +49,8 @@ class DigitalIdentityStoreTest {
         assertEquals(2, reloaded.size)
         assertEquals("Paisa", reloaded[juanita.id]?.origin?.community)
         assertEquals(IdentityPresentation.MASCULINE, reloaded[jose.id]?.presentation)
-        assertEquals(juanita.id, reloaded[juanita.id]?.memoryNamespace)
-        assertEquals(jose.id, reloaded[jose.id]?.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, reloaded[juanita.id]?.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, reloaded[jose.id]?.memoryNamespace)
     }
 
     @Test
@@ -83,12 +83,19 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
-    fun identityNamespaceCannotBeAssignedToAnotherIdentity() {
-        val identity = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
-        val invalid = identity.copy(memoryNamespace = UUID.randomUUID().toString())
+    fun onlyOneConfigurationPerCharacterIsAllowedAndBothUseSharedMemory() {
+        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val secondJuanita = identity("Juanita paisa", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
 
-        assertThrows(IllegalArgumentException::class.java) { store.create(invalid) }
-        assertFalse(testDirectory.walkTopDown().any { it.isFile && it.name.endsWith(".identity.enc") })
+        store.create(juanita)
+        assertThrows(IllegalArgumentException::class.java) { store.create(secondJuanita) }
+        store.create(jose)
+
+        assertEquals(2, store.list().size)
+        assertEquals("Juanita", store.get(juanita.id)?.displayName)
+        assertEquals("José", store.get(jose.id)?.displayName)
+        assertTrue(store.list().all { it.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE })
     }
 
     @Test
