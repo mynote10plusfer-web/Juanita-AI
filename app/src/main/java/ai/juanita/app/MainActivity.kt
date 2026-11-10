@@ -74,6 +74,7 @@ import ai.juanita.app.alarm.AlarmSection
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
 import ai.juanita.app.memory.ImprovementReport
+import ai.juanita.app.identity.DigitalIdentitySection
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -644,6 +645,8 @@ private fun JuanitaApp(
                     Text("Il nome e la frase vengono salvati sul telefono. La wake word sarà collegata al motore di ascolto in una fase successiva.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
+
+                DigitalIdentitySection(panel = panel, gold = gold)
 
                 SettingsCard(panel, gold, "CARATTERE E PERSONALITÀ") {
                     Text("Regola ogni tratto da 0 a 100%. Le preferenze vengono salvate automaticamente.",
