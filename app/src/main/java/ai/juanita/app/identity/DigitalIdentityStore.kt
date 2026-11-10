@@ -18,9 +18,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Dedicated encrypted storage for independent digital identities.
- * It is intentionally separate from the human user's PersonalProfileStore.
- * Each identity has its own file and UUID-bound memory namespace.
+ * Encrypted storage for at most two character configurations: Juanita and José.
+ * Only one can be selected for a session. Character settings are separate, while
+ * both configurations deliberately point to the same shared user-memory archive.
  */
 class DigitalIdentityStore(context: Context) {
     private val appContext = context.applicationContext
