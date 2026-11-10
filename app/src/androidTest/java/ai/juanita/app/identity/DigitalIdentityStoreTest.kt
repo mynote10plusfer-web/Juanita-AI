@@ -149,6 +149,45 @@ class DigitalIdentityStoreTest {
         assertTrue(instruction.contains("never turn warmth or empathy into flattery"))
     }
 
+    @Test
+    fun culturalCatalogIsSourceBackedOfflineAndRequiresExplicitApproval() {
+        val dossiers = CulturalDossierCatalog.dossiers
+        assertEquals(2, dossiers.size)
+        dossiers.forEach { dossier ->
+            assertTrue(dossier.summary.isNotBlank())
+            assertTrue(dossier.sources.size >= 3)
+            dossier.sources.forEach { source ->
+                assertTrue(source.title.isNotBlank())
+                assertTrue(source.publisher.isNotBlank())
+                assertTrue(source.url.startsWith("https://"))
+                assertTrue(source.confidence in 0f..1f)
+            }
+            assertNull(dossier.approvedAtMillis)
+        }
+
+        val base = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        assertFalse(base.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+        val approved = base.copy(culturalDossier = dossiers.first().copy(approvedAtMillis = 123L))
+        assertTrue(approved.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+        assertTrue(approved.toSystemInstruction().contains("Vos, tú e usted"))
+    }
+
+    @Test
+    fun approvedCulturalDossierPersistsEncryptedAndCanBeRevoked() {
+        val base = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val approved = base.copy(culturalDossier = CulturalDossierCatalog.dossiers.first().copy(approvedAtMillis = 456L))
+        store.create(approved)
+        val restored = DigitalIdentityStore(isolatedContext()).get(base.id)!!
+        assertEquals(456L, restored.culturalDossier?.approvedAtMillis)
+        assertEquals(3, restored.culturalDossier?.sources?.size)
+        assertTrue(restored.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+
+        store.update(restored.copy(culturalDossier = null))
+        val revoked = DigitalIdentityStore(isolatedContext()).get(base.id)!!
+        assertNull(revoked.culturalDossier)
+        assertFalse(revoked.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+    }
+
     private fun identity(
         name: String,
         presentation: IdentityPresentation,

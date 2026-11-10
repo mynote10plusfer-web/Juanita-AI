@@ -54,6 +54,7 @@ fun DigitalIdentitySection(
     var message by remember { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
     var deleteCandidate by remember { mutableStateOf<DigitalIdentity?>(null) }
+    var dossierTarget by remember { mutableStateOf<DigitalIdentity?>(null) }
 
     var name by remember { mutableStateOf("Juanita") }
     var presentation by remember { mutableStateOf(IdentityPresentation.FEMININE) }
@@ -147,7 +148,7 @@ fun DigitalIdentitySection(
         Text("IDENTITÀ DIGITALI", color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
         Text("Crea personaggi indipendenti. Ognuno avrà una propria biografia, personalità, origine culturale e memoria separata.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
         Text("IDENTITÀ DIGITALI · SELEZIONE E ARCHIVIO CIFRATO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("Seleziona quale identità userà la prossima conversazione. Le memorie vengono conservate in archivi cifrati distinti. La ricerca culturale online arriverà in una fase successiva.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+        Text("Seleziona quale identità userà la prossima conversazione. Le memorie vengono conservate in archivi cifrati distinti. I dossier culturali documentati possono essere esaminati e approvati; restano disponibili offline.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         if (loading) Text("Caricamento identità…", color = Color.White, fontSize = 13.sp)
         if (identities.isNotEmpty()) {
@@ -158,12 +159,16 @@ fun DigitalIdentitySection(
                         Text(identity.displayName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         Text("${if (identity.presentation == IdentityPresentation.FEMININE) "Femminile" else "Maschile"} · ${identity.origin.countryName}${if (identity.origin.region.isNotBlank()) " · ${identity.origin.region}" else ""}${if (identity.origin.community.isNotBlank()) " · ${identity.origin.community}" else ""}", color = Color(0xFFB9BBC1), fontSize = 12.sp)
                         if (identity.biography.isNotBlank()) Text(identity.biography, color = Color(0xFF9A9DA4), fontSize = 12.sp, maxLines = 3)
+                        identity.culturalDossier?.takeIf { it.approvedAtMillis != null }?.let { dossier ->
+                            Text("DOSSIER CULTURALE APPROVATO · v${dossier.version} · ${dossier.sources.size} fonti", color = Color(0xFF9BC7A5), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                         Text(
                             if (activeIdentityId == identity.id) "IDENTITÀ ATTIVA · usata nella prossima conversazione" else "Non attiva",
                             color = if (activeIdentityId == identity.id) gold else Color(0xFF9A9DA4),
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold
                         )
+                        TextButton(onClick = { dossierTarget = identity }) { Text(if (identity.culturalDossier?.approvedAtMillis != null) "Esamina / modifica dossier culturale" else "Esamina dossier culturali") }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (activeIdentityId != identity.id) {
                                 TextButton(onClick = { onActiveIdentityChanged(identity.id); message = "${identity.displayName} sarà usata nella prossima conversazione." }) {
@@ -263,6 +268,83 @@ fun DigitalIdentitySection(
             }
         }
         message?.let { Text(it, color = if (it.contains("non riuscito") || it.contains("obbligatori") || it.contains("non leggibile")) Color(0xFFFFAB91) else Color(0xFFB9BBC1), fontSize = 12.sp) }
+    }
+
+    dossierTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { dossierTarget = null },
+            title = { Text("Ricerca culturale · ${target.displayName}") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Scegli un dossier documentato da esaminare. Il contenuto è incluso nell'app e disponibile offline. Nulla viene applicato finché non premi Approva.",
+                        fontSize = 12.sp
+                    )
+                    CulturalDossierCatalog.dossiers.forEach { proposal ->
+                        Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF202329))) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(proposal.sources.firstOrNull()?.publisher ?: "Fonti culturali", color = gold, fontWeight = FontWeight.Bold)
+                                Text(proposal.summary, color = Color.White, fontSize = 11.sp)
+                                Text("FONTI VERIFICABILI", color = gold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                proposal.sources.forEach { source ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(source.title, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(source.publisher, color = Color(0xFFB9BBC1), fontSize = 10.sp)
+                                        Text(source.url, color = Color(0xFF8AB4F8), fontSize = 9.sp)
+                                        Text(source.summary, color = Color(0xFFB9BBC1), fontSize = 10.sp)
+                                    }
+                                }
+                                Button(
+                                    onClick = {
+                                        val approved = proposal.copy(
+                                            version = (target.culturalDossier?.version ?: 0) + 1,
+                                            approvedAtMillis = System.currentTimeMillis(),
+                                            sources = proposal.sources
+                                        )
+                                        scope.launch {
+                                            saving = true
+                                            runCatching {
+                                                withContext(Dispatchers.IO) { store.update(target.copy(culturalDossier = approved)) }
+                                            }.onSuccess { saved ->
+                                                identities = withContext(Dispatchers.IO) { store.list() }
+                                                onIdentitiesChanged(identities)
+                                                message = "Dossier culturale approvato per ${saved.displayName}. È salvato in locale e verrà usato nelle prossime conversazioni."
+                                                dossierTarget = null
+                                            }.onFailure {
+                                                message = "Applicazione del dossier non riuscita: ${it.localizedMessage ?: "errore"}"
+                                            }
+                                            saving = false
+                                        }
+                                    },
+                                    enabled = !saving,
+                                    colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text("Approva e applica questo dossier") }
+                            }
+                        }
+                    }
+                    if (target.culturalDossier != null) {
+                        TextButton(onClick = {
+                            scope.launch {
+                                saving = true
+                                runCatching { withContext(Dispatchers.IO) { store.update(target.copy(culturalDossier = null)) } }
+                                    .onSuccess {
+                                        identities = withContext(Dispatchers.IO) { store.list() }
+                                        onIdentitiesChanged(identities)
+                                        message = "Dossier culturale revocato. L'identità userà solo il suo profilo individuale."
+                                        dossierTarget = null
+                                    }.onFailure { message = "Revoca non riuscita: ${it.localizedMessage ?: "errore"}" }
+                                saving = false
+                            }
+                        }) { Text("Revoca dossier da questa identità", color = Color(0xFFFF8A80)) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { dossierTarget = null }) { Text("Chiudi") } }
+        )
     }
 
     deleteCandidate?.let { candidate ->
