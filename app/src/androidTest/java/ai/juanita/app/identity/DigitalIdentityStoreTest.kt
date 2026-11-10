@@ -53,6 +53,18 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
+    fun identityContentsAreEncryptedAtRest() {
+        val identity = identity("NomeRiservatoJuanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        store.create(identity)
+        val encryptedFile = File(File(testDirectory, "juanita_digital_identities"), "${identity.id}.identity.enc")
+        val storedBytes = encryptedFile.readText()
+
+        assertFalse(storedBytes.contains("NomeRiservatoJuanita"))
+        assertFalse(storedBytes.contains("Colombia"))
+        assertNotNull(store.get(identity.id))
+    }
+
+    @Test
     fun updatingOrDeletingOneIdentityDoesNotChangeAnother() {
         val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
         val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
