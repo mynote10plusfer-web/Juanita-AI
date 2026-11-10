@@ -156,3 +156,36 @@ The existing call UI's CameraX work is separate from the new assistant-avatar re
 - Denying camera permission must leave voice-only conversation available. Closing the call or revoking permission releases only the call screen's own camera use cases.
 - The earlier orientation correction is present in source, but physical-device orientation still requires confirmation on Note10+ Android 12 and S22 Ultra Android 15.
 - The prior roadmap proposed local/open-source TalkingHead/GLB/WebGL exploration. The user's latest explicit decision is now online avatar creation/processing; that supersedes the earlier generation-location preference. It does not waive the no-paid-service approval gate.
+
+
+## Updated feasibility decision — 2026-11-10 (free-only requirement)
+
+The user has explicitly set a hard constraint: **only genuinely free solutions**. Exclude any paid provider, paid subscription, credit-metered SDK, trial-credit dependency, paid hosted GPU, or payment method. A temporary free trial is not a qualifying solution.
+
+### Rejected for this project
+
+- **bitHuman Essence 2:** technically attractive but requires a paid Creator plan and metered credits. Explicitly excluded.
+- **HeyGen LiveAvatar:** API is credit-metered/paid; excluded.
+- **Talking Avatar Realistic Avatars hosted service:** paid per minute; excluded.
+- **Talking Avatar Open Source:** MIT/free, but it is a browser-rendered stylized 3D avatar, not a photorealistic photo-to-human avatar. It also requires a GLB already rigged with 15 Oculus viseme morph targets. It does not satisfy the product's visual bar or generate the avatar asset from a description/photo. Do not ship as a substitute.
+- **MuseTalk:** promising open-source photo-driven lip-sync, with MIT code and upstream statement that its released weights may be used commercially. However, it reports 30fps+ on an NVIDIA Tesla V100; its README also documents limitations including 256x256 face-region resolution, identity-detail loss and frame jitter. It requires GPU inference infrastructure. No qualifying zero-cost, reliable always-on GPU host has been established. Do not represent the software license as free compute or promise free online operation.
+- **LivePortrait:** not selected. Some upstream detection/model dependencies carry non-commercial research restrictions unless replaced; a permissive code license alone does not clear the model/dependency chain.
+
+### Confirmed Firebase SDK integration constraint
+
+The app currently uses Firebase AI Logic BOM 35.1.0 and LiveSession.startAudioConversation(LiveAudioConversationConfig). The helper owns microphone capture and assistant audio playback and exposes transcript/function/GoAway callbacks, not assistant PCM frames.
+
+The current Android API reference documents LiveSession.receive(): Flow<LiveServerMessage>, and the Live API's raw streaming examples show assistant audio represented as InlineDataPart with audio/pcm data. However, receive() is the lower-level receive path; it cannot simply be collected in parallel with the SDK-managed startAudioConversation() because the session already has an active receiver (SessionAlreadyReceivingException). To fan out the exact assistant audio, a separate experimental transport would need to own microphone capture, LiveSession receive, AudioTrack playback, interruption handling, AEC/VAD and recovery. That is a substantial replacement of the current stable audio path, not a safe additive callback.
+
+Therefore:
+- Do not tap the loudspeaker with a second microphone.
+- Do not drive lip sync from transcript text.
+- Do not play a second TTS voice.
+- Do not replace the stable audio path merely to obtain avatar audio.
+- Any lower-level transport experiment must remain isolated from the production branch and must prove audio parity on physical devices before any integration is considered.
+
+### Decision / release gate
+
+**No avatar renderer or provider currently passes all three non-negotiable gates together: photorealistic quality, exact live audio synchronization, and genuinely zero recurring infrastructure cost.**
+
+Do not ship the stylized 3D SDK or a low-resolution/jittery photo animation as a compromise. Keep the existing static portrait/video-call screen and Gemini Live audio unchanged for the stable release. Continue only if a demonstrably free, legally usable, sufficiently photorealistic solution and a safe exact-audio bridge are found. Otherwise explicitly close this feature as not feasible under the current constraints rather than degrade Juanita.
