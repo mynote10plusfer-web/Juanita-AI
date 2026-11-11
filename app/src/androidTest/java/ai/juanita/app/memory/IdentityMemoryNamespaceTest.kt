@@ -52,6 +52,29 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun topicRoutedRecallIsSharedAcrossCharactersAndKeepsBroadFallback() {
+        val context = isolatedContext()
+        val juanitaMemory = EncryptedMemoryStore(context)
+        val joseMemory = EncryptedMemoryStore(context)
+        val vehicleFact = "La mia Yamaha Tricity 300 è il mio scooter principale."
+        val projectFact = "Juanita AI è il progetto Android che sto sviluppando."
+        try {
+            juanitaMemory.addMemory(vehicleFact)
+            juanitaMemory.addMemory(projectFact)
+
+            val vehicleRecall = joseMemory.buildRelevantRecallContext("Come va la mia Tricity?")
+            assertTrue(vehicleRecall.contains(vehicleFact))
+            assertTrue(vehicleRecall.contains("topic=vehicles_transport"))
+
+            val projectRecall = joseMemory.buildRelevantRecallContext("Problema con il progetto Android Juanita")
+            assertTrue(projectRecall.contains(projectFact))
+            assertTrue(projectRecall.contains("topic=projects_technology"))
+        } finally {
+            juanitaMemory.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
