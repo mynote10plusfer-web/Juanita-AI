@@ -142,17 +142,56 @@ fun DigitalIdentitySection(
     }
 
     LaunchedEffect(store) { refresh() }
+    fun duplicateIdentity(identity: DigitalIdentity) {
+        scope.launch {
+            saving = true
+            runCatching { withContext(Dispatchers.IO) { store.duplicate(identity.id, "${identity.displayName} copia") } }
+                .onSuccess {
+                    identities = withContext(Dispatchers.IO) { store.list() }
+                    onIdentitiesChanged(identities)
+                    message = "Copia indipendente creata: ${it.displayName}."
+                }.onFailure { message = "Duplicazione non riuscita: ${it.localizedMessage ?: "errore"}" }
+            saving = false
+        }
+    }
+
+    fun archiveIdentity(identity: DigitalIdentity) {
+        scope.launch {
+            saving = true
+            runCatching { withContext(Dispatchers.IO) { store.setArchived(identity.id, true) } }
+                .onSuccess {
+                    if (activeIdentityId == identity.id) onActiveIdentityChanged(null)
+                    identities = withContext(Dispatchers.IO) { store.list() }
+                    onIdentitiesChanged(identities)
+                    message = "${identity.displayName} archiviata. La memoria comune è rimasta intatta."
+                }.onFailure { message = "Archiviazione non riuscita: ${it.localizedMessage ?: "errore"}" }
+            saving = false
+        }
+    }
+
+    fun restoreIdentity(identity: DigitalIdentity) {
+        scope.launch {
+            saving = true
+            runCatching { withContext(Dispatchers.IO) { store.setArchived(identity.id, false) } }
+                .onSuccess {
+                    identities = withContext(Dispatchers.IO) { store.list() }
+                    onIdentitiesChanged(identities)
+                    message = "${identity.displayName} ripristinata."
+                }.onFailure { message = "Ripristino non riuscito: ${it.localizedMessage ?: "errore"}" }
+            saving = false
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("IDENTITÀ DIGITALI", color = gold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Text("Puoi configurare Juanita e José, ma soltanto uno sarà attivo alla volta. La memoria delle conoscenze e delle esperienze è comune; personalità, voce e origine regionale restano distinte.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+        Text("Crea tutte le Juanita e tutti i José che desideri: ogni profilo mantiene le proprie impostazioni, mentre la memoria resta condivisa. Soltanto un personaggio può essere attivo per sessione.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
         Text("IDENTITÀ DIGITALI · SELEZIONE E ARCHIVIO CIFRATO", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-        Text("La scelta vale dalla prossima conversazione: per cambiare identità termina prima la sessione in corso. Ogni identità ha un solo profilo modificabile: cambia paese, regione o località per cambiarne la caratterizzazione, senza creare copie. Il dossier culturale approvato resta disponibile offline.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+        Text("La scelta vale dalla prossima conversazione. Puoi aggiungere profili, modificarli, duplicarli, archiviarli, ripristinarli o eliminarli. Archiviazione ed eliminazione non cancellano mai la memoria comune.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         if (loading) Text("Caricamento identità…", color = Color.White, fontSize = 13.sp)
         if (identities.isNotEmpty()) {
-            Text("CONFIGURAZIONI DISPONIBILI · ${identities.size}/2", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            identities.forEach { identity ->
+            Text("PROFILI ATTIVI · ${identities.count { !it.archived }}", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            identities.filterNot { it.archived }.forEach { identity ->
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF202329))) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(identity.displayName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
@@ -179,6 +218,8 @@ fun DigitalIdentitySection(
                                 }
                             }
                             TextButton(onClick = { loadForEdit(identity) }) { Text("Modifica", color = gold) }
+                            TextButton(onClick = { duplicateIdentity(identity) }, enabled = !saving) { Text("Duplica", color = gold) }
+                            TextButton(onClick = { archiveIdentity(identity) }, enabled = !saving) { Text("Archivia", color = gold) }
                             TextButton(onClick = { deleteCandidate = identity }) { Text("Elimina", color = Color(0xFFFF8A80)) }
                         }
                     }
@@ -188,10 +229,27 @@ fun DigitalIdentitySection(
             Text("Non hai ancora creato identità digitali.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
         }
 
+        val archivedIdentities = identities.filter { it.archived }
+        if (archivedIdentities.isNotEmpty()) {
+            Text("PROFILI ARCHIVIATI · ${archivedIdentities.size}", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            archivedIdentities.forEach { identity ->
+                Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF202329))) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(identity.displayName, color = Color.White, fontWeight = FontWeight.SemiBold)
+                        Text("${identity.origin.countryName} · ${identity.origin.region}", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = { restoreIdentity(identity) }, enabled = !saving) { Text("Ripristina", color = gold) }
+                            TextButton(onClick = { loadForEdit(identity) }) { Text("Modifica", color = gold) }
+                            TextButton(onClick = { deleteCandidate = identity }) { Text("Elimina", color = Color(0xFFFF8A80)) }
+                        }
+                    }
+                }
+            }
+        }
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = panel)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(if (editingId == null) "CONFIGURA UN’IDENTITÀ" else "MODIFICA CONFIGURAZIONE", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                OutlinedTextField(value = name, onValueChange = {}, readOnly = true, label = { Text("Nome identità") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome del personaggio") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Presentazione", color = Color.White, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { presentation = IdentityPresentation.FEMININE; name = "Juanita" }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.FEMININE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.FEMININE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.FEMININE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("Juanita · femminile") }
@@ -259,7 +317,7 @@ fun DigitalIdentitySection(
                             }
                         }
                     },
-                    enabled = !saving && (editingId != null || (identities.size < 2 && identities.none { it.presentation == presentation })),
+                    enabled = !saving && name.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
                 ) { Text(if (saving) "Salvataggio…" else if (editingId == null) "Crea identità" else "Salva modifiche") }
