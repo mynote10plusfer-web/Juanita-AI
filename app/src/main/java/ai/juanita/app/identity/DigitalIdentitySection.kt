@@ -45,7 +45,8 @@ fun DigitalIdentitySection(
     activeIdentityId: String?,
     refreshSignal: Int,
     onActiveIdentityChanged: (String?) -> Unit,
-    onIdentitiesChanged: (List<DigitalIdentity>) -> Unit
+    onIdentitiesChanged: (List<DigitalIdentity>) -> Unit,
+    onPreviewVoice: (DigitalIdentity) -> Unit
 ) {
     val context = LocalContext.current
     val store = remember(context) { DigitalIdentityStore(context.applicationContext) }
@@ -326,6 +327,38 @@ fun DigitalIdentitySection(
                         }
                     }
                 }
+                val draftForVoicePreview = {
+                    val existing = editingId?.let { id -> identities.firstOrNull { it.id == id } }
+                    DigitalIdentity(
+                        id = existing?.id ?: java.util.UUID.randomUUID().toString(),
+                        displayName = name.trim().ifBlank { if (presentation == IdentityPresentation.FEMININE) "Juanita" else "José" },
+                        presentation = presentation,
+                        origin = CulturalOrigin(countryCode.trim(), countryName.trim(), region.trim(), locality.trim(), community.trim()),
+                        preferredLanguageTag = languageTag.trim().ifBlank { "es-ES" },
+                        voiceName = voiceName,
+                        languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
+                        personality = IdentityPersonality(
+                            irony = irony, sweetness = sweetness, sensuality = sensuality, friendliness = friendliness,
+                            warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness,
+                            directness = directness, sociability = sociability, spontaneity = spontaneity,
+                            patience = patience, optimism = optimism, assertiveness = assertiveness,
+                            playfulness = playfulness, discretion = discretion
+                        ),
+                        biography = biography.trim(),
+                        culturalDossier = existing?.culturalDossier,
+                        memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
+                        createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis(),
+                        updatedAtMillis = System.currentTimeMillis(),
+                        archived = existing?.archived ?: false
+                    )
+                }
+                Button(
+                    onClick = { onPreviewVoice(draftForVoicePreview()) },
+                    enabled = !saving && name.isNotBlank() && countryName.isNotBlank() && languageTag.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                ) { Text("ASCOLTA QUESTA VOCE") }
+                Text("Ascolterai un breve campione con la voce appena scelta e le caratteristiche linguistiche di questo profilo. L'anteprima usa temporaneamente il microfono e si chiude da sola.", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                 OutlinedTextField(value = biography, onValueChange = { biography = it }, label = { Text("Biografia iniziale (facoltativa)") }, minLines = 3, modifier = Modifier.fillMaxWidth())
                 Text("PERSONALITÀ INIZIALE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 TraitControl("Ironia", irony, { irony = it })
