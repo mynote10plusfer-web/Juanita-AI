@@ -1601,3 +1601,33 @@ Audit findings and fixes:
 - Regression tests verify that both characters retrieve the same evidence but retain their own distinct personality instructions.
 
 **Status:** APPROVED AS PRODUCT DIRECTION; implementation belongs to C4, with encrypted archive performance/migration verified in C5. Not yet implemented or device-validated.
+
+## 2026-11-11 — C4.5 topic-routed shared memory: first implementation slice
+
+**STATUS: CODE COMMITTED ON PR #40 BRANCH; CI AND ANDROID DEVICE VERIFICATION PENDING. NOT RELEASED.**
+
+User-approved requirement: all Juanita/José identities must use one growing shared memory organized by subject. A question about a vehicle should prioritize vehicle memories; a project question should prioritize project/technology memories. Topic folders are metadata/indexes over one shared store, never separate character memories.
+
+First implementation slice:
+- Added deterministic, on-device, multilingual MemoryTopicClassifier with extensible subject areas for vehicles/transport, projects/technology, home/property, health/wellbeing, work/finances, relationships/family, travel/places, interests/hobbies, preferences and personal profile.
+- New curated memories receive a topic tag; legacy records derive a topic at read time without destructive migration. Topic is serialized in the existing encrypted record and remains shared across all identities.
+- Relevant-memory retrieval now routes to the likely topic first and boosts matching topic records, while retaining broad lexical matching as a fallback so cross-topic facts are not hidden by classification.
+- Edited memories are reclassified. Live assistant instructions now describe the shared topic-first retrieval tool and require it when personal/project/device context may materially affect an answer.
+- Removed an unnecessary full encrypted-store rewrite from session-start context assembly; this path is now read-only.
+- Added JVM classifier tests for vehicle, project, home, travel, relationships, hobbies, accents and unknown-topic fallback, plus Android instrumentation coverage for shared topic recall across character store instances.
+- Commits: topic metadata/routing a8812f54a6c0e8dd9af05a7b1626a7b0e2ccca6f; classifier 1e7525a23319ac79c6d730af445f853f39a94785; JVM tests 517b9f45544ab8ee860ae1c5c543f962a6285de2; shared-recall instrumentation 9ae1ca4d6ef3bbdc805d12d11a059b427de79518; read-only session context c63e3a2db75ac18c84e45fbc2706b0ab3b8e9b2a; Live retrieval instructions 47a0f13c358945f86e32ea3f4619560352c2b5d7.
+
+### Critical storage issue discovered during implementation — C4/C5 blocker
+
+The current implementation still stores the encrypted record collection as one Base64 AES-GCM value in SharedPreferences and rewrites the full encrypted JSON collection on writes. It also applies hard ceilings of 100 curated memories / 32 KB of memory text and 300 legacy transcript turns. These are implementation limits, not the desired product behavior; records can be dropped when ceilings are exceeded. Do not describe the current memory as unlimited.
+
+Required next work:
+1. Design and implement a crash-safe migration from the legacy SharedPreferences encrypted blob to a scalable encrypted local database or chunked/file-backed store, preserving the existing Android Keystore key and all verified records.
+2. Remove silent destructive caps only after the new store and migration are proven. If storage/size constraints are reached, surface an explicit recoverable warning; never silently discard durable memories.
+3. Keep full transcript archive separate from curated memories; avoid loading all transcript turns into RAM for ordinary recall.
+4. Add topic/entity indexes that are rebuilt safely from legacy records and updated atomically with memory add/edit/delete. Retrieval should use indexed topic candidates first, then broad fallback; measure query latency and heap on growing datasets.
+5. Add paginated memory browsing, archive-size diagnostics, and user-controlled encrypted export/backup/restore.
+6. Benchmark append/write cost and memory pressure on 100, 1,000 and 10,000 curated memories plus long multi-session transcripts; verify process death, interrupted migration, rollback, Keystore continuity and no data loss.
+7. Verify actual Live tool invocation and returned evidence on Note10+ Android 12 and S22 Ultra Android 15. Tool availability/instructions alone do not prove the model calls it on every relevant turn.
+
+Do not replace or delete the legacy encrypted blob until migration validation and a recoverable backup succeed. Keep PR #40 draft/unmerged and stable v0.11.12 untouched. No APK release or merge without explicit user approval.
