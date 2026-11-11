@@ -32,6 +32,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
@@ -47,6 +48,10 @@ import kotlinx.coroutines.sync.withLock
 class GeminiLiveAssistant {
     private val lifecycleMutex = Mutex()
     private val recoveryMutex = Mutex()
+    // Serialize SDK microphone teardown. AudioRecord stop calls are synchronous and may block;
+    // a timed-out caller must never trigger a second concurrent stop on the same LiveSession.
+    private val audioStopLock = Any()
+    private var audioStoppedSession: LiveSession? = null
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var session: LiveSession? = null
     @Volatile private var manualStop = true
@@ -72,7 +77,7 @@ class GeminiLiveAssistant {
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
-    ) = lifecycleMutex.withLock {
+    ) = recoveryMutex.withLock { lifecycleMutex.withLock {
         stopSessionLocked()
         automaticRecoveryCount = 0
         synchronized(recentTranscript) { recentTranscript.clear() }
@@ -328,6 +333,12 @@ class GeminiLiveAssistant {
         this.onContinuityContext = onContinuityContext
         manualStop = false
         val connected = model.connect()
+        if (manualStop) {
+            // Stop may have been requested while the WebSocket handshake was in flight.
+            // Do not start a microphone pipeline after that request.
+            withTimeoutOrNull(1_500L) { runCatching { connected.close() } }
+            return@withLock
+        }
         session = connected
         startAudioOnSession(connected)
         if (initialPrompt.isNotBlank() && !manualStop) {
@@ -335,7 +346,7 @@ class GeminiLiveAssistant {
             // Recovery sessions deliberately do not replay this one-time greeting.
             connected.send(content("user") { text(initialPrompt.take(7000)) }, turnComplete = true)
         }
-    }
+    } }
 
 
     private fun rememberRecentTurn(role: String, text: String) {
@@ -382,7 +393,7 @@ class GeminiLiveAssistant {
         // A user stop can race with an in-flight reconnect/start operation.
         // Re-check after the SDK has finished initializing its audio pipeline.
         if (manualStop) {
-            runCatching { activeSession.stopAudioConversation() }
+            runCatching { stopAudioConversationOnce(activeSession) }
             if (session === activeSession) session = null
             withTimeoutOrNull(1_500L) { runCatching { activeSession.close() } }
             return
@@ -436,7 +447,7 @@ class GeminiLiveAssistant {
         healthJob?.cancel()
         stabilityJob?.cancel()
         session = null
-        runCatching { expected.stopAudioConversation() }
+        runCatching { stopAudioConversationOnce(expected) }
         withTimeoutOrNull(2_000L) { runCatching { expected.close() } }
 
         val recentContext = synchronized(recentTranscript) {
@@ -484,7 +495,7 @@ class GeminiLiveAssistant {
             startAudioOnSession(next)
             if (manualStop) {
                 if (session === next) session = null
-                runCatching { next.stopAudioConversation() }
+                runCatching { stopAudioConversationOnce(next) }
                 withTimeoutOrNull(1_500L) { runCatching { next.close() } }
                 return@withLock
             }
@@ -496,7 +507,7 @@ class GeminiLiveAssistant {
         } catch (failure: Exception) {
             lastFailure = failure
             if (session === next) session = null
-            runCatching { next.stopAudioConversation() }
+            runCatching { stopAudioConversationOnce(next) }
             withTimeoutOrNull(1_500L) { runCatching { next.close() } }
             if (manualStop) return@withLock
         }
@@ -514,18 +525,38 @@ class GeminiLiveAssistant {
         activeSession.sendVideoRealtime(InlineData(output.toByteArray(), "image/jpeg"))
     }
 
-    /** Stop microphone capture synchronously before any slower cleanup begins. */
-    fun stopAudioCapture() {
+    /**
+     * Signals shutdown immediately and stops the current recorder at most once.
+     * Returns false when the SDK did not confirm the synchronous recorder stop.
+     */
+    fun stopAudioCapture(): Boolean {
         manualStop = true
         healthJob?.cancel()
         stabilityJob?.cancel()
-        session?.let { active ->
-            runCatching { active.stopAudioConversation() }
+        val active = session ?: return true
+        return runCatching {
+            stopAudioConversationOnce(active)
+            true
+        }.getOrDefault(false)
+    }
+
+    suspend fun stop() {
+        // Recovery owns its own mutex. Wait for it before detaching/closing the session so
+        // an in-flight reconnect cannot reopen the microphone after an explicit Stop.
+        manualStop = true
+        healthJob?.cancel()
+        stabilityJob?.cancel()
+        recoveryMutex.withLock {
+            lifecycleMutex.withLock { stopSessionLocked() }
         }
     }
 
-    suspend fun stop() = lifecycleMutex.withLock {
-        stopSessionLocked()
+    private fun stopAudioConversationOnce(active: LiveSession) {
+        synchronized(audioStopLock) {
+            if (audioStoppedSession === active) return
+            active.stopAudioConversation()
+            audioStoppedSession = active
+        }
     }
 
     private suspend fun stopSessionLocked() {
@@ -537,11 +568,14 @@ class GeminiLiveAssistant {
         val active = session ?: return
         // Detach first so a repeated stop is harmless and cannot revive this session.
         session = null
-        runCatching { active.stopAudioConversation() }
+        val audioStopFailure = withContext(Dispatchers.IO) {
+            runCatching { stopAudioConversationOnce(active) }.exceptionOrNull()
+        }
         // Closing the websocket is bounded; the microphone is already stopped above.
         withTimeoutOrNull(4_000L) {
             runCatching { active.close() }
         }
+        if (audioStopFailure != null) throw audioStopFailure
     }
 
     companion object {
