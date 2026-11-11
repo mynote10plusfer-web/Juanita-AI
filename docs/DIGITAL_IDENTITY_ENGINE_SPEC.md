@@ -36,13 +36,32 @@ All runtime paths — automatic memory extraction, continuity snapshots, archive
 - A Settings selection change applies only after the current session has ended and a new one is explicitly started.
 - A call-in/wake matcher receives only the selected character's name. It may recognize a direct call at the beginning of an utterance; it must ignore the other character's name and must never switch profiles.
 
-## 4. Character configuration
+## 4. Character configuration and unified editor
 
-The encrypted identity store contains at most two slots: one feminine Juanita and one masculine José. The canonical names and presentations are fixed; the user can edit regional/cultural origin, preferred language, optional biography and personality traits in place. A second profile with the same presentation is rejected. This avoids duplicate regional variants becoming separate people.
+The target is an extensible, user-managed collection of saved Juanita profiles and José profiles. The user independently chooses how many to create; no extra profiles are pre-created and there is no hard-coded maximum of three. Exactly one selected profile may be active in a session.
 
-Cultural origin informs relevant language and context only. It must not determine personality, values, beliefs, gender roles or relationship preferences. Regional dossier approval is explicit, sources are visible, and the same dossier can be assigned to either character without changing grammatical presentation.
+Every profile has its own stable ID and independent configuration: display name, grammatical presentation, primary/additional languages, voice preference, cultural origin, approved regional dossier, biography/backstory, stable personality traits and avatar configuration. Regional variants are templates or settings within a profile, not a reason to create unwanted duplicates.
 
-Stable character traits include warmth, humour, curiosity, seriousness, expressiveness, formality, empathy, directness, sociability, spontaneity, patience, optimism, assertiveness, playfulness and discretion. Traits must be translated into observable conversational choices rather than maximized simultaneously.
+**One complete editor is the only source of truth for character settings.** “Aggiungi Juanita” and “Aggiungi José” open the complete guided editor before the new profile is saved. “Modifica” opens the same editor prefilled with all values of that exact profile. The user configures all character attributes during creation and can later change any of them in the same place. Essential character options must not be scattered across unrelated Settings pages.
+
+The unified editor includes:
+- Character family/presentation and editable display name.
+- Primary language, additional languages and preferred language behavior.
+- Available voice choices, with a preview when supported by the existing provider. Persist a stable voice ID; disclose unavailable choices and never silently substitute another voice.
+- Country, region, locality and cultural identity.
+- Optional source-backed cultural dossier selection, review and explicit approval.
+- All supported stable personality traits, with understandable labels and balanced defaults.
+- Biography/backstory and conversational style.
+- Avatar selection or creation metadata bound to this profile.
+- Review/preview, validation, save and cancel.
+
+The editor must load and persist every field. Editing one property (for example, voice) must not reset other fields. Duplicating a profile copies its initial configuration into a new independent ID; subsequent edits remain isolated. Deleting or archiving a profile never deletes shared memory, conversation archive or PersonalProfileStore. Profile cards summarize the main configured traits and reopen the same editor.
+
+Character settings may have shortcuts elsewhere, but no duplicate independent settings store. Shared-memory controls remain global and do not belong to an individual character.
+
+Stable character traits include warmth, humour, curiosity, seriousness, expressiveness, formality, empathy, directness, sociability, spontaneity, patience, optimism, assertiveness, playfulness and discretion. Traits translate into observable conversational choices rather than being maximized simultaneously.
+
+Cultural origin informs relevant language and context only. It must not determine personality, values, beliefs, gender roles or relationship preferences. A cultural dossier requires explicit approval and sources; the same dossier may be assigned to different profiles without changing grammatical presentation.
 
 Biography/backstory is user-authored character configuration, not a claim of real lived experience. Temporary affective state is computational, bounded and transparent; the app must never claim biological consciousness or human feelings.
 
