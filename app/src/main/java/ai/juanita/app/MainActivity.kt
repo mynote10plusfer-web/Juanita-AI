@@ -30,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -430,6 +431,7 @@ private fun JuanitaApp(
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
+    var showExitConfirmation by remember { mutableStateOf(false) }
     val hostActivity = context as? Activity
     DisposableEffect(hostActivity, callScreenVisible) {
         val window = hostActivity?.window
@@ -969,6 +971,15 @@ private fun JuanitaApp(
                     Text("Gemini Live è integrato per le prove vocali. La memoria automatica è attiva quando abilitata nelle impostazioni; la wake word e le voci regionali native sono ancora in sviluppo.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
+                SettingsCard(panel, gold, "USCITA SICURA") {
+                    Text("Esci da Juanita AI e chiudi anche la conversazione vocale in background. Le sveglie già programmate e la memoria resteranno sul telefono.",
+                        color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                    Button(
+                        onClick = { showExitConfirmation = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Esci e chiudi completamente") }
+                }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
                 }
@@ -1016,6 +1027,27 @@ private fun JuanitaApp(
                           .edit().putBoolean("onboarding_completed", true).apply()
                       showPermissionOnboarding = false
                   }
+              }
+              if (showExitConfirmation) {
+                  AlertDialog(
+                      onDismissRequest = { showExitConfirmation = false },
+                      title = { Text("Uscire da Juanita AI?") },
+                      text = { Text("La conversazione vocale verrà interrotta, il microfono disattivato e il servizio chiuso. Le sveglie programmate e i dati salvati resteranno intatti.") },
+                      confirmButton = {
+                          TextButton(onClick = {
+                              showExitConfirmation = false
+                              JuanitaVoiceService.stop(context)
+                              callScreenVisible = false
+                              hostActivity?.finishAndRemoveTask()
+                          }) { Text("Esci e chiudi", color = Color(0xFFFF8A80)) }
+                      },
+                      dismissButton = {
+                          TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
+                      },
+                      containerColor = panel,
+                      titleContentColor = Color.White,
+                      textContentColor = Color(0xFFB9BBC1)
+                  )
               }
               NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "ALARM" to "Sveglia", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
