@@ -702,6 +702,18 @@ private fun JuanitaApp(
                     activeIdentityId = activeDigitalIdentityId,
                     refreshSignal = identityRefreshSignal,
                     onActiveIdentityChanged = { id ->
+                        val previousId = activeDigitalIdentityId
+                        val voiceMayBeRunning = listOf(
+                            "in ascolto", "connessione", "rinnovando", "anteprima",
+                            "chiusura sessione", "chiusura audio non confermata"
+                        ).any { liveState.contains(it, ignoreCase = true) }
+                        if (id != previousId && voiceMayBeRunning) {
+                            // A Live session keeps the persona/system prompt it was created with.
+                            // Stop it immediately when the selected identity changes; the next
+                            // explicit Parla action will start a fresh session with the new profile.
+                            JuanitaVoiceService.stop(context)
+                            liveStartError = "Personaggio cambiato: chiusura della conversazione precedente in corso. Premi Parla per usare il nuovo profilo."
+                        }
                         activeDigitalIdentityId = id
                         onActiveDigitalIdentityChanged(id)
                     },
