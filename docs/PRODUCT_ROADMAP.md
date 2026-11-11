@@ -1562,3 +1562,42 @@ Audit findings and fixes:
 4. Do not begin unrelated feature expansion until C3–C5 are completed or explicitly reprioritized by the user.
 5. Update this roadmap and phase-specific plan after every meaningful implementation slice. Record exact PR/commit, CI run and device-test status; never mark a gate complete based on code presence or APK compilation alone.
 
+## C4.5 — Topic-organized shared memory and routed retrieval (USER-REQUESTED, 2026-11-11)
+
+**Goal:** let every saved Juanita and José retrieve the same growing shared knowledge efficiently by first identifying the subject, then searching the relevant topic area. Topic organization is an index over one shared memory, not separate memories or separate character stores.
+
+### Data organization
+- Keep one encrypted, append/grow-capable shared knowledge store and one shared conversation archive. All canonical and future character profiles use the same store.
+- Add topic metadata to each durable memory: primary topic, optional subtopic, keywords/entities, language, timestamps, provenance, confidence, confirmation state and expiry where relevant.
+- Start with a practical extensible taxonomy, not a fixed closed list: personal profile/routines; vehicles and transport; projects/technology; home/property; health/wellbeing; work/finances; relationships/family; travel/places; interests/hobbies; preferences; learned reference knowledge; and uncategorized.
+- Allow one memory to carry multiple topic tags where it genuinely spans subjects. Preserve links between related memories and the original source conversation/turn.
+- Do not force every transcript turn into permanent memory. The full transcript remains a separate historical source; curated durable memories are the searchable knowledge layer.
+- Never split memory by Juanita/José, language, region or character slot. Topic metadata is shared; character personality/profile configuration remains separate.
+
+### Query routing and retrieval
+- Before answering, classify the user's current request into one or more likely topics and extract useful entities/keywords (for example, a motorcycle model, project name or place).
+- Search the matching topic/subtopic first, using an index rather than scanning every archive file. Retrieve a small ranked set based on semantic relevance, exact entities/keywords, recency, confidence and user confirmation.
+- Expand to linked topics and then broader shared-memory search when the first topic is ambiguous, cross-topic or returns insufficient evidence. Do not miss a memory merely because it was filed under a neighboring topic.
+- If the question concerns a past conversation rather than a durable fact, search the transcript archive for the source turn and nearby context; do not treat a short summary as an exact quotation.
+- Build the answer context from retrieved evidence only, within a bounded context budget. Both Juanita and José must use this same retrieval pipeline before responding whenever prior user knowledge may materially affect the answer.
+- If no relevant memory is found, say so honestly; do not invent a remembered fact. Ask only for the missing detail when necessary.
+
+### Performance, storage and resilience
+- Memory is allowed to grow naturally; do not impose an arbitrary small total-memory cap that silently discards useful durable knowledge.
+- Optimize retrieval and storage rather than suppress learning: indexed topic/entity lookup, bounded result sets, lazy loading and pagination for long histories.
+- Stop rewriting an entire growing per-session transcript file for every appended turn. Benchmark and implement a crash-safe encrypted append-only or chunked archive with integrity checks and a tested migration path.
+- Keep transcript retention configurable and separate from durable memory retention. Never automatically delete curated important memories just to reclaim storage.
+- Monitor archive size, database/file growth, query latency, heap/RAM, CPU and battery. Expose understandable storage diagnostics and user-controlled archive export/deletion.
+- Any compaction or deduplication must preserve provenance and be reversible/auditable where feasible. Backups and migrations must be integrity-checked before old data is retired.
+
+### Acceptance tests
+- A vehicle question retrieves vehicle memories first; a project question retrieves project memories first; cross-topic questions can retrieve linked facts.
+- A fact learned by any Juanita/José is retrievable by every other character through the shared index.
+- Retrieval still finds relevant facts when the user uses synonyms, another language or an indirect reference.
+- Low-confidence or conflicting memories are identified as such; the latest explicit user correction wins without erasing provenance.
+- Large archives do not require loading every transcript into RAM for ordinary questions; query latency and memory use are measured on growing test datasets.
+- Appending a turn does not rewrite the complete long session archive; interrupted writes and migration preserve every verified turn.
+- No durable memory is silently removed by storage optimization; transcript cleanup does not delete curated memories or PersonalProfileStore.
+- Regression tests verify that both characters retrieve the same evidence but retain their own distinct personality instructions.
+
+**Status:** APPROVED AS PRODUCT DIRECTION; implementation belongs to C4, with encrypted archive performance/migration verified in C5. Not yet implemented or device-validated.
