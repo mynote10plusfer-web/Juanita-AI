@@ -1632,6 +1632,27 @@ Required next work:
 
 Do not replace or delete the legacy encrypted blob until migration validation and a recoverable backup succeed. Keep PR #40 draft/unmerged and stable v0.11.12 untouched. No APK release or merge without explicit user approval.
 
-### Character collection evolution — user-approved 2026-11-11
+### Character collection evolution — user-approved 2026-11-11 (user-controlled quantity)
+
+The earlier Phase A/B/C plan and current PR #40 implementation constrain the archive to two canonical slots (one Juanita, one José). This is superseded by the user's explicit requirement for a user-managed collection of saved profiles.
+
+**The user chooses the quantity independently for each character family.** The app must not force three profiles, pre-create unwanted profiles, or impose a hard-coded maximum of three:
+- If the user wants one Juanita, the collection contains one Juanita.
+- If the user wants three Juanitas, it contains three Juanitas.
+- The same independent choice applies to José.
+- The user can create another profile at any time, or keep just one. The collection grows only by explicit user action.
+
+Every saved profile is individually editable after creation: rename it, change its language, voice, regional/cultural dossier, biography/backstory, personality traits and avatar; duplicate it as a starting point; archive/restore it; or delete it with a clear confirmation. Editing one profile must never overwrite another profile's settings. Deleting/archiving a character profile must never delete shared user memory, conversation history or PersonalProfileStore.
+
+Exactly one selected saved profile may be active in a session. Switching is deliberate through Settings and takes effect on the next session; never run two characters simultaneously. All profiles use the same shared encrypted user memory and conversation archive, without profile-specific memory namespaces.
+
+Implementation requirements:
+- Replace the two-slot identity model with a persistent collection and stable unique profile IDs.
+- Migrate the existing Juanita and José configurations as the initial saved profiles, preserving their settings and all user data.
+- Do not automatically generate additional profiles. Provide clear “Aggiungi Juanita” and “Aggiungi José” actions and show the actual saved count for each family.
+- Provide an edit action for every existing profile and a safe create/edit flow; user can keep one or create any number.
+- Profile selection, editing, duplication, archiving and deletion must preserve the one-active-session invariant and must not instantiate another voice service or microphone.
+- Test 1 Juanita / 1 José, multiple Juanitas / one José, one Juanita / multiple José, and several of both; verify settings isolation and shared-memory visibility across all profiles.
+- This identity-model migration is planned and not yet implemented. Do not claim it delivered until migration, UI, persistence and regression tests pass.
 
 The earlier Phase A/B/C plan and current PR #40 implementation constrain the archive to two canonical slots (one Juanita, one José). This is now superseded by the user's explicit request for a collection of multiple saved profiles: initially around three Juanitas and three José, with an extensible architecture and no hard-coded maximum of three. Each saved profile must preserve independent language, voice, regional dossier, biography and personality. One profile only may be active in a session. All profiles share the same user memory and conversation archive. This is a separate identity-model migration; do not implement it by duplicating the app, duplicating memory stores, or starting parallel voice services. Preserve existing Juanita/José profiles as the first two migrated profiles, verify migration/rollback, and never delete user data. Update PR #40's two-slot assumptions and tests before claiming this requirement delivered.
