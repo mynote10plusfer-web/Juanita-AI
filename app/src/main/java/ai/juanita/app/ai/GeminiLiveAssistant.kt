@@ -569,9 +569,11 @@ class GeminiLiveAssistant {
         val audioStopped = withContext(Dispatchers.IO) {
             runCatching { stopAudioConversationOnce(active) }.isSuccess
         }
-        val closed = withTimeoutOrNull(closeTimeoutMillis) {
-            runCatching { active.close() }.isSuccess
-        } == true
+        val closed = withContext(Dispatchers.IO) {
+            withTimeoutOrNull(closeTimeoutMillis) {
+                runCatching { active.close() }.isSuccess
+            } == true
+        }
         if (audioStopped && closed && closingSession === active) {
             closingSession = null
         }
