@@ -338,8 +338,6 @@ private fun JuanitaApp(
         mutableStateOf(liveVoices.firstOrNull { it.id == initialLiveVoiceName } ?: liveVoices.first())
     }
     var liveVoiceMenuExpanded by remember { mutableStateOf(false) }
-    val profileStore = remember(context) { DigitalIdentityStore(context.applicationContext) }
-    val profileScope = rememberCoroutineScope()
     val dialects = listOf(
         RegionalDialect("sicilian-palermo", "Siciliano · area palermitana", "it-IT",
             "Chi bedda jurnata! Nni facemu 'na passiata?",
@@ -393,6 +391,8 @@ private fun JuanitaApp(
     var memories by remember { mutableStateOf(initialMemories) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     val context = LocalContext.current
+    val profileStore = remember(context) { DigitalIdentityStore(context.applicationContext) }
+    val profileScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedSection by remember { mutableStateOf("HOME") }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
