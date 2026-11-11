@@ -331,6 +331,7 @@ private fun JuanitaApp(
     val initialLanguage = voiceLanguages.firstOrNull { it.tag == initialLanguageTag } ?: voiceLanguages.first()
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
     var digitalIdentities by remember { mutableStateOf(initialDigitalIdentities) }
+    var identityRefreshSignal by remember { mutableStateOf(0) }
     var activeDigitalIdentityId by remember { mutableStateOf(initialActiveDigitalIdentityId) }
     val activeDigitalIdentity = digitalIdentities.firstOrNull { it.id == activeDigitalIdentityId }
     var selectedLiveVoice by remember {
@@ -524,6 +525,7 @@ private fun JuanitaApp(
                     }
                 }.onSuccess { updated ->
                     digitalIdentities = digitalIdentities.map { if (it.id == updated.id) updated else it }
+                    identityRefreshSignal += 1
                     liveStartError = "Voce ${voice.label} salvata nel profilo ${updated.displayName}. Sarà usata dalla prossima conversazione."
                 }.onFailure { error ->
                     liveStartError = "Non sono riuscita a salvare la voce: ${error.localizedMessage ?: "errore"}"
@@ -548,10 +550,10 @@ private fun JuanitaApp(
             android.content.pm.PackageManager.PERMISSION_GRANTED) {
             val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
+            JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
+                "Questa è una breve anteprima della mia voce. Ciao, sono ${activeDigitalIdentity?.displayName ?: assistantName}. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
                 previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
-            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
+            liveStartError = "Anteprima della voce ${activeDigitalIdentity?.voiceName ?: selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
         } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
     }
     val speechLauncher = rememberLauncherForActivityResult(
@@ -696,6 +698,7 @@ private fun JuanitaApp(
                     panel = panel,
                     gold = gold,
                     activeIdentityId = activeDigitalIdentityId,
+                    refreshSignal = identityRefreshSignal,
                     onActiveIdentityChanged = { id ->
                         activeDigitalIdentityId = id
                         onActiveDigitalIdentityChanged(id)
@@ -802,7 +805,7 @@ private fun JuanitaApp(
                         TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
                         DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
                             Text(
-                                "VOCI FEMMINILI",
+                                if (activeDigitalIdentity == null) "VOCI FEMMINILI" else "VOCI DISPONIBILI PER ${activeDigitalIdentity.displayName}",
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                 color = gold,
                                 fontSize = 11.sp,
@@ -819,28 +822,25 @@ private fun JuanitaApp(
                                     onClick = { persistSelectedVoice(voice) }
                                 )
                             }
-                            Text(
-                                "VOCI MASCHILI",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = gold,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            liveVoices.filter { voice -> if (activeDigitalIdentity == null) voice.gender == "MASCHILE" else voice.id in ai.juanita.app.identity.DigitalIdentityVoiceCatalog.forPresentation(activeDigitalIdentity.presentation) }.forEach { voice ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(voice.label)
-                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedLiveVoice = voice
-                                        onLiveVoiceChanged(voice.id)
-                                        liveVoiceMenuExpanded = false
-                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
-                                    }
+                            if (activeDigitalIdentity == null) {
+                                Text(
+                                    "VOCI MASCHILI",
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    color = gold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(voice.label)
+                                                Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                            }
+                                        },
+                                        onClick = { persistSelectedVoice(voice) }
+                                    )
+                                }
                             }
                         }
                     }
