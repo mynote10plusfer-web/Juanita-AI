@@ -1,6 +1,6 @@
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-10 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. Debug APK build and JVM unit tests passed; Android API 31 instrumentation is still running; physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
+Last updated: 2026-11-11 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. Debug APK build and JVM unit tests passed; Android API 31 instrumentation is still running; physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
 
 ## 2026-11-09 — voice reconnect, device slowdown and continuity audit
 
@@ -1678,3 +1678,27 @@ Implementation requirements:
 - This identity-model migration is planned and not yet implemented. Do not claim it delivered until migration, UI, persistence and regression tests pass.
 
 The earlier Phase A/B/C plan and current PR #40 implementation constrain the archive to two canonical slots (one Juanita, one José). This is now superseded by the user's explicit request for a collection of multiple saved profiles: initially around three Juanitas and three José, with an extensible architecture and no hard-coded maximum of three. Each saved profile must preserve independent language, voice, regional dossier, biography and personality. One profile only may be active in a session. All profiles share the same user memory and conversation archive. This is a separate identity-model migration; do not implement it by duplicating the app, duplicating memory stores, or starting parallel voice services. Preserve existing Juanita/José profiles as the first two migrated profiles, verify migration/rollback, and never delete user data. Update PR #40's two-slot assumptions and tests before claiming this requirement delivered.
+
+
+## 2026-11-11 — six-tab source audit and extensible character collection slice
+
+**Source audit:** inspected the actual Compose navigation and the implementations behind all six existing tabs. Keep exactly these six tabs; no seventh tab is approved:
+- **Home:** selected assistant overview, location/status, manually started Gemini Live conversation, stop action and entry to the existing video-call screen. No separate conversational-presence control or selected-name call-in integration is wired yet.
+- **Avatar:** Avatar Studio metadata and CameraX vision controls. Avatar profiles are still stored separately from DigitalIdentity; the current call portrait remains a fixed local image and is not bound to the selected character's avatar asset. No live photorealistic generation/lip-sync is claimed.
+- **Sveglia:** the local multi-alarm implementation is present. Local reminders/tasks, a dedicated upcoming-days agenda and calendar browsing are still missing; morning briefing can read today's Android calendar events when permission is granted.
+- **Settaggi:** permissions, legacy global assistant settings, language/dialect/voice selection and DigitalIdentity management currently coexist. This is too fragmented for the approved complete per-character editor; character-owned voice, avatar, language behavior and all personality fields must move into that single editor without breaking the stable global voice/session path.
+- **Memoria:** encrypted memory and conversation archive controls, manual memory editing/deletion and automatic-memory pause are present. The current durable-memory UI/store still has the 100-record / 32,000-character caps. The legacy JSON blob and migration/scaling work remain C4/C5 blockers.
+- **Altro:** debug-only diagnostics, Improvement Lab reports and project/version status. Notification reading remains deferred and must not be restored without a separate policy/distribution review.
+
+**Character collection implementation slice — code committed, validation pending:**
+- Removed the two-profile and one-per-presentation restrictions from the encrypted DigitalIdentityStore. Multiple Juanita profiles and multiple José profiles can now coexist, with no hard-coded maximum.
+- Preserved the existing encrypted per-profile files and Keystore alias. Existing records without the new archive flag decode as active (archived=false); no destructive bulk migration is performed.
+- Added an encrypted archived flag plus store operations to duplicate a profile under a new UUID and archive/restore a profile. Profile deletion/archive does not call or clear the shared memory store.
+- Made display names persist as user-authored values rather than forcibly rewriting every feminine/masculine profile to the canonical name.
+- Updated the identity UI with an editable display name, duplicate/archive/restore controls and separate archived-profile listing. Archiving the active profile clears the selected ID; app startup refuses to reactivate an archived profile.
+- Added Android instrumentation coverage for 5 Juanita + 4 José profiles, independent IDs, duplicate behavior and archive/restore persistence.
+- Code commits: model dad3fcabf01ccec75a83290304c7c498ff47cf41; encrypted store ea7a7f87a8bafaa0625b624ad5ef9405c5ee6894; tests 54a50927a772198550da502630abe10b4ba36d61; editor UI 8bcbbc45114fd7103492bd560218b8563e84c144; active-profile startup guard 6a14acaef92602aa7fa5ded96a07f2434353f76c.
+- **Not yet complete:** unified editor still needs per-profile provider voice ID and preview, profile-bound avatar selection, language behavior/conversational style fields, full 15-trait editing, profile duplication semantics for avatar assets, and review/preview validation. The existing separate settings must not remain an alternative source of truth once this is integrated.
+- CI for the exact latest commit is pending. No new APK from this slice is validated yet.
+
+**Next execution order remains C3 → C4 → C5**, with the user-approved Personal Organizer requirements retained for the next product package after the safety-critical phase is accepted. Do not declare the profile editor, memory scaling, presence or Organizer complete from code presence alone.
