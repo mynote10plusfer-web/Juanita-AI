@@ -426,12 +426,10 @@ class JuanitaVoiceService : Service() {
                 // top of an audio pipeline whose release has not been confirmed.
                 val captureStopped = withTimeoutOrNull(6_000L) {
                     withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
-                    true
                 } == true
-                audioRouteController.end()
-                if (captureStopped) releaseCpuWakeLock()
+                if (captureStopped) audioRouteController.end()
                 assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
-                    assistant.stop()
+                    withContext(Dispatchers.IO) { assistant.stop() }
                     true
                 } == true)
                 if (!assistantStopped) {
@@ -445,6 +443,18 @@ class JuanitaVoiceService : Service() {
                     updateNotification("Microfono disattivato · salvataggio in corso")
                 }
             } finally {
+                // Fail closed: if the SDK did not confirm recorder/session shutdown, keep the
+                // foreground service and its notification visible. Never report a false stop,
+                // release the service, or permit another character to open a second recorder.
+                if (!assistantStopped) {
+                    pendingStartIntent = null
+                    pendingStartId = 0
+                    _state.value = "Chiusura audio non confermata · riprova Termina o arresta forzatamente l'app"
+                    updateNotification("Microfono non disattivato con certezza · chiusura richiesta")
+                    releaseCpuWakeLock()
+                    stopJob = null
+                    return@launch
+                }
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                 if (!preserveContinuitySnapshot) {
