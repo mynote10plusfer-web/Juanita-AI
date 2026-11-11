@@ -1722,3 +1722,17 @@ Implementation update (2026-11-11):
 - Fixed both the permission-granted preview path and the direct voice-preview path to use the selected profile's own voice ID. Main conversation startup already resolves the selected profile voice.
 - Added an Android instrumentation regression test verifying a profile voice update survives store recreation and does not alter another character's voice.
 - Validation pending on the latest branch head: debug build, JVM tests, instrumentation-test compilation and API 31 emulator execution. Manual Samsung UI/voice testing is still required.
+
+## C4.8 — Safe application exit and reliable character/session transitions
+
+**IMPLEMENTED ON PR #40 BRANCH; CI AND DEVICE VALIDATION PENDING.**
+
+- Added an explicit **Esci e chiudi completamente** action inside the existing **Altro** tab; no seventh tab is introduced.
+- The action asks for confirmation, requests termination of the Gemini Live conversation/service, releases microphone/audio routing and the CPU WakeLock through the existing orderly stop path, then removes the Activity task.
+- Scheduled local alarms and encrypted memory are intentionally preserved; exiting the assistant is not equivalent to clearing app data or cancelling alarms.
+- A new voice-session request arriving while the previous session is shutting down is now retained (latest request wins) and started only after the old audio pipeline has been stopped and its teardown has completed. This prevents a rapid character switch/restart from being silently discarded.
+- A second start request while a session is already active now reports that the current session must be ended before the newly selected character can be used. Character selection remains a next-session change; two personas never run simultaneously.
+- Explicit stop/exit cancels any queued start, so an exit request cannot accidentally restart the microphone.
+- The existing background conversation behavior remains intentional when the user merely presses Home, turns off the display or removes the task from Recents. Only the explicit exit action ends the session.
+
+**Validation still required:** exact-head CI, physical Samsung verification of exit during active audio, exit during pending teardown, quick character change/restart, confirmation that microphone and WakeLock are released, and confirmation that scheduled alarms still fire after exit. This change alone does not establish the cause of any thermal shutdown; battery/thermal diagnostics and device logs remain necessary.
