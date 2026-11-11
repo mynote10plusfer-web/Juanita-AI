@@ -24,7 +24,8 @@ object MemoryTopicClassifier {
             "juanita", "jose", "josé", "app", "applicazione", "android", "apk", "github",
             "gradle", "programmazione", "codice", "software", "road", "display", "progetto",
             "memoria", "build", "release", "repository", "telefono", "microfono", "avatar",
-            "technology", "project", "code", "software", "computer"
+            "technology", "project", "code", "software", "computer", "batteria", "battery",
+            "cellulare", "samsung", "ram", "cpu", "wakelock", "wifi", "gps", "processore"
         ),
         "home_property" to setOf(
             "casa", "abitazione", "appartamento", "terrazza", "jacuzzi", "pergola", "proprieta",
@@ -33,7 +34,7 @@ object MemoryTopicClassifier {
         ),
         "health_wellbeing" to setOf(
             "salute", "benessere", "allenamento", "palestra", "cardio", "airbike", "pesi",
-            "sonno", "batteria", "stress", "alimentazione", "nutrizione", "fitness",
+            "sonno", "stress", "alimentazione", "nutrizione", "fitness",
             "health", "wellbeing", "workout", "exercise", "sleep"
         ),
         "work_finances" to setOf(
