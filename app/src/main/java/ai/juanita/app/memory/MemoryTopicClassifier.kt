@@ -73,14 +73,15 @@ object MemoryTopicClassifier {
         var bestTopic = GENERAL
         var bestScore = 0
         for ((topic, words) in keywords) {
-            val score = words.sumOf { keyword ->
-                if (keyword.contains(' ')) {
+            val score: Int = words.fold(0) { total, keyword ->
+                val points = if (keyword.contains(' ')) {
                     if (normalized.contains(keyword)) 2 else 0
                 } else if (keyword in tokens) {
                     2
                 } else if (keyword.length >= 5 && tokens.any { it.length >= 5 && (it.startsWith(keyword) || keyword.startsWith(it)) }) {
                     1
                 } else 0
+                total + points
             }
             if (score > bestScore) {
                 bestScore = score
