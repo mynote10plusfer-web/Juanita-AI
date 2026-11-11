@@ -43,6 +43,7 @@ fun DigitalIdentitySection(
     panel: Color,
     gold: Color,
     activeIdentityId: String?,
+    refreshSignal: Int,
     onActiveIdentityChanged: (String?) -> Unit,
     onIdentitiesChanged: (List<DigitalIdentity>) -> Unit
 ) {
@@ -176,7 +177,7 @@ fun DigitalIdentitySection(
         }
     }
 
-    LaunchedEffect(store) { refresh() }
+    LaunchedEffect(store, refreshSignal) { refresh() }
     fun duplicateIdentity(identity: DigitalIdentity) {
         scope.launch {
             saving = true
@@ -392,7 +393,7 @@ fun DigitalIdentitySection(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
                 ) { Text(if (saving) "Salvataggio…" else if (editingId == null) "Crea identità" else "Salva modifiche") }
-                TextButton(onClick = { resetForm(); editorOpen = false; message = if (editingId == null) "Creazione annullata." else "Modifiche annullate." }) { Text("Annulla e torna ai personaggi", color = gold) }
+                TextButton(onClick = { val wasEditing = editingId != null; resetForm(); editorOpen = false; message = if (wasEditing) "Modifiche annullate." else "Creazione annullata." }) { Text("Annulla e torna ai personaggi", color = gold) }
             }
         }
         }
