@@ -1702,3 +1702,12 @@ The earlier Phase A/B/C plan and current PR #40 implementation constrain the arc
 - CI for the exact latest commit is pending. No new APK from this slice is validated yet.
 
 **Next execution order remains C3 → C4 → C5**, with the user-approved Personal Organizer requirements retained for the next product package after the safety-critical phase is accepted. Do not declare the profile editor, memory scaling, presence or Organizer complete from code presence alone.
+
+## C4.6 — Persisted per-character voice and complete personality controls
+
+Implementation update (2026-11-11):
+- The identity editor now owns the legacy character dimensions (irony, sweetness, sensuality, friendliness) as well as the expanded behavioral dimensions. The global sliders are explicitly reserved for the standard assistant when no digital identity is active; they no longer appear to edit a selected character.
+- Each digital identity stores its own stable Gemini Live voice ID. The editor offers only voice IDs from the current provider catalogue and filters them by the character's grammatical presentation. The selected profile voice is used for session startup and voice preview.
+- Encrypted profile JSON persists biography, all personality values and voice ID. Older records without a voice ID or the four added dimensions receive safe defaults during decoding; existing encrypted profile files and the shared-memory namespace are retained.
+- Regression coverage verifies voice, biography and the added personality values after store recreation.
+- Still required before release: CI build and Android instrumentation results on the updated head; manual Samsung verification of create/edit/reopen, per-profile voice, profile switching and no cross-profile leakage. Avatar binding/generation remains separate and is not claimed complete.
