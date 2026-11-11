@@ -2,6 +2,22 @@
 
 Last updated: 2026-11-11 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. New microphone shutdown, reconnect serialization and character-switch mitigations have been committed; exact-head CI is pending. Physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
 
+## 2026-11-11 — character voice preview, obsolete mic test removal and session identity
+
+**STATUS: CODE COMMITTED TO PR #40; EXACT-HEAD CI AND PHYSICAL-DEVICE VALIDATION PENDING.**
+
+User-requested UX changes:
+- Add a voice preview directly below the voice selector inside each character's create/edit form. The preview uses the exact currently selected Gemini Live voice ID and the draft character's language/cultural instruction, even before the profile is saved.
+- Reuse Gemini Live's existing voice output path; do not introduce Android TTS or another voice provider. The short preview requires microphone permission because the current Live SDK session path opens audio input, then auto-stops. It is blocked while another voice session is active or still closing.
+- Remove the separate Settings > Prova microfono Android speech-recognition/transcription test. Normal user speech is already handled by Gemini Live in the conversation.
+- Remove the duplicate Settings voice-sample button. Voice choice and preview now live in the character editor; the Settings voice card remains for inspecting/changing the saved voice.
+- Show the actual character name for the current Live session in the Home conversation card and full-screen call. Preserve the session's original name while a previous character is still closing; show the newly selected character as the next profile only after the old session is no longer active.
+
+Validation required:
+- Exact-head Android build, JVM tests, instrumentation APK compilation and API 31 emulator tests.
+- Physical test: create an unsaved character, change voice, preview, verify the sample uses the draft voice and regional language; verify automatic mic/session shutdown; save/edit and repeat; verify no preview while a regular conversation is active; verify the Home and full-screen call labels match the speaking character; verify obsolete mic-test and duplicate preview controls are absent.
+- The preview still uses the current Gemini Live SDK audio path and temporarily requests microphone permission. A future SDK-supported output-only preview could remove that permission requirement, but must not substitute a different voice engine.
+
 ## 2026-11-11 — microphone shutdown and character-switch incident
 
 **STATUS: CODE MITIGATIONS COMMITTED; EXACT-HEAD CI AND PHYSICAL SAMSUNG VALIDATION REQUIRED. NOT YET DECLARED FIXED.**
