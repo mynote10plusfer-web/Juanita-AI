@@ -12,6 +12,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -63,8 +65,14 @@ fun DigitalIdentitySection(
     var locality by remember { mutableStateOf("Medellín") }
     var community by remember { mutableStateOf("Paisa") }
     var languageTag by remember { mutableStateOf("es-CO") }
+    var voiceName by remember { mutableStateOf("Kore") }
+    var voiceMenuExpanded by remember { mutableStateOf(false) }
     var otherLanguages by remember { mutableStateOf("it-IT, es-ES") }
     var biography by remember { mutableStateOf("") }
+    var irony by remember { mutableStateOf(0.5f) }
+    var sweetness by remember { mutableStateOf(0.7f) }
+    var sensuality by remember { mutableStateOf(0.5f) }
+    var friendliness by remember { mutableStateOf(0.7f) }
     var warmth by remember { mutableStateOf(0.7f) }
     var humour by remember { mutableStateOf(0.6f) }
     var curiosity by remember { mutableStateOf(0.8f) }
@@ -88,8 +96,13 @@ fun DigitalIdentitySection(
         locality = "Medellín"
         community = "Paisa"
         languageTag = "es-CO"
+        voiceName = DigitalIdentityVoiceCatalog.defaultFor(presentation)
         otherLanguages = "it-IT, es-ES"
         biography = ""
+        irony = 0.5f
+        sweetness = 0.7f
+        sensuality = 0.5f
+        friendliness = 0.7f
         warmth = 0.7f
         humour = 0.6f
         curiosity = 0.8f
@@ -114,8 +127,13 @@ fun DigitalIdentitySection(
         locality = identity.origin.locality
         community = identity.origin.community
         languageTag = identity.preferredLanguageTag
+        voiceName = identity.voiceName
         otherLanguages = identity.languages.joinToString(", ")
         biography = identity.biography
+        irony = identity.personality.irony
+        sweetness = identity.personality.sweetness
+        sensuality = identity.personality.sensuality
+        friendliness = identity.personality.friendliness
         warmth = identity.personality.warmth
         humour = identity.personality.humour
         curiosity = identity.personality.curiosity
@@ -195,7 +213,9 @@ fun DigitalIdentitySection(
                 Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF202329))) {
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(identity.displayName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                        Text("${if (identity.presentation == IdentityPresentation.FEMININE) "Femminile" else "Maschile"} · ${identity.origin.countryName}${if (identity.origin.region.isNotBlank()) " · ${identity.origin.region}" else ""}${if (identity.origin.community.isNotBlank()) " · ${identity.origin.community}" else ""}", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                        Text("${if (identity.presentation == IdentityPresentation.FEMININE) "Juanita" else "José"} · ${identity.origin.countryName}${if (identity.origin.region.isNotBlank()) " · ${identity.origin.region}" else ""}${if (identity.origin.community.isNotBlank()) " · ${identity.origin.community}" else ""}", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                        Text("Voce: ${identity.voiceName}", color = gold, fontSize = 11.sp)
+                        Text("Carattere: dolcezza ${(identity.personality.sweetness * 100).toInt()}% · ironia ${(identity.personality.irony * 100).toInt()}% · empatia ${(identity.personality.empathy * 100).toInt()}%", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                         if (identity.biography.isNotBlank()) Text(identity.biography, color = Color(0xFF9A9DA4), fontSize = 12.sp, maxLines = 3)
                         identity.culturalDossier?.takeIf { it.approvedAtMillis != null }?.let { dossier ->
                             Text("DOSSIER CULTURALE APPROVATO · v${dossier.version} · ${dossier.sources.size} fonti", color = Color(0xFF9BC7A5), fontSize = 10.sp, fontWeight = FontWeight.Bold)
@@ -252,8 +272,8 @@ fun DigitalIdentitySection(
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome del personaggio") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Presentazione", color = Color.White, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { presentation = IdentityPresentation.FEMININE; name = "Juanita" }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.FEMININE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.FEMININE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.FEMININE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("Juanita · femminile") }
-                    Button(onClick = { presentation = IdentityPresentation.MASCULINE; name = "José" }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.MASCULINE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.MASCULINE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.MASCULINE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("José · maschile") }
+                    Button(onClick = { presentation = IdentityPresentation.FEMININE; name = "Juanita"; voiceName = DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.FEMININE) }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.FEMININE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.FEMININE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.FEMININE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("Juanita · femminile") }
+                    Button(onClick = { presentation = IdentityPresentation.MASCULINE; name = "José"; voiceName = DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.MASCULINE) }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.MASCULINE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.MASCULINE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.MASCULINE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("José · maschile") }
                 }
                 OutlinedTextField(value = countryName, onValueChange = { countryName = it }, label = { Text("Paese") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = countryCode, onValueChange = { countryCode = it.uppercase(Locale.ROOT).take(2) }, label = { Text("Codice paese · es. CO, ES, IT") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -262,8 +282,27 @@ fun DigitalIdentitySection(
                 OutlinedTextField(value = community, onValueChange = { community = it }, label = { Text("Identità culturale / area locale") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = languageTag, onValueChange = { languageTag = it }, label = { Text("Lingua preferita · es. es-CO") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = otherLanguages, onValueChange = { otherLanguages = it }, label = { Text("Altre lingue · codici separati da virgola") }, modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("VOCE PERSONALE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("La voce viene salvata in questo profilo, non nelle impostazioni generali.", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                    }
+                    TextButton(onClick = { voiceMenuExpanded = true }) { Text(voiceName, color = gold) }
+                    DropdownMenu(expanded = voiceMenuExpanded, onDismissRequest = { voiceMenuExpanded = false }) {
+                        DigitalIdentityVoiceCatalog.forPresentation(presentation).forEach { voice ->
+                            DropdownMenuItem(text = { Text(voice) }, onClick = {
+                                voiceName = voice
+                                voiceMenuExpanded = false
+                            })
+                        }
+                    }
+                }
                 OutlinedTextField(value = biography, onValueChange = { biography = it }, label = { Text("Biografia iniziale (facoltativa)") }, minLines = 3, modifier = Modifier.fillMaxWidth())
                 Text("PERSONALITÀ INIZIALE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                TraitControl("Ironia", irony, { irony = it })
+                TraitControl("Dolcezza", sweetness, { sweetness = it })
+                TraitControl("Sensualità", sensuality, { sensuality = it })
+                TraitControl("Simpatia", friendliness, { friendliness = it })
                 TraitControl("Calore", warmth, { warmth = it })
                 TraitControl("Umorismo", humour, { humour = it })
                 TraitControl("Curiosità", curiosity, { curiosity = it })
@@ -290,8 +329,10 @@ fun DigitalIdentitySection(
                                 presentation = presentation,
                                 origin = CulturalOrigin(countryCode.trim(), countryName.trim(), region.trim(), locality.trim(), community.trim()),
                                 preferredLanguageTag = languageTag.trim(),
+                                voiceName = voiceName,
                                 languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
                                 personality = IdentityPersonality(
+                                    irony = irony, sweetness = sweetness, sensuality = sensuality, friendliness = friendliness,
                                     warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness,
                                     directness = directness, sociability = sociability, spontaneity = spontaneity,
                                     patience = patience, optimism = optimism, assertiveness = assertiveness,
