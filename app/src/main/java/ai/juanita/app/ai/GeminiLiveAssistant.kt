@@ -336,8 +336,13 @@ class GeminiLiveAssistant {
         val connected = model.connect()
         if (manualStop) {
             // Stop may have been requested while the WebSocket handshake was in flight.
-            // Do not start a microphone pipeline after that request.
-            withTimeoutOrNull(1_500L) { runCatching { connected.close() } }
+            // Do not start a microphone pipeline after that request. Track an unclosed
+            // handshake so the service can retry its close before allowing another session.
+            closingSession = connected
+            val closed = withTimeoutOrNull(1_500L) {
+                runCatching { connected.close() }.isSuccess
+            } == true
+            if (closed) closingSession = null
             return@lifecycleLock
         }
         session = connected
