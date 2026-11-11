@@ -52,8 +52,8 @@ data class CulturalDossier(
 )
 
 /**
- * One of at most two separately configured characters. Identity settings are
- * stored independently; both intentionally use the common user-memory namespace.
+ * One independently configured character in the user's extensible profile collection. Identity settings are
+ * stored independently; all profiles intentionally use the common user-memory namespace.
  */
 data class DigitalIdentity(
     val id: String = UUID.randomUUID().toString(),
@@ -68,6 +68,7 @@ data class DigitalIdentity(
     val memoryNamespace: String = SHARED_IDENTITY_MEMORY_NAMESPACE,
     val createdAtMillis: Long = System.currentTimeMillis(),
     val updatedAtMillis: Long = System.currentTimeMillis(),
+    val archived: Boolean = false,
     val schemaVersion: Int = 1
 )
 
