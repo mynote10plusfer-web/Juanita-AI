@@ -1634,6 +1634,28 @@ Do not replace or delete the legacy encrypted blob until migration validation an
 
 ### Character collection evolution — user-approved 2026-11-11 (user-controlled quantity)
 
+
+### Unified character creation/editing flow — user-approved 2026-11-11
+
+All character-specific settings must live inside the same complete create/edit experience. Do not scatter essential character options into separate settings pages or external controls that the user must discover after creation.
+
+When the user taps “Aggiungi Juanita” or “Aggiungi José”, open one guided character editor that configures the complete profile before saving. The same editor, prefilled with the selected profile's current values, must be used to modify an existing character. Creation and editing therefore share one source of truth and one validation/save path.
+
+The editor must include, as applicable:
+- Character family/presentation (Juanita or José) and display name.
+- Primary language, additional languages, preferred language behavior and regional accent/voice language.
+- Actual available voice selection with preview where the current provider supports it; persist a stable voice identifier, not just a display label. Show unavailable voices clearly and never silently substitute a different voice.
+- Region, country, locality, cultural identity and optional source-backed cultural dossier selection/review/approval.
+- Full personality controls (all supported stable character traits), with clear labels and sensible defaults.
+- Biography/backstory and conversational style/instructions.
+- Avatar selection or creation metadata, using the existing avatar flow where appropriate but bound to this exact profile.
+- A review/preview summary before saving, with validation and explicit save/cancel.
+- For editing, load every saved field and change only the selected profile; never reset unrelated traits or overwrite another character.
+
+After saving, the character card should summarize its configured language, voice, region and personality. The user can reopen the same editor at any time. External settings may expose shortcuts to edit, but must not hold a second independent copy of these character settings. Shared-memory controls remain global and separate from individual character configuration.
+
+Acceptance tests: create a profile with non-default values, close/reopen editor and verify every value persists; edit only voice and confirm all other values remain unchanged; duplicate a profile and verify independent settings; verify each avatar/voice/personality is bound to the correct profile; ensure only one profile is active in a voice session.
+
 The earlier Phase A/B/C plan and current PR #40 implementation constrain the archive to two canonical slots (one Juanita, one José). This is superseded by the user's explicit requirement for a user-managed collection of saved profiles.
 
 **The user chooses the quantity independently for each character family.** The app must not force three profiles, pre-create unwanted profiles, or impose a hard-coded maximum of three:
