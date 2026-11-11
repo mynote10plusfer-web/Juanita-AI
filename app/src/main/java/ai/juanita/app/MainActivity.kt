@@ -1004,7 +1004,7 @@ private fun JuanitaApp(
                         .firstOrNull { it.id == initialActiveAvatarProfileId }
                         ?.displayName ?: assistantName
                     AvatarCallScreen(
-                        avatarName = activeAvatarName,
+                        avatarName = activeDigitalIdentity?.displayName ?: activeAvatarName,
                         portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
                         connectionStatus = liveState,
                         voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
