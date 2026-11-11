@@ -77,7 +77,7 @@ class GeminiLiveAssistant {
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
-    ) = recoveryMutex.withLock { lifecycleMutex.withLock {
+    ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
         automaticRecoveryCount = 0
         synchronized(recentTranscript) { recentTranscript.clear() }
@@ -337,7 +337,7 @@ class GeminiLiveAssistant {
             // Stop may have been requested while the WebSocket handshake was in flight.
             // Do not start a microphone pipeline after that request.
             withTimeoutOrNull(1_500L) { runCatching { connected.close() } }
-            return@withLock
+            return@lifecycleLock
         }
         session = connected
         startAudioOnSession(connected)
