@@ -419,13 +419,29 @@ class JuanitaVoiceService : Service() {
             try {
                 // AudioRecord.release() can block on some Android audio stacks. Never run
                 // SDK audio teardown on the service/UI main thread.
-                withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
-                // Restore Android routing immediately after the SDK releases its recorder.
+                // First stop SDK microphone capture off the main thread. If it does not
+                // acknowledge shutdown, fail closed: never start another Live session on
+                // top of an audio pipeline whose release has not been confirmed.
+                val captureStopped = withTimeoutOrNull(6_000L) {
+                    withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
+                    true
+                } == true
                 audioRouteController.end()
-                releaseCpuWakeLock()
-                withTimeoutOrNull(5_000L) { assistant.stop() }
-                _state.value = "Microfono disattivato · salvataggio dei ricordi…"
-                updateNotification("Microfono disattivato · salvataggio in corso")
+                if (captureStopped) releaseCpuWakeLock()
+                val assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
+                    assistant.stop()
+                    true
+                } == true)
+                if (!assistantStopped) {
+                    Log.e("JuanitaVoiceService", "Voice shutdown not confirmed; queued restart will be discarded")
+                    pendingStartIntent = null
+                    pendingStartId = 0
+                    _state.value = "Chiusura audio non confermata · riavvia il telefono prima di riaprire Juanita"
+                    updateNotification("Chiusura audio non confermata · riavvio richiesto")
+                } else {
+                    _state.value = "Microfono disattivato · salvataggio dei ricordi…"
+                    updateNotification("Microfono disattivato · salvataggio in corso")
+                }
             } finally {
                 // Audio is stopped before draining callbacks or waiting on network work.
                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
@@ -450,19 +466,22 @@ class JuanitaVoiceService : Service() {
                 }
                 startRequested = false
                 activeAlarmId = null
-                releaseCpuWakeLock()
+                if (assistantStopped) releaseCpuWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                _state.value = finalMessage ?: "Conversazione terminata"
-                val queuedStart = pendingStartIntent
+                if (assistantStopped) {
+                    _state.value = finalMessage ?: "Conversazione terminata"
+                }
+                val queuedStart = if (assistantStopped) pendingStartIntent else null
+                pendingStartIntent = null
+                val queuedStartId = if (queuedStart != null) pendingStartId else 0
+                pendingStartId = 0
                 if (queuedStart != null) {
-                    val queuedStartId = pendingStartId
-                    pendingStartIntent = null
-                    pendingStartId = 0
-                    // This teardown job is finishing now; allow the queued start to
-                    // initialize a fresh Live session without racing stopSelf().
+                    // Restart is permitted only after both SDK audio capture and the
+                    // Live session close have completed successfully.
                     stopJob = null
                     onStartCommand(queuedStart, 0, queuedStartId)
                 } else {
+                    stopJob = null
                     stopSelf()
                 }
             }
