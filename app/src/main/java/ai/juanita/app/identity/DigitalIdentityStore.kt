@@ -18,9 +18,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Encrypted storage for at most two character configurations: Juanita and José.
- * Only one can be selected for a session. Character settings are separate, while
- * both configurations deliberately point to the same shared user-memory archive.
+ * Encrypted storage for a user-managed collection of Juanita and José profiles.
+ * The collection has no product-imposed profile-count limit. Only one non-archived
+ * profile can be selected for a session; every profile uses the same shared memory.
  */
 class DigitalIdentityStore(context: Context) {
     private val appContext = context.applicationContext
@@ -31,11 +31,6 @@ class DigitalIdentityStore(context: Context) {
         val normalized = normalize(identity)
         val file = fileFor(normalized.id)
         require(!file.exists()) { "Esiste già un'identità con questo ID." }
-        val saved = list()
-        require(saved.size < 2) { "Sono consentite soltanto due configurazioni: Juanita e José." }
-        require(saved.none { it.presentation == normalized.presentation }) {
-            "Esiste già la configurazione ${canonicalName(normalized.presentation)}. Modificala per cambiare origine o carattere regionale."
-        }
         writeEncrypted(file, identityToJson(normalized))
         return normalized
     }
@@ -45,9 +40,6 @@ class DigitalIdentityStore(context: Context) {
         val normalized = normalize(identity.copy(updatedAtMillis = System.currentTimeMillis()))
         val file = fileFor(normalized.id)
         require(file.exists()) { "L'identità da modificare non esiste." }
-        require(list().none { it.id != normalized.id && it.presentation == normalized.presentation }) {
-            "Esiste già la configurazione ${canonicalName(normalized.presentation)}."
-        }
         writeEncrypted(file, identityToJson(normalized))
         return normalized
     }
@@ -77,6 +69,28 @@ class DigitalIdentityStore(context: Context) {
         }.sortedBy { it.createdAtMillis }
     }
 
+    /** Create an independent copy with a new stable ID; shared memory is never copied. */
+    @Synchronized
+    fun duplicate(identityId: String, newDisplayName: String): DigitalIdentity {
+        val source = get(identityId) ?: throw IllegalArgumentException("Il profilo da duplicare non esiste.")
+        require(newDisplayName.isNotBlank()) { "Il nuovo nome del profilo è obbligatorio." }
+        val now = System.currentTimeMillis()
+        return create(source.copy(
+            id = UUID.randomUUID().toString(),
+            displayName = newDisplayName.trim().take(80),
+            archived = false,
+            createdAtMillis = now,
+            updatedAtMillis = now
+        ))
+    }
+
+    /** Archive/restore a profile without touching shared memory or PersonalProfileStore. */
+    @Synchronized
+    fun setArchived(identityId: String, archived: Boolean): DigitalIdentity {
+        val current = get(identityId) ?: throw IllegalArgumentException("Il profilo selezionato non esiste.")
+        return update(current.copy(archived = archived))
+    }
+
     @Synchronized
     fun delete(identityId: String): Boolean {
         val file = fileFor(identityId)
@@ -94,7 +108,7 @@ class DigitalIdentityStore(context: Context) {
         require(identity.schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata." }
         val traits = identity.personality
         return identity.copy(
-            displayName = canonicalName(identity.presentation),
+            displayName = identity.displayName.trim().take(80),
             memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             preferredLanguageTag = identity.preferredLanguageTag.trim(),
             languages = identity.languages.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
@@ -202,6 +216,7 @@ class DigitalIdentityStore(context: Context) {
         put("memoryNamespace", identity.memoryNamespace)
         put("createdAtMillis", identity.createdAtMillis)
         put("updatedAtMillis", identity.updatedAtMillis)
+        put("archived", identity.archived)
     }
 
     private fun dossierToJson(dossier: CulturalDossier): JSONObject = JSONObject().apply {
@@ -266,6 +281,7 @@ class DigitalIdentityStore(context: Context) {
             memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             createdAtMillis = json.optLong("createdAtMillis", 0L),
             updatedAtMillis = json.optLong("updatedAtMillis", 0L),
+            archived = json.optBoolean("archived", false),
             schemaVersion = SCHEMA_VERSION
         )
     }
