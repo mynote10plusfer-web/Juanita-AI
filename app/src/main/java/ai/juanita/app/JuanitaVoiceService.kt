@@ -13,6 +13,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import ai.juanita.app.ai.GeminiLiveAssistant
@@ -416,6 +417,7 @@ class JuanitaVoiceService : Service() {
         }
         _state.value = "Microfono disattivato · chiusura sessione…"
         stopJob = serviceScope.launch {
+            var assistantStopped = false
             try {
                 // AudioRecord.release() can block on some Android audio stacks. Never run
                 // SDK audio teardown on the service/UI main thread.
@@ -428,7 +430,7 @@ class JuanitaVoiceService : Service() {
                 } == true
                 audioRouteController.end()
                 if (captureStopped) releaseCpuWakeLock()
-                val assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
+                assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
                     assistant.stop()
                     true
                 } == true)
