@@ -370,15 +370,31 @@ class JuanitaVoiceService : Service() {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {
-                            audioRouteController.end()
-                            _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
-                            updateNotification("Connessione non riuscita · apri Juanita per riprovare")
-                            runCatching { assistant.stop() }
-                            withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
-                            startRequested = false
-                            releaseCpuWakeLock()
-                            stopForeground(STOP_FOREGROUND_REMOVE)
-                            stopSelf(startId)
+                            val captureStopped = withTimeoutOrNull(6_000L) {
+                                withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
+                            } == true
+                            if (captureStopped) audioRouteController.end()
+                            val assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
+                                withContext(Dispatchers.IO) { assistant.stop() }
+                                true
+                            } == true)
+                            if (assistantStopped) {
+                                _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
+                                updateNotification("Connessione non riuscita · microfono disattivato")
+                                withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                                startRequested = false
+                                activeAlarmId = null
+                                releaseCpuWakeLock()
+                                stopForeground(STOP_FOREGROUND_REMOVE)
+                                stopSelf(startId)
+                            } else {
+                                // Startup can fail after the SDK has already opened AudioRecord.
+                                // Keep the foreground notification and block another start until
+                                // a later explicit Stop confirms complete teardown.
+                                _state.value = "Avvio fallito · chiusura audio non confermata. Premi Termina o arresta forzatamente l'app."
+                                updateNotification("Chiusura microfono non confermata · riprova Termina")
+                                releaseCpuWakeLock()
+                            }
                         }
                     }
                 }
