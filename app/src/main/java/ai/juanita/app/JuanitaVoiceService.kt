@@ -375,8 +375,7 @@ class JuanitaVoiceService : Service() {
                             } == true
                             if (captureStopped) audioRouteController.end()
                             val assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
-                                withContext(Dispatchers.IO) { assistant.stop() }
-                                true
+                                runCatching { withContext(Dispatchers.IO) { assistant.stop() } }.isSuccess
                             } == true)
                             if (assistantStopped) {
                                 _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
