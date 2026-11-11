@@ -54,6 +54,7 @@ fun DigitalIdentitySection(
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var editingId by remember { mutableStateOf<String?>(null) }
+    var editorOpen by remember { mutableStateOf(false) }
     var deleteCandidate by remember { mutableStateOf<DigitalIdentity?>(null) }
     var dossierTarget by remember { mutableStateOf<DigitalIdentity?>(null) }
 
@@ -118,6 +119,7 @@ fun DigitalIdentitySection(
     }
 
     fun loadForEdit(identity: DigitalIdentity) {
+        editorOpen = true
         editingId = identity.id
         name = identity.displayName
         presentation = identity.presentation
@@ -147,6 +149,21 @@ fun DigitalIdentitySection(
         playfulness = identity.personality.playfulness
         discretion = identity.personality.discretion
         message = "Stai modificando ${identity.displayName}."
+    }
+
+    fun startCreate(target: IdentityPresentation) {
+        resetForm()
+        presentation = target
+        name = if (target == IdentityPresentation.FEMININE) "Juanita" else "José"
+        countryName = ""
+        countryCode = ""
+        region = ""
+        locality = ""
+        community = ""
+        languageTag = if (target == IdentityPresentation.FEMININE) "es-CO" else "es-ES"
+        voiceName = DigitalIdentityVoiceCatalog.defaultFor(target)
+        editorOpen = true
+        message = if (target == IdentityPresentation.FEMININE) "Stai creando una nuova Juanita. Scegli il suo nome e configura il personaggio." else "Stai creando un nuovo José. Scegli il suo nome e configura il personaggio."
     }
 
     fun refresh() {
@@ -266,14 +283,25 @@ fun DigitalIdentitySection(
                 }
             }
         }
+        if (!editorOpen) {
+            Text("CREA UN NUOVO PERSONAGGIO", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Scegli chi vuoi creare. Ogni personaggio avrà nome, voce, biografia e carattere propri.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = { startCreate(IdentityPresentation.FEMININE) }, enabled = !saving, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) { Text("Crea una Juanita") }
+                Button(onClick = { startCreate(IdentityPresentation.MASCULINE) }, enabled = !saving, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = Color.White)) { Text("Crea un José") }
+            }
+        }
+
+        if (editorOpen) {
         Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = panel)) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(if (editingId == null) "CONFIGURA UN’IDENTITÀ" else "MODIFICA CONFIGURAZIONE", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(if (editingId == null) "NUOVO PERSONAGGIO · CONFIGURAZIONE COMPLETA" else "MODIFICA PERSONAGGIO · CONFIGURAZIONE COMPLETA", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(if (editingId == null) "Prima di salvarlo, assegna un nome e personalizza tutte le sue caratteristiche. Nessun altro profilo verrà modificato." else "Stai modificando soltanto questo profilo. Le altre Juanite e gli altri José resteranno invariati.", color = Color(0xFFB9BBC1), fontSize = 11.sp)
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nome del personaggio") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 Text("Presentazione", color = Color.White, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { presentation = IdentityPresentation.FEMININE; name = "Juanita"; voiceName = DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.FEMININE) }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.FEMININE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.FEMININE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.FEMININE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("Juanita · femminile") }
-                    Button(onClick = { presentation = IdentityPresentation.MASCULINE; name = "José"; voiceName = DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.MASCULINE) }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.MASCULINE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.MASCULINE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.MASCULINE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("José · maschile") }
+                    Button(onClick = { presentation = IdentityPresentation.FEMININE; voiceName = DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.FEMININE) }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.FEMININE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.FEMININE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.FEMININE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("Juanita · femminile") }
+                    Button(onClick = { presentation = IdentityPresentation.MASCULINE; voiceName = DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.MASCULINE) }, enabled = editingId == null || identities.firstOrNull { it.id == editingId }?.presentation == IdentityPresentation.MASCULINE, colors = ButtonDefaults.buttonColors(containerColor = if (presentation == IdentityPresentation.MASCULINE) gold else Color(0xFF30343B), contentColor = if (presentation == IdentityPresentation.MASCULINE) Color.Black else Color.White), modifier = Modifier.weight(1f)) { Text("José · maschile") }
                 }
                 OutlinedTextField(value = countryName, onValueChange = { countryName = it }, label = { Text("Paese") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = countryCode, onValueChange = { countryCode = it.uppercase(Locale.ROOT).take(2) }, label = { Text("Codice paese · es. CO, ES, IT") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -287,7 +315,7 @@ fun DigitalIdentitySection(
                         Text("VOCE PERSONALE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Text("La voce viene salvata in questo profilo, non nelle impostazioni generali.", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                     }
-                    TextButton(onClick = { voiceMenuExpanded = true }) { Text(voiceName, color = gold) }
+                    Button(onClick = { voiceMenuExpanded = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)) { Text("SCEGLI VOCE · $voiceName") }
                     DropdownMenu(expanded = voiceMenuExpanded, onDismissRequest = { voiceMenuExpanded = false }) {
                         DigitalIdentityVoiceCatalog.forPresentation(presentation).forEach { voice ->
                             DropdownMenuItem(text = { Text(voice) }, onClick = {
@@ -351,8 +379,9 @@ fun DigitalIdentitySection(
                                     .onSuccess { saved ->
                                         identities = withContext(Dispatchers.IO) { store.list() }
                                         onIdentitiesChanged(identities)
-                                        message = "Configurazione ${saved.displayName} salvata. La memoria comune non è stata modificata."
+                                        message = if (existing == null) "${saved.displayName} è stato creato e salvato. Ora lo trovi nell’elenco dei personaggi." else "Modifiche di ${saved.displayName} salvate correttamente."
                                         resetForm()
+                                        editorOpen = false
                                     }
                                     .onFailure { message = "Salvataggio non riuscito: ${it.localizedMessage ?: "errore"}" }
                                 saving = false
@@ -363,8 +392,9 @@ fun DigitalIdentitySection(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
                 ) { Text(if (saving) "Salvataggio…" else if (editingId == null) "Crea identità" else "Salva modifiche") }
-                if (editingId != null) TextButton(onClick = { resetForm(); message = "Modifiche annullate." }) { Text("Annulla modifica", color = gold) }
+                TextButton(onClick = { resetForm(); editorOpen = false; message = if (editingId == null) "Creazione annullata." else "Modifiche annullate." }) { Text("Annulla e torna ai personaggi", color = gold) }
             }
+        }
         }
         message?.let { Text(it, color = if (it.contains("non riuscito") || it.contains("obbligatori") || it.contains("non leggibile")) Color(0xFFFFAB91) else Color(0xFFB9BBC1), fontSize = 12.sp) }
     }
