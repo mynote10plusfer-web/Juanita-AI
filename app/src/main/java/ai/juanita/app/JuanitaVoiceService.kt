@@ -54,6 +54,9 @@ class JuanitaVoiceService : Service() {
     private var activeAlarmId: String? = null
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
+    /** Latest explicit start requested while the previous session is shutting down. */
+    private var pendingStartIntent: Intent? = null
+    private var pendingStartId: Int = 0
     private var voicePreviewJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
     private var transcriptWorker: Job? = null
@@ -90,6 +93,9 @@ class JuanitaVoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                // An explicit stop/exit always wins over a start queued during teardown.
+                pendingStartIntent = null
+                pendingStartId = 0
                 requestStop()
                 return START_NOT_STICKY
             }
@@ -125,7 +131,17 @@ class JuanitaVoiceService : Service() {
                     } else 0
                 )
                 if (stopJob?.isActive == true) {
-                    _state.value = "Attendi la chiusura della conversazione precedente"
+                    // Do not lose a character/session change requested while the old
+                    // microphone pipeline is being released. Keep only the latest start.
+                    pendingStartIntent = Intent(intent)
+                    pendingStartId = startId
+                    _state.value = "Chiusura della sessione precedente · nuova conversazione in attesa"
+                    updateNotification("Nuova conversazione in attesa della chiusura audio")
+                    return START_NOT_STICKY
+                }
+                if (startRequested) {
+                    _state.value = "Conversazione già attiva. Termina quella corrente per usare il personaggio selezionato."
+                    updateNotification("Conversazione già attiva · termina per cambiare personaggio")
                     return START_NOT_STICKY
                 }
                 if (!startRequested) {
@@ -437,7 +453,18 @@ class JuanitaVoiceService : Service() {
                 releaseCpuWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 _state.value = finalMessage ?: "Conversazione terminata"
-                stopSelf()
+                val queuedStart = pendingStartIntent
+                if (queuedStart != null) {
+                    val queuedStartId = pendingStartId
+                    pendingStartIntent = null
+                    pendingStartId = 0
+                    // This teardown job is finishing now; allow the queued start to
+                    // initialize a fresh Live session without racing stopSelf().
+                    stopJob = null
+                    onStartCommand(queuedStart, 0, queuedStartId)
+                } else {
+                    stopSelf()
+                }
             }
         }
     }
@@ -593,6 +620,8 @@ class JuanitaVoiceService : Service() {
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
         activeAlarmId = null
+        pendingStartIntent = null
+        pendingStartId = 0
         releaseCpuWakeLock()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
