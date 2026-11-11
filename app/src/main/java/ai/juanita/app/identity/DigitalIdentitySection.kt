@@ -301,7 +301,8 @@ fun DigitalIdentitySection(
                                 culturalDossier = existing?.culturalDossier,
                                 memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
                                 createdAtMillis = existing?.createdAtMillis ?: System.currentTimeMillis(),
-                                updatedAtMillis = System.currentTimeMillis()
+                                updatedAtMillis = System.currentTimeMillis(),
+                                archived = existing?.archived ?: false
                             )
                             scope.launch {
                                 saving = true
