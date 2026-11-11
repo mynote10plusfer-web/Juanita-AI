@@ -425,7 +425,7 @@ private fun JuanitaApp(
         }
     }
     val liveState by JuanitaVoiceService.state.collectAsState()
-    val voiceSessionLabelVisible = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+    val voiceSessionLabelVisible = listOf("in ascolto", "connessione a gemini live", "anteprima", "rinnovando", "chiusura", "non confermata")
         .any { liveState.contains(it, ignoreCase = true) }
     var liveSessionIdentityName by remember { mutableStateOf(activeDigitalIdentity?.displayName ?: assistantName) }
     val visionState by JuanitaVoiceService.visionState.collectAsState()
@@ -542,7 +542,7 @@ private fun JuanitaApp(
     var pendingVoicePreview by remember { mutableStateOf<DigitalIdentity?>(null) }
 
     fun startIdentityVoicePreview(identity: DigitalIdentity) {
-        val busyStates = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+        val busyStates = listOf("in ascolto", "connessione a gemini live", "anteprima", "rinnovando", "chiusura", "non confermata")
         if (busyStates.any { liveState.contains(it, ignoreCase = true) }) {
             liveStartError = "Prima termina la conversazione o attendi la chiusura completa; poi potrai provare questa voce."
             return
@@ -577,7 +577,7 @@ private fun JuanitaApp(
         }
     }
     val previewIdentityVoice: (DigitalIdentity) -> Unit = { identity ->
-        val busyStates = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+        val busyStates = listOf("in ascolto", "connessione a gemini live", "anteprima", "rinnovando", "chiusura", "non confermata")
         if (busyStates.any { liveState.contains(it, ignoreCase = true) }) {
             liveStartError = "Prima termina la conversazione o attendi la chiusura completa; poi potrai provare questa voce."
         } else {
