@@ -104,6 +104,7 @@ class DigitalIdentityStore(context: Context) {
         require(identity.displayName.isNotBlank()) { "Il nome dell'identità è obbligatorio." }
         require(identity.origin.countryName.isNotBlank()) { "Il paese di origine è obbligatorio." }
         require(identity.preferredLanguageTag.isNotBlank()) { "La lingua preferita è obbligatoria." }
+        require(DigitalIdentityVoiceCatalog.forPresentation(identity.presentation).contains(identity.voiceName)) { "La voce selezionata non è compatibile con il tipo di personaggio." }
         require(identity.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE || identity.memoryNamespace == identity.id) { "Spazio di memoria non riconosciuto." }
         require(identity.schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata." }
         val traits = identity.personality
@@ -111,9 +112,14 @@ class DigitalIdentityStore(context: Context) {
             displayName = identity.displayName.trim().take(80),
             memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             preferredLanguageTag = identity.preferredLanguageTag.trim(),
+            voiceName = identity.voiceName,
             languages = identity.languages.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
             biography = identity.biography.trim(),
             personality = traits.copy(
+                irony = traits.irony.coerceIn(0f, 1f),
+                sweetness = traits.sweetness.coerceIn(0f, 1f),
+                sensuality = traits.sensuality.coerceIn(0f, 1f),
+                friendliness = traits.friendliness.coerceIn(0f, 1f),
                 warmth = traits.warmth.coerceIn(0f, 1f),
                 humour = traits.humour.coerceIn(0f, 1f),
                 curiosity = traits.curiosity.coerceIn(0f, 1f),
@@ -193,8 +199,13 @@ class DigitalIdentityStore(context: Context) {
             put("community", identity.origin.community)
         })
         put("preferredLanguageTag", identity.preferredLanguageTag)
+        put("voiceName", identity.voiceName)
         put("languages", JSONArray(identity.languages))
         put("personality", JSONObject().apply {
+            put("irony", identity.personality.irony.toDouble())
+            put("sweetness", identity.personality.sweetness.toDouble())
+            put("sensuality", identity.personality.sensuality.toDouble())
+            put("friendliness", identity.personality.friendliness.toDouble())
             put("warmth", identity.personality.warmth.toDouble())
             put("humour", identity.personality.humour.toDouble())
             put("curiosity", identity.personality.curiosity.toDouble())
@@ -257,8 +268,14 @@ class DigitalIdentityStore(context: Context) {
                 community = origin.optString("community")
             ),
             preferredLanguageTag = json.getString("preferredLanguageTag"),
+            voiceName = json.optString("voiceName").takeIf { it.isNotBlank() && DigitalIdentityVoiceCatalog.forPresentation(IdentityPresentation.valueOf(json.getString("presentation"))).contains(it) }
+                ?: DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.valueOf(json.getString("presentation"))),
             languages = languages,
             personality = IdentityPersonality(
+                irony = personality.optDouble("irony", 0.5).toFloat(),
+                sweetness = personality.optDouble("sweetness", 0.7).toFloat(),
+                sensuality = personality.optDouble("sensuality", 0.5).toFloat(),
+                friendliness = personality.optDouble("friendliness", 0.7).toFloat(),
                 warmth = personality.optDouble("warmth", 0.7).toFloat(),
                 humour = personality.optDouble("humour", 0.6).toFloat(),
                 curiosity = personality.optDouble("curiosity", 0.8).toFloat(),
