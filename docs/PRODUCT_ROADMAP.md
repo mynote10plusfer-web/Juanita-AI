@@ -2,6 +2,31 @@
 
 Last updated: 2026-11-11 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. Debug APK build and JVM unit tests passed; Android API 31 instrumentation is still running; physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
 
+## 2026-11-11 — microphone shutdown and character-switch incident
+
+**STATUS: CODE MITIGATIONS COMMITTED; EXACT-HEAD CI AND PHYSICAL SAMSUNG VALIDATION REQUIRED. NOT YET DECLARED FIXED.**
+
+User-reported test incident: after changing the selected character and ending a conversation, the previous Paisa persona continued speaking and Android's microphone privacy indicator remained active even though the assistant no longer responded. A force-stop was required to release the microphone.
+
+Code audit findings:
+- The service could remove its foreground notification and stop itself even when the SDK microphone/session shutdown timed out or was not confirmed. This could make the UI appear stopped while audio resources were still retained.
+- Explicit microphone stop and full Live-session stop could call the SDK's synchronous recorder teardown more than once, including from service destruction.
+- Automatic Live recovery ran independently from explicit lifecycle operations. A reconnect already in progress could race with a user stop and potentially reopen the audio pipeline.
+- Each Live session retains the persona/system instruction with which it was created. Selecting another profile during an active session cannot mutate that already-open Gemini session.
+
+Mitigations committed on PR #40:
+- Serialize new Live startup and explicit stop with recovery; an in-flight recovery must finish its cancellation path before a replacement session can start.
+- Make SDK microphone teardown idempotent per LiveSession and track any session whose close was not confirmed. A new session is blocked until recorder shutdown and Live-session close both succeed.
+- Check for a stop request after the WebSocket handshake and close the handshake without opening the microphone.
+- If shutdown is unconfirmed, keep the foreground service/notification visible, discard any queued restart, release the CPU wake lock, and refuse a new character session. The UI no longer reports the microphone as off before shutdown is confirmed. A later Stop can retry; force-stop/reboot remains the user fallback if the SDK call never returns.
+- Startup failures use the same fail-closed cleanup path.
+- Selecting a different character requests termination of the previous Live session. The next explicit Parla action starts with the newly selected identity and its voice.
+
+Release gates:
+- Build, JVM tests, instrumentation compilation and API 31 emulator tests must pass on the exact final commit.
+- Physical testing remains mandatory on Note10+ Android 12 and S22 Ultra Android 15: repeated start/stop, rapid character switching, switching during connection/recovery, mic privacy indicator disappearance, audio thread/CPU behavior, thermal/battery behavior and app responsiveness.
+- CI cannot verify that the Samsung microphone privacy indicator clears or prove the upstream Firebase AudioRecord worker lifecycle is fixed. Do not declare the incident resolved until physical tests pass.
+
 ## 2026-11-09 — voice reconnect, device slowdown and continuity audit
 
 **STATUS: APP-SIDE MITIGATIONS COMMITTED; CI AND PHYSICAL-DEVICE VALIDATION REQUIRED. NOT YET DECLARED FIXED.**
