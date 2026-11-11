@@ -612,8 +612,7 @@ class EncryptedMemoryStore(context: Context) {
      */
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000): String {
-        // Compact legacy data on IO before constructing the next-session context.
-        writeRecords(readRecords())
+        // Read-only context assembly: do not rewrite the complete encrypted store at session start.
         val durableMemories = listMemories().take(60)
         val memoryLines = durableMemories
             .take(40)
@@ -793,6 +792,7 @@ class EncryptedMemoryStore(context: Context) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") == "memory" && record.optString("id") == id) {
                 record.put("text", newText.trim().take(MAX_MEMORY_TEXT_LENGTH))
+                record.put("topic", MemoryTopicClassifier.classify(newText))
                 updated = true
                 break
             }
