@@ -54,6 +54,7 @@ class GeminiLiveAssistant {
     private var audioStoppedSession: LiveSession? = null
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     @Volatile private var session: LiveSession? = null
+    @Volatile private var closingSession: LiveSession? = null
     @Volatile private var manualStop = true
     private var healthJob: Job? = null
     private var stabilityJob: Job? = null
@@ -393,7 +394,7 @@ class GeminiLiveAssistant {
         // A user stop can race with an in-flight reconnect/start operation.
         // Re-check after the SDK has finished initializing its audio pipeline.
         if (manualStop) {
-            runCatching { stopAudioConversationOnce(activeSession) }
+            withContext(Dispatchers.IO) { runCatching { stopAudioConversationOnce(activeSession) } }
             if (session === activeSession) session = null
             withTimeoutOrNull(1_500L) { runCatching { activeSession.close() } }
             return
@@ -533,7 +534,7 @@ class GeminiLiveAssistant {
         manualStop = true
         healthJob?.cancel()
         stabilityJob?.cancel()
-        val active = session ?: return true
+        val active = session ?: closingSession ?: return true
         return runCatching {
             stopAudioConversationOnce(active)
             true
@@ -565,17 +566,23 @@ class GeminiLiveAssistant {
         stabilityJob?.cancel()
         sessionFactory = null
         onContinuityContext = { it }
-        val active = session ?: return
-        // Detach first so a repeated stop is harmless and cannot revive this session.
+        val active = session ?: closingSession ?: return
+        // Detach from the active slot first so recovery cannot revive this session.
         session = null
+        closingSession = active
         val audioStopFailure = withContext(Dispatchers.IO) {
             runCatching { stopAudioConversationOnce(active) }.exceptionOrNull()
         }
-        // Closing the websocket is bounded; the microphone is already stopped above.
-        withTimeoutOrNull(4_000L) {
-            runCatching { active.close() }
+        // A timed-out/failed close remains tracked. A later Stop may retry it, and a new
+        // Live session cannot start until both recorder shutdown and session close succeed.
+        val closeConfirmed = withTimeoutOrNull(4_000L) {
+            runCatching { active.close() }.isSuccess
+        } == true
+        if (audioStopFailure == null && closeConfirmed) {
+            closingSession = null
         }
         if (audioStopFailure != null) throw audioStopFailure
+        if (!closeConfirmed) throw IllegalStateException("Chiusura della sessione Gemini Live non confermata")
     }
 
     companion object {
