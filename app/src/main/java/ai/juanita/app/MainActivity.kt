@@ -698,22 +698,28 @@ private fun JuanitaApp(
                     }
                 }
 
-                SettingsCard(panel, gold, "LINGUA DELLA VOCE") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(selectedLanguage.label, color = Color.White, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { languageMenuExpanded = true }) { Text("Cambia", color = gold) }
-                        DropdownMenu(expanded = languageMenuExpanded, onDismissRequest = { languageMenuExpanded = false }) {
-                            voiceLanguages.forEach { language ->
-                                DropdownMenuItem(text = { Text(language.label) }, onClick = {
-                                    selectedLanguage = language
-                                    onLanguageSelected(language.tag)
-                                    languageMenuExpanded = false
-                                    status = "Lingua ${language.label} salvata"
-                                })
+                if (activeDigitalIdentity == null) {
+                    SettingsCard(panel, gold, "LINGUA DELLA VOCE · ASSISTENTE STANDARD") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(selectedLanguage.label, color = Color.White, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { languageMenuExpanded = true }) { Text("Cambia", color = gold) }
+                            DropdownMenu(expanded = languageMenuExpanded, onDismissRequest = { languageMenuExpanded = false }) {
+                                voiceLanguages.forEach { language ->
+                                    DropdownMenuItem(text = { Text(language.label) }, onClick = {
+                                        selectedLanguage = language
+                                        onLanguageSelected(language.tag)
+                                        languageMenuExpanded = false
+                                        status = "Lingua ${language.label} salvata"
+                                    })
+                                }
                             }
                         }
+                        Text("La lingua selezionata è separata dal carattere e dal dialetto.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                     }
-                    Text("La lingua selezionata è separata dal carattere e dal dialetto.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                } else {
+                    SettingsCard(panel, gold, "LINGUA DI ${activeDigitalIdentity.displayName}") {
+                        Text("Lingua principale: ${activeDigitalIdentity.preferredLanguageTag}. Le altre lingue sono: ${activeDigitalIdentity.languages.joinToString(", ").ifBlank { "non specificate" }}. Per modificarle, usa Modifica nel profilo.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                    }
                 }
 
                 SettingsCard(panel, gold, "ACCENTO E VARIANTE REGIONALE") {
