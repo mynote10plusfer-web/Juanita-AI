@@ -9,7 +9,6 @@ import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.Bundle
 import android.view.WindowManager
-import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -355,7 +354,6 @@ private fun JuanitaApp(
     }
     var dialectMenuExpanded by remember { mutableStateOf(false) }
     var languageMenuExpanded by remember { mutableStateOf(false) }
-    var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
     var status by remember { mutableStateOf("Impostazioni salvate sul dispositivo") }
     var assistantName by remember { mutableStateOf(initialName) }
     var assistantGender by remember { mutableStateOf(if (initialAssistantGender == "MASCHILE") "MASCHILE" else "FEMMINILE") }
@@ -427,6 +425,7 @@ private fun JuanitaApp(
         }
     }
     val liveState by JuanitaVoiceService.state.collectAsState()
+    var liveSessionIdentityName by remember { mutableStateOf(activeDigitalIdentity?.displayName ?: assistantName) }
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
@@ -505,6 +504,7 @@ private fun JuanitaApp(
                             append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
                         }
                     }
+                    liveSessionIdentityName = activeDigitalIdentity?.displayName ?: assistantName
                     JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id, identityId = activeDigitalIdentity?.id)
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
@@ -537,37 +537,57 @@ private fun JuanitaApp(
         liveVoiceMenuExpanded = false
     }
 
+    var pendingVoicePreview by remember { mutableStateOf<DigitalIdentity?>(null) }
+
+    fun startIdentityVoicePreview(identity: DigitalIdentity) {
+        val busyStates = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+        if (busyStates.any { liveState.contains(it, ignoreCase = true) }) {
+            liveStartError = "Prima termina la conversazione o attendi la chiusura completa; poi potrai provare questa voce."
+            return
+        }
+        val sample = when {
+            identity.preferredLanguageTag.startsWith("es", ignoreCase = true) ->
+                "Hola, soy ${identity.displayName}. Esta es una breve prueba de mi voz. ¿Qué tal? Me alegra saludarte."
+            identity.preferredLanguageTag.startsWith("it", ignoreCase = true) ->
+                "Ciao, sono ${identity.displayName}. Questa è una breve prova della mia voce. È un piacere conoscerti."
+            else -> "Hello, I'm ${identity.displayName}. This is a short sample of my voice. It's lovely to meet you."
+        }
+        val instruction = identity.toSystemInstruction() +
+            "\nANTEPRIMA VOCALE: pronuncia soltanto il breve testo iniziale fornito. Usa la voce Gemini selezionata e le indicazioni linguistiche di questo profilo. Non avviare una conversazione, non chiedere informazioni e poi resta in silenzio."
+        liveSessionIdentityName = identity.displayName
+        JuanitaVoiceService.start(
+            context = context,
+            instruction = instruction,
+            voiceName = identity.voiceName,
+            initialPrompt = sample,
+            previewDurationMillis = 12_000L
+        )
+        liveStartError = "Anteprima di ${identity.displayName} avviata con la voce ${identity.voiceName}; si chiuderà automaticamente."
+    }
+
     val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
-                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, ${if (assistantGender == "MASCHILE") "pronto" else "pronta"} ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
-            liveStartError = "Anteprima della voce ${activeDigitalIdentity?.voiceName ?: selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
-        } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
+        val identity = pendingVoicePreview
+        pendingVoicePreview = null
+        if (granted && identity != null) {
+            startIdentityVoicePreview(identity)
+        } else if (!granted) {
+            liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
+        }
     }
-    val startVoicePreview = {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
-                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono ${activeDigitalIdentity?.displayName ?: assistantName}. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
-            liveStartError = "Anteprima della voce ${activeDigitalIdentity?.voiceName ?: selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
-        } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!spoken.isNullOrBlank()) {
-                transcript = spoken
-                status = "Voce riconosciuta. Il dialogo AI non è ancora collegato."
-            } else status = "Nessun testo riconosciuto"
-        } else status = "Riconoscimento vocale annullato o non disponibile"
+    val previewIdentityVoice: (DigitalIdentity) -> Unit = { identity ->
+        val busyStates = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+        if (busyStates.any { liveState.contains(it, ignoreCase = true) }) {
+            liveStartError = "Prima termina la conversazione o attendi la chiusura completa; poi potrai provare questa voce."
+        } else {
+            pendingVoicePreview = identity
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingVoicePreview = null
+                startIdentityVoicePreview(identity)
+            } else {
+                voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
     }
 
     MaterialTheme(
@@ -717,7 +737,8 @@ private fun JuanitaApp(
                         activeDigitalIdentityId = id
                         onActiveDigitalIdentityChanged(id)
                     },
-                    onIdentitiesChanged = { digitalIdentities = it }
+                    onIdentitiesChanged = { digitalIdentities = it },
+                    onPreviewVoice = previewIdentityVoice
                 )
 
                 SettingsCard(panel, gold, if (activeDigitalIdentity == null) "CARATTERE E PERSONALITÀ · STANDARD" else "CARATTERE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
@@ -786,28 +807,7 @@ private fun JuanitaApp(
                                         )
                                     }
                     
-                                    SettingsCard(panel, gold, "PROVA MICROFONO") {
-                                        Text(transcript, color = Color.White, fontSize = 16.sp)
-                                        Button(onClick = {
-                                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE, selectedLanguage.tag)
-                                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, selectedLanguage.tag)
-                                                putExtra(RecognizerIntent.EXTRA_PROMPT, "Parla con ${assistantName.ifBlank { "Juanita" }}")
-                                                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                                            }
-                                            try {
-                                                speechLauncher.launch(intent)
-                                                status = "Ascolto tramite il servizio vocale Android…"
-                                            } catch (_: Exception) {
-                                                status = "Nessun servizio di riconoscimento vocale disponibile"
-                                            }
-                                        }, modifier = Modifier.fillMaxWidth(),
-                                            colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
-                                            Icon(Icons.Default.Mic, contentDescription = null)
-                                            Text("  Parla")
-                                        }
-                                    }
+
                 }
 
                 SettingsCard(panel, gold, if (activeDigitalIdentity == null) "VOCE DI $assistantName · GEMINI LIVE" else "VOCE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
@@ -859,12 +859,6 @@ private fun JuanitaApp(
                         }
                     }
                     if (activeDigitalIdentity != null) Text("Questa voce appartiene a ${activeDigitalIdentity.displayName}. Puoi cambiarla qui oppure nell’editor del personaggio; il salvataggio aggiorna soltanto questo profilo.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                    Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
-                        enabled = !liveState.contains("in ascolto", ignoreCase = true) &&
-                            !liveState.contains("connessione", ignoreCase = true),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) { Text("Ascolta un campione della voce") }
-                    Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text(liveStartError ?: liveState, color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
@@ -874,6 +868,15 @@ private fun JuanitaApp(
                 if (selectedSection == "HOME") {
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                    val sessionLabelVisible = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+                        .any { liveState.contains(it, ignoreCase = true) }
+                    Text(
+                        if (sessionLabelVisible) "PERSONAGGIO DELLA SESSIONE: $liveSessionIdentityName"
+                        else "PROSSIMO PERSONAGGIO: ${activeDigitalIdentity?.displayName ?: assistantName}",
+                        color = gold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
                     Text(locationStatus, color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text("La posizione viene letta automaticamente con il tuo permesso quando apri Juanita e aggiornata all’avvio della conversazione. Nessun tracciamento in background.", color = Color(0xFF777D87), fontSize = 11.sp)
