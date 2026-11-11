@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity() {
         val digitalIdentityStore = DigitalIdentityStore(applicationContext)
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
         val initialActiveDigitalIdentityId = preferences.activeDigitalIdentityId
-            ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId } }
+            ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId && !it.archived } }
             .also { validId ->
                 if (preferences.activeDigitalIdentityId != validId) preferences.activeDigitalIdentityId = validId
             }
