@@ -415,7 +415,7 @@ class JuanitaVoiceService : Service() {
             }
             return
         }
-        _state.value = "Microfono disattivato · chiusura sessione…"
+        _state.value = "Richiesta di chiusura audio in corso…"
         stopJob = serviceScope.launch {
             var assistantStopped = false
             try {
