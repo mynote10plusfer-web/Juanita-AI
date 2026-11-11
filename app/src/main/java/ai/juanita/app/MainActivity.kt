@@ -425,6 +425,8 @@ private fun JuanitaApp(
         }
     }
     val liveState by JuanitaVoiceService.state.collectAsState()
+    val voiceSessionLabelVisible = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
+        .any { liveState.contains(it, ignoreCase = true) }
     var liveSessionIdentityName by remember { mutableStateOf(activeDigitalIdentity?.displayName ?: assistantName) }
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
@@ -868,10 +870,8 @@ private fun JuanitaApp(
                 if (selectedSection == "HOME") {
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    val sessionLabelVisible = listOf("in ascolto", "connessione", "anteprima", "rinnovando", "chiusura", "non confermata")
-                        .any { liveState.contains(it, ignoreCase = true) }
                     Text(
-                        if (sessionLabelVisible) "PERSONAGGIO DELLA SESSIONE: $liveSessionIdentityName"
+                        if (voiceSessionLabelVisible) "PERSONAGGIO DELLA SESSIONE: $liveSessionIdentityName"
                         else "PROSSIMO PERSONAGGIO: ${activeDigitalIdentity?.displayName ?: assistantName}",
                         color = gold,
                         fontSize = 13.sp,
@@ -1004,7 +1004,7 @@ private fun JuanitaApp(
                         .firstOrNull { it.id == initialActiveAvatarProfileId }
                         ?.displayName ?: assistantName
                     AvatarCallScreen(
-                        avatarName = activeDigitalIdentity?.displayName ?: activeAvatarName,
+                        avatarName = if (voiceSessionLabelVisible) liveSessionIdentityName else activeDigitalIdentity?.displayName ?: activeAvatarName,
                         portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
                         connectionStatus = liveState,
                         voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
