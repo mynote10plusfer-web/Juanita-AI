@@ -676,7 +676,7 @@ private fun JuanitaApp(
                     onIdentitiesChanged = { digitalIdentities = it }
                 )
 
-                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "CARATTERE E PERSONALITÀ · STANDARD" else "CARATTERE DI ${activeDigitalIdentity.displayName}") {
+                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "CARATTERE E PERSONALITÀ · STANDARD" else "CARATTERE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
                     if (activeDigitalIdentity == null) {
                         Text("Questi cursori configurano l'assistente standard. Ogni personaggio salvato ha percentuali indipendenti nel proprio editor.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                         TraitSlider("Ironia", persona.irony) { persona = persona.copy(irony = it); onPersonaChanged(persona) }
@@ -693,7 +693,7 @@ private fun JuanitaApp(
                     }
                 }
 
-                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "LINGUA DELLA VOCE · STANDARD" else "LINGUA DI ${activeDigitalIdentity.displayName}") {
+                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "LINGUA DELLA VOCE · STANDARD" else "LINGUA DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
                     if (activeDigitalIdentity == null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(selectedLanguage.label, color = Color.White, modifier = Modifier.weight(1f))
@@ -710,7 +710,7 @@ private fun JuanitaApp(
                             }
                         }
                     } else {
-                        Text("Lingua principale: ${activeDigitalIdentity.preferredLanguageTag}. Altre lingue: ${activeDigitalIdentity.languages.joinToString(", ").ifBlank { "non specificate" }}. Per modificarle, usa Modifica nel profilo.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                        Text("Lingua principale: ${activeDigitalIdentity?.preferredLanguageTag.orEmpty()}. Altre lingue: ${activeDigitalIdentity?.languages?.joinToString(", ")?.ifBlank { "non specificate" } ?: "non specificate"}. Per modificarle, usa Modifica nel profilo.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
                     }
                 }
 
@@ -766,7 +766,7 @@ private fun JuanitaApp(
                                     }
                 }
 
-                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "VOCE DI $assistantName · GEMINI LIVE" else "VOCE DI ${activeDigitalIdentity.displayName}") {
+                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "VOCE DI $assistantName · GEMINI LIVE" else "VOCE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(activeDigitalIdentity?.voiceName ?: selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
