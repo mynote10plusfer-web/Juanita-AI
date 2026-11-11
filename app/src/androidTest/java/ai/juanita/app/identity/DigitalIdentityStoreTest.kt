@@ -190,6 +190,19 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
+    fun changingVoiceFromSettingsPersistsOnlyForTheSelectedCharacter() {
+        val juanita = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val anotherJuanita = identity("Juanita Canaria", IdentityPresentation.FEMININE, "ES", "España")
+        store.create(juanita)
+        store.create(anotherJuanita)
+
+        store.update(juanita.copy(voiceName = "Sulafat"))
+        val reopened = DigitalIdentityStore(isolatedContext())
+        assertEquals("Sulafat", reopened.get(juanita.id)?.voiceName)
+        assertEquals("Kore", reopened.get(anotherJuanita.id)?.voiceName)
+    }
+
+    @Test
     fun newIdentityReceivesDefinedCharacterDefaults() {
         val original = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
         store.create(original)
