@@ -5,6 +5,16 @@ import java.util.UUID
 /** Shared memory is intentional: only the character configuration changes when switching identity. */
 const val SHARED_IDENTITY_MEMORY_NAMESPACE = "shared"
 
+/** Stable voice IDs exposed by the current Gemini Live voice catalogue. */
+object DigitalIdentityVoiceCatalog {
+    val feminine = listOf("Kore", "Aoede", "Sulafat", "Achernar", "Vindemiatrix", "Zephyr", "Pulcherrima", "Autonoe", "Callirrhoe", "Despina", "Erinome", "Gacrux", "Laomedeia", "Leda")
+    val masculine = listOf("Achird", "Algenib", "Algieba", "Alnilam", "Charon", "Enceladus", "Fenrir", "Iapetus", "Orus", "Puck", "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Umbriel", "Zubenelgenubi")
+    fun forPresentation(presentation: IdentityPresentation): List<String> =
+        if (presentation == IdentityPresentation.MASCULINE) masculine else feminine
+    fun defaultFor(presentation: IdentityPresentation): String =
+        if (presentation == IdentityPresentation.MASCULINE) "Achird" else "Kore"
+}
+
 /** Presentation used for self-reference and voice matching; it does not define personality. */
 enum class IdentityPresentation { FEMININE, MASCULINE }
 
@@ -17,6 +27,10 @@ data class CulturalOrigin(
 )
 
 data class IdentityPersonality(
+    val irony: Float = 0.5f,
+    val sweetness: Float = 0.7f,
+    val sensuality: Float = 0.5f,
+    val friendliness: Float = 0.7f,
     val warmth: Float = 0.7f,
     val humour: Float = 0.6f,
     val curiosity: Float = 0.8f,
@@ -61,6 +75,8 @@ data class DigitalIdentity(
     val presentation: IdentityPresentation,
     val origin: CulturalOrigin,
     val preferredLanguageTag: String,
+    /** Stable Gemini Live voice ID selected specifically for this character. */
+    val voiceName: String = if (presentation == IdentityPresentation.MASCULINE) "Achird" else "Kore",
     val languages: List<String> = emptyList(),
     val personality: IdentityPersonality = IdentityPersonality(),
     val biography: String = "",
@@ -90,11 +106,12 @@ fun DigitalIdentity.toSystemInstruction(): String {
         appendLine("Your name is: ${displayName.take(80)}.")
         appendLine("Use ${selfReference} grammatical self-reference where the selected language requires it.")
         appendLine("Preferred response language: ${preferredLanguageTag.take(35)}.")
+        appendLine("Selected Gemini Live voice ID: ${voiceName.take(40)}. Keep this character voice distinct from other saved profiles.")
         if (languages.isNotEmpty()) appendLine("Other languages this identity can use when requested: ${languages.joinToString(", ").take(180)}.")
         appendLine("Cultural origin: ${culturalContext.take(240)}.")
         appendLine("Cultural origin informs relevant references and language context only; it does not determine personality, values, beliefs, gender roles or preferences. Avoid stereotypes and acknowledge regional diversity.")
         appendLine("SHARED USER MEMORY: the same encrypted knowledge, user facts, preferences, corrections and conversation history are available to both Juanita and José. Use relevant shared memories naturally; the user must never need to teach the same fact twice. This shared knowledge does not merge character personalities or turn another character's configuration or backstory into your own.")
-        appendLine("Stable character profile (0-100; these are behavioral tendencies, not rigid rules): warmth ${percent(personality.warmth)}, humour ${percent(personality.humour)}, curiosity ${percent(personality.curiosity)}, seriousness ${percent(personality.seriousness)}, expressiveness ${percent(personality.expressiveness)}, formality ${percent(personality.formality)}, empathy ${percent(personality.empathy)}, directness ${percent(personality.directness)}, sociability ${percent(personality.sociability)}, spontaneity ${percent(personality.spontaneity)}, patience ${percent(personality.patience)}, optimism ${percent(personality.optimism)}, assertiveness ${percent(personality.assertiveness)}, playfulness ${percent(personality.playfulness)}, discretion ${percent(personality.discretion)}.")
+        appendLine("Stable character profile (0-100; these are behavioral tendencies, not rigid rules): irony ${percent(personality.irony)}, sweetness ${percent(personality.sweetness)}, sensuality ${percent(personality.sensuality)}, friendliness ${percent(personality.friendliness)}, warmth ${percent(personality.warmth)}, humour ${percent(personality.humour)}, curiosity ${percent(personality.curiosity)}, seriousness ${percent(personality.seriousness)}, expressiveness ${percent(personality.expressiveness)}, formality ${percent(personality.formality)}, empathy ${percent(personality.empathy)}, directness ${percent(personality.directness)}, sociability ${percent(personality.sociability)}, spontaneity ${percent(personality.spontaneity)}, patience ${percent(personality.patience)}, optimism ${percent(personality.optimism)}, assertiveness ${percent(personality.assertiveness)}, playfulness ${percent(personality.playfulness)}, discretion ${percent(personality.discretion)}.")
         appendLine("Translate traits into observable conversational choices: directness controls how plainly you express a view; sociability how readily you initiate light conversation; spontaneity how varied and less formulaic your phrasing is; patience how much space you give the other person; optimism balances encouragement with realism; assertiveness supports clear boundaries without aggression; playfulness adds lightness only when appropriate; discretion avoids prying and respects privacy.")
         appendLine("Do not maximize every trait at once. Keep a coherent balance, adapt to context without erasing the stable character, and never turn warmth or empathy into flattery, pressure, possessiveness or dependency.")
         if (biography.isNotBlank()) {
