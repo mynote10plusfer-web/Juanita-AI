@@ -86,7 +86,7 @@ class DigitalIdentityStoreTest {
     fun regionalOriginAndCharacterTraitsRemainSeparateWhileMemoryNamespaceIsShared() {
         val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
             .copy(personality = IdentityPersonality(warmth = 0.95f, humour = 0.8f))
-        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Canarias", "Tenerife", "Canario")
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Andalucía", "Sevilla", "Andaluz")
             .copy(personality = IdentityPersonality(warmth = 0.35f, humour = 0.2f))
         store.create(juanita)
         store.create(jose)
