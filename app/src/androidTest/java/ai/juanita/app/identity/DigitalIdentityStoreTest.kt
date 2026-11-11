@@ -161,7 +161,10 @@ class DigitalIdentityStoreTest {
     @Test
     fun expandedCharacterTraitsPersistAcrossStoreRecreation() {
         val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia").copy(
+            voiceName = "Sulafat",
+            biography = "Una biografia di prova persistente.",
             personality = IdentityPersonality(
+                irony = 0.93f, sweetness = 0.84f, sensuality = 0.72f, friendliness = 0.88f,
                 warmth = 0.91f, humour = 0.82f, curiosity = 0.73f, expressiveness = 0.64f,
                 formality = 0.15f, empathy = 0.88f, seriousness = 0.42f, directness = 0.77f,
                 sociability = 0.69f, spontaneity = 0.83f, patience = 0.92f, optimism = 0.71f,
@@ -170,6 +173,12 @@ class DigitalIdentityStoreTest {
         )
         store.create(original)
         val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
+        assertEquals("Sulafat", restored.voiceName)
+        assertEquals("Una biografia di prova persistente.", restored.biography)
+        assertEquals(0.93f, restored.personality.irony, 0.001f)
+        assertEquals(0.84f, restored.personality.sweetness, 0.001f)
+        assertEquals(0.72f, restored.personality.sensuality, 0.001f)
+        assertEquals(0.88f, restored.personality.friendliness, 0.001f)
         assertEquals(0.77f, restored.personality.directness, 0.001f)
         assertEquals(0.69f, restored.personality.sociability, 0.001f)
         assertEquals(0.83f, restored.personality.spontaneity, 0.001f)
@@ -197,6 +206,9 @@ class DigitalIdentityStoreTest {
             .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f))
         val instruction = profile.toSystemInstruction()
         assertTrue(instruction.contains("directness 90"))
+        assertTrue(instruction.contains("irony 50"))
+        assertTrue(instruction.contains("sweetness 70"))
+        assertTrue(instruction.contains("sensuality 50"))
         assertTrue(instruction.contains("patience 80"))
         assertTrue(instruction.contains("playfulness 20"))
         assertTrue(instruction.contains("does not determine personality"))
