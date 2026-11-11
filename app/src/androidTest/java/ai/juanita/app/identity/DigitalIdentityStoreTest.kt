@@ -107,19 +107,43 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
-    fun onlyOneConfigurationPerCharacterIsAllowedAndBothUseSharedMemory() {
-        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
-        val secondJuanita = identity("Juanita paisa", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
-        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
+    fun userCanCreateIndependentCollectionsOfAnySizeForBothCharacterFamilies() {
+        val juanitas = (1..5).map { index ->
+            identity("Juanita $index", IdentityPresentation.FEMININE, "CO", "Colombia", "Region $index")
+        }
+        val jose = (1..4).map { index ->
+            identity("José $index", IdentityPresentation.MASCULINE, "ES", "España", "Region $index")
+        }
 
-        store.create(juanita)
-        assertThrows(IllegalArgumentException::class.java) { store.create(secondJuanita) }
-        store.create(jose)
+        (juanitas + jose).forEach(store::create)
 
+        val saved = store.list()
+        assertEquals(9, saved.size)
+        assertEquals(5, saved.count { it.presentation == IdentityPresentation.FEMININE })
+        assertEquals(4, saved.count { it.presentation == IdentityPresentation.MASCULINE })
+        assertEquals(juanitas.map { it.displayName }.toSet(), saved.filter { it.presentation == IdentityPresentation.FEMININE }.map { it.displayName }.toSet())
+        assertTrue(saved.all { it.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE })
+    }
+
+    @Test
+    fun duplicateGetsIndependentIdAndArchiveRestoreNeverDeletesSharedProfileData() {
+        val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(biography = "Biografia originale")
+        store.create(original)
+
+        val duplicate = store.duplicate(original.id, "Juanita Canaria")
+        assertTrue(duplicate.id != original.id)
+        assertEquals("Juanita Canaria", duplicate.displayName)
+        assertEquals("Biografia originale", duplicate.biography)
+
+        store.setArchived(original.id, true)
+        assertTrue(store.get(original.id)!!.archived)
+        assertFalse(store.get(duplicate.id)!!.archived)
+
+        store.setArchived(original.id, false)
+        assertFalse(store.get(original.id)!!.archived)
         assertEquals(2, store.list().size)
-        assertEquals("Juanita", store.get(juanita.id)?.displayName)
-        assertEquals("José", store.get(jose.id)?.displayName)
-        assertTrue(store.list().all { it.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE })
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, store.get(original.id)!!.memoryNamespace)
     }
 
     @Test
