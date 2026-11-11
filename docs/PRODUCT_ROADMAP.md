@@ -1711,3 +1711,14 @@ Implementation update (2026-11-11):
 - Encrypted profile JSON persists biography, all personality values and voice ID. Older records without a voice ID or the four added dimensions receive safe defaults during decoding; existing encrypted profile files and the shared-memory namespace are retained.
 - Regression coverage verifies voice, biography and the added personality values after store recreation.
 - Still required before release: CI build and Android instrumentation results on the updated head; manual Samsung verification of create/edit/reopen, per-profile voice, profile switching and no cross-profile leakage. Avatar binding/generation remains separate and is not claimed complete.
+
+
+## C4.7 — Character creation UX and profile voice correction
+
+Implementation update (2026-11-11):
+- Replaced the permanently visible, default-filled identity form with explicit entry actions: **Create a Juanita** or **Create a José**. The user then enters a guided, complete profile editor, names the character, and configures origin, languages, voice, biography and personality before saving.
+- The editor is hidden until creation is requested; existing profiles remain visible in their collection. Editing opens the same editor prefilled from the selected profile. Successful save closes the editor and shows a clear success message while the newly saved profile remains in the list. Cancel returns to the collection without saving.
+- Fixed the Settings voice selector, which had been disabled whenever a digital identity was active. It now shows voices compatible with the selected character and persists a voice change to that profile's encrypted record, not to the global assistant setting.
+- Fixed both the permission-granted preview path and the direct voice-preview path to use the selected profile's own voice ID. Main conversation startup already resolves the selected profile voice.
+- Added an Android instrumentation regression test verifying a profile voice update survives store recreation and does not alter another character's voice.
+- Validation pending on the latest branch head: debug build, JVM tests, instrumentation-test compilation and API 31 emulator execution. Manual Samsung UI/voice testing is still required.
