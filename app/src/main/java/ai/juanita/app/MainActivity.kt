@@ -498,7 +498,7 @@ private fun JuanitaApp(
                             append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
                         }
                     }
-                    JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id, identityId = activeDigitalIdentity?.id)
+                    JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id, identityId = activeDigitalIdentity?.id)
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
                 }
@@ -510,7 +510,7 @@ private fun JuanitaApp(
         if (granted) {
             val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
                 "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
+            JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
                 "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, ${if (assistantGender == "MASCHILE") "pronto" else "pronta"} ad accompagnarti con calma e con il sorriso.",
                 previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
             liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
@@ -676,20 +676,26 @@ private fun JuanitaApp(
                     onIdentitiesChanged = { digitalIdentities = it }
                 )
 
-                SettingsCard(panel, gold, "CARATTERE E PERSONALITÀ") {
-                    Text("Regola ogni tratto da 0 a 100%. Le preferenze vengono salvate automaticamente.",
-                        color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    TraitSlider("Ironia", persona.irony) { persona = persona.copy(irony = it); onPersonaChanged(persona) }
-                    TraitSlider("Dolcezza", persona.sweetness) { persona = persona.copy(sweetness = it); onPersonaChanged(persona) }
-                    TraitSlider("Sensualità", persona.sensuality) { persona = persona.copy(sensuality = it); onPersonaChanged(persona) }
-                    TraitSlider("Serietà", persona.seriousness) { persona = persona.copy(seriousness = it); onPersonaChanged(persona) }
-                    TraitSlider("Simpatia", persona.friendliness) { persona = persona.copy(friendliness = it); onPersonaChanged(persona) }
-                    TraitSlider("Intelligenza e curiosità", persona.curiosity) { persona = persona.copy(curiosity = it); onPersonaChanged(persona) }
-                    TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
-                    TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
-                    TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
-                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di $assistantName.",
-                        color = gold, fontSize = 11.sp)
+                if (activeDigitalIdentity == null) {
+                    SettingsCard(panel, gold, "CARATTERE E PERSONALITÀ") {
+                        Text("Regola ogni tratto da 0 a 100%. Le preferenze vengono salvate automaticamente.",
+                            color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                        TraitSlider("Ironia", persona.irony) { persona = persona.copy(irony = it); onPersonaChanged(persona) }
+                        TraitSlider("Dolcezza", persona.sweetness) { persona = persona.copy(sweetness = it); onPersonaChanged(persona) }
+                        TraitSlider("Sensualità", persona.sensuality) { persona = persona.copy(sensuality = it); onPersonaChanged(persona) }
+                        TraitSlider("Serietà", persona.seriousness) { persona = persona.copy(seriousness = it); onPersonaChanged(persona) }
+                        TraitSlider("Simpatia", persona.friendliness) { persona = persona.copy(friendliness = it); onPersonaChanged(persona) }
+                        TraitSlider("Intelligenza e curiosità", persona.curiosity) { persona = persona.copy(curiosity = it); onPersonaChanged(persona) }
+                        TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
+                        TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
+                        TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
+                        Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di $assistantName.",
+                            color = gold, fontSize = 11.sp)
+                    }
+                } else {
+                    SettingsCard(panel, gold, "CARATTERE DI ${activeDigitalIdentity.displayName}") {
+                        Text("I tratti di questo personaggio si modificano nella scheda del suo profilo, con il pulsante Modifica. Le percentuali vengono salvate separatamente per ogni Juanita e José.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                    }
                 }
 
                 SettingsCard(panel, gold, "LINGUA DELLA VOCE") {
@@ -760,180 +766,167 @@ private fun JuanitaApp(
                     }
                 }
 
-                SettingsCard(panel, gold, "VOCE DI $assistantName · GEMINI LIVE") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text(selectedLiveVoice.quality, color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                        }
-                        TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
-                        DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
-                            Text(
-                                "VOCI FEMMINILI",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = gold,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            liveVoices.filter { it.gender == "FEMMINILE" }.forEach { voice ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(voice.label)
-                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedLiveVoice = voice
-                                        onLiveVoiceChanged(voice.id)
-                                        liveVoiceMenuExpanded = false
-                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
-                                    }
-                                )
+                if (activeDigitalIdentity == null) {
+                    SettingsCard(panel, gold, "VOCE DI $assistantName · GEMINI LIVE") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                                Text(selectedLiveVoice.quality, color = Color(0xFF9A9DA4), fontSize = 12.sp)
                             }
-                            Text(
-                                "VOCI MASCHILI",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = gold,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(voice.label)
-                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedLiveVoice = voice
-                                        onLiveVoiceChanged(voice.id)
-                                        liveVoiceMenuExpanded = false
-                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
-                                    }
+                            TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
+                            DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
+                                Text(
+                                    "VOCI FEMMINILI",
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    color = gold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                liveVoices.filter { it.gender == "FEMMINILE" }.forEach { voice ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(voice.label)
+                                                Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedLiveVoice = voice
+                                            onLiveVoiceChanged(voice.id)
+                                            liveVoiceMenuExpanded = false
+                                            liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+                                        }
+                                    )
+                                }
+                                Text(
+                                    "VOCI MASCHILI",
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    color = gold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(voice.label)
+                                                Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                            }
+                                        },
+                                        onClick = {
+                                            selectedLiveVoice = voice
+                                            onLiveVoiceChanged(voice.id)
+                                            liveVoiceMenuExpanded = false
+                                            liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+                                        }
+                                    )
+                                }
                             }
                         }
+                        Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
+                            enabled = !liveState.contains("in ascolto", ignoreCase = true) &&
+                                !liveState.contains("connessione", ignoreCase = true),
+                            colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                        ) { Text("Ascolta un campione della voce") }
+                        Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                        Text(liveStartError ?: liveState, color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                        Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     }
-                    Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
-                        enabled = !liveState.contains("in ascolto", ignoreCase = true) &&
-                            !liveState.contains("connessione", ignoreCase = true),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) { Text("Ascolta un campione della voce") }
-                    Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                    Text(liveStartError ?: liveState, color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                    Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                }
-
-                }
-
-                if (selectedSection == "HOME") {
-                SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
-                    Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
-                    Text(locationStatus, color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                    Text("La posizione viene letta automaticamente con il tuo permesso quando apri Juanita e aggiornata all’avvio della conversazione. Nessun tracciamento in background.", color = Color(0xFF777D87), fontSize = 11.sp)
-                    Button(
-                        onClick = { livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) {
-                        Icon(Icons.Default.Mic, contentDescription = null)
-                        Text("  Avvia conversazione")
+    
                     }
-                    Button(
-                        onClick = {
-                            liveStartError = null
-                            JuanitaVoiceService.stop(context)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-                    ) { Text("Termina conversazione") }
-
-                    Button(
-                        onClick = { callScreenVisible = true },
-                        enabled = liveState.contains("in ascolto", ignoreCase = true),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) { Text("Apri videochiamata") }
-                    Text(
-                        "La modalità chiamata mostra Juanita a schermo intero e la tua fotocamera in un riquadro. La videocamera resta spenta finché non la attivi.",
-                        color = Color(0xFF9A9DA4), fontSize = 11.sp
-                    )
-                    Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
-                        color = Color(0xFF9A9DA4), fontSize = 11.sp)
-                }
-
-                }
-
-                if (selectedSection == "AVATAR" && !callScreenVisible) {
-                    CameraVisionSection(
+    
+                    if (selectedSection == "HOME") {
+                    SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
+                        Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                        Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
+                        Text(locationStatus, color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                        Text("La posizione viene letta automaticamente con il tuo permesso quando apri Juanita e aggiornata all’avvio della conversazione. Nessun tracciamento in background.", color = Color(0xFF777D87), fontSize = 11.sp)
+                        Button(
+                            onClick = { livePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                        ) {
+                            Icon(Icons.Default.Mic, contentDescription = null)
+                            Text("  Avvia conversazione")
+                        }
+                        Button(
+                            onClick = {
+                                liveStartError = null
+                                JuanitaVoiceService.stop(context)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                        ) { Text("Termina conversazione") }
+    
+                        Button(
+                            onClick = { callScreenVisible = true },
+                            enabled = liveState.contains("in ascolto", ignoreCase = true),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                        ) { Text("Apri videochiamata") }
+                        Text(
+                            "La modalità chiamata mostra Juanita a schermo intero e la tua fotocamera in un riquadro. La videocamera resta spenta finché non la attivi.",
+                            color = Color(0xFF9A9DA4), fontSize = 11.sp
+                        )
+                        Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
+                            color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    }
+    
+                    }
+    
+                    if (selectedSection == "AVATAR" && !callScreenVisible) {
+                        CameraVisionSection(
+                            panel = panel,
+                            gold = gold,
+                            voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
+                            visionStatus = visionState,
+                            onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
+                        )
+                    }
+    
+                    if (selectedSection == "MEMORY") {
+                    MemoryPrivacySection(
                         panel = panel,
                         gold = gold,
-                        voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
-                        visionStatus = visionState,
-                        onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) }
+                        initialArchiveEnabled = archiveEnabled,
+                        initialAutoMemoryEnabled = initialAutoMemoryEnabled,
+                        memoryStatus = memoryState,
+                        onAutoMemoryEnabledChanged = onAutoMemoryEnabledChanged,
+                        onRefreshMemories = onRefreshMemories,
+                        initialMemories = memories,
+                        initialArchivedConversations = initialArchivedConversations,
+                        initialRetentionDays = initialRetentionDays,
+                        onArchiveEnabledChanged = { enabled ->
+                            archiveEnabled = enabled
+                            onArchiveEnabledChanged(enabled)
+                            status = if (enabled) "Consenso archivio conversazioni attivato" else "Archivio conversazioni in pausa"
+                        },
+                        onSaveMemory = { text -> onSaveMemory(text) },
+                        onDeleteMemory = onDeleteMemory,
+                        onDeleteMemories = onDeleteMemories,
+                        onUpdateMemory = onUpdateMemory,
+                        onClearMemories = onClearMemories,
+                        onDeleteConversation = onDeleteConversation,
+                        onDeleteArchiveRange = onDeleteArchiveRange,
+                        onListConversationTurns = onListConversationTurns,
+                        onDeleteConversationRange = onDeleteConversationRange,
+                        onRefreshArchive = onRefreshArchive,
+                        onClearArchive = onClearArchive,
+                        onRetentionChanged = onRetentionChanged
                     )
-                }
-
-                if (selectedSection == "MEMORY") {
-                MemoryPrivacySection(
-                    panel = panel,
-                    gold = gold,
-                    initialArchiveEnabled = archiveEnabled,
-                    initialAutoMemoryEnabled = initialAutoMemoryEnabled,
-                    memoryStatus = memoryState,
-                    onAutoMemoryEnabledChanged = onAutoMemoryEnabledChanged,
-                    onRefreshMemories = onRefreshMemories,
-                    initialMemories = memories,
-                    initialArchivedConversations = initialArchivedConversations,
-                    initialRetentionDays = initialRetentionDays,
-                    onArchiveEnabledChanged = { enabled ->
-                        archiveEnabled = enabled
-                        onArchiveEnabledChanged(enabled)
-                        status = if (enabled) "Consenso archivio conversazioni attivato" else "Archivio conversazioni in pausa"
-                    },
-                    onSaveMemory = { text -> onSaveMemory(text) },
-                    onDeleteMemory = onDeleteMemory,
-                    onDeleteMemories = onDeleteMemories,
-                    onUpdateMemory = onUpdateMemory,
-                    onClearMemories = onClearMemories,
-                    onDeleteConversation = onDeleteConversation,
-                    onDeleteArchiveRange = onDeleteArchiveRange,
-                    onListConversationTurns = onListConversationTurns,
-                    onDeleteConversationRange = onDeleteConversationRange,
-                    onRefreshArchive = onRefreshArchive,
-                    onClearArchive = onClearArchive,
-                    onRetentionChanged = onRetentionChanged
-                )
-
-                }
-
-                if (selectedSection == "ALARM") {
-                    SettingsCard(panel, gold, "SVEGLIA") {
-                        AlarmSection(panel = panel, gold = gold, assistantName = assistantName)
+    
                     }
-                }
-
-                if (selectedSection == "MORE") {
-                if (BuildConfig.DEBUG) AppCheckDebugPanel()
-
-                ImprovementLabSection(
-                    panel = panel,
-                    gold = gold,
-                    initialReports = improvementReports,
-                    onRefresh = { onRefreshImprovementReports().also { improvementReports = it } },
-                    onSave = { title, type, area, observed, evidence, expected, acceptance ->
-                        onSaveImprovementReport(title, type, area, observed, evidence, expected, acceptance).also {
-                            improvementReports = listOf(it) + improvementReports
+    
+                    if (selectedSection == "ALARM") {
+                        SettingsCard(panel, gold, "SVEGLIA") {
+                            AlarmSection(panel = panel, gold = gold, assistantName = assistantName)
                         }
-                    },
-                    onDelete = { ids ->
-                        onDeleteImprovementReports(ids)
-                        improvementReports = improvementReports.filterNot { it.id in ids }
                     }
-                )
+                } else {
+                    SettingsCard(panel, gold, "VOCE DI ${activeDigitalIdentity.displayName}") {
+                        Text("Voce assegnata a questo profilo: ${activeDigitalIdentity.voiceName}. Per cambiarla, apri il profilo e premi Modifica. La voce verrà applicata alla prossima conversazione.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                    }
+                }
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
