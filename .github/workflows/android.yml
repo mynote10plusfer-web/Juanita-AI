@@ -44,6 +44,26 @@ jobs:
       - name: Compile Android instrumentation tests
         run: gradle --no-daemon :app:assembleDebugAndroidTest
 
+      # Bootstrap only: generate a baseline from the current PR head.
+      # The generated baseline must be committed before this step is removed and
+      # Detekt becomes a strict regression gate on subsequent commits.
+      - name: Generate initial Detekt baseline
+        run: gradle --no-daemon :app:detektBaseline
+
+      - name: Run Detekt Kotlin analysis
+        run: gradle --no-daemon :app:detekt
+
+      - name: Upload Detekt baseline and reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: Juanita-AI-detekt-bootstrap
+          path: |
+            config/detekt/baseline.xml
+            app/build/reports/detekt/**
+          if-no-files-found: warn
+          retention-days: 7
+
+
       - name: Verify debug APK package identity
         shell: bash
         run: |
