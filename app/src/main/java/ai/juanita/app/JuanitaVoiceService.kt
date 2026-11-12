@@ -42,6 +42,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicBoolean
 
+private enum class VoiceLifecycleState { IDLE, STARTING, ACTIVE, STOPPING, ERROR }
+
 /** Owns Gemini Live independently from the Activity; starts only after user consent. */
 class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -51,6 +53,9 @@ class JuanitaVoiceService : Service() {
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private lateinit var personalProfileStore: PersonalProfileStore
     private var startRequested = false
+    /** Main-thread-confined lifecycle gate: one session can own audio resources at a time. */
+    private var lifecycleState = VoiceLifecycleState.IDLE
+    private var activeIdentityId: String? = null
     /** Non-null only when this Live session was launched by a specific alarm. */
     private var activeAlarmId: String? = null
     private var sessionJob: Job? = null
@@ -132,20 +137,37 @@ class JuanitaVoiceService : Service() {
                     } else 0
                 )
                 if (stopJob?.isActive == true) {
-                    // Do not lose a character/session change requested while the old
-                    // microphone pipeline is being released. Keep only the latest start.
+                    // A stop is already in progress. Keep only the newest requested
+                    // persona and let the existing shutdown finish before reopening audio.
                     pendingStartIntent = Intent(intent)
                     pendingStartId = startId
-                    _state.value = "Chiusura della sessione precedente · nuova conversazione in attesa"
-                    updateNotification("Nuova conversazione in attesa della chiusura audio")
+                    _state.value = "Chiusura della sessione precedente · nuova personalità in attesa"
+                    updateNotification("Nuova personalità in attesa della chiusura audio")
                     return START_NOT_STICKY
                 }
-                if (startRequested) {
-                    _state.value = "Conversazione già attiva. Termina quella corrente per usare il personaggio selezionato."
-                    updateNotification("Conversazione già attiva · termina per cambiare personaggio")
+                if (startRequested || lifecycleState != VoiceLifecycleState.IDLE) {
+                    if (activeIdentityId == identityId && lifecycleState != VoiceLifecycleState.ERROR) {
+                        _state.value = if (lifecycleState == VoiceLifecycleState.ACTIVE) {
+                            "Questa personalità è già attiva."
+                        } else {
+                            "Questa personalità è già in fase di avvio."
+                        }
+                        updateNotification(_state.value)
+                        return START_NOT_STICKY
+                    }
+                    // A different persona is a switch request, not an error. Queue the
+                    // complete start intent, close the old session, then reopen only after
+                    // microphone capture and the old Live connection are both confirmed closed.
+                    pendingStartIntent = Intent(intent)
+                    pendingStartId = startId
+                    _state.value = "Cambio personalità · chiusura della sessione precedente…"
+                    updateNotification("Cambio personalità · chiusura audio in corso")
+                    requestStop()
                     return START_NOT_STICKY
                 }
                 if (!startRequested) {
+                    lifecycleState = VoiceLifecycleState.STARTING
+                    activeIdentityId = identityId
                     activeAlarmId = alarmId
                     acquireCpuWakeLock()
                     startRequested = true
@@ -217,8 +239,7 @@ class JuanitaVoiceService : Service() {
                                 var userTranscriptCount = 0
                                 var bufferedEvent: Pair<String, String>? = null
                                 while (true) {
-                                    val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
-                                    bufferedEvent = null
+                                    val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break                                    bufferedEvent = null
                                     val role = first.first
                                     var combinedText = first.second.trim()
 
@@ -357,6 +378,7 @@ class JuanitaVoiceService : Service() {
                                 getSharedPreferences("juanita_profile_guidance", MODE_PRIVATE).edit()
                                     .putBoolean(profilePromptKey, true).apply()
                             }
+                            lifecycleState = VoiceLifecycleState.ACTIVE
                             _state.value = if (previewDurationMillis > 0L) "Anteprima della voce Gemini in corso…"
                                 else "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification(if (previewDurationMillis > 0L) "Anteprima voce Gemini" else "Conversazione vocale attiva")
@@ -382,6 +404,8 @@ class JuanitaVoiceService : Service() {
                                 updateNotification("Connessione non riuscita · microfono disattivato")
                                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                                 startRequested = false
+                                lifecycleState = VoiceLifecycleState.IDLE
+                                activeIdentityId = null
                                 activeAlarmId = null
                                 releaseCpuWakeLock()
                                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -390,6 +414,7 @@ class JuanitaVoiceService : Service() {
                                 // Startup can fail after the SDK has already opened AudioRecord.
                                 // Keep the foreground notification and block another start until
                                 // a later explicit Stop confirms complete teardown.
+                                lifecycleState = VoiceLifecycleState.ERROR
                                 _state.value = "Avvio fallito · chiusura audio non confermata. Premi Termina o arresta forzatamente l'app."
                                 updateNotification("Chiusura microfono non confermata · riprova Termina")
                                 releaseCpuWakeLock()
@@ -430,6 +455,7 @@ class JuanitaVoiceService : Service() {
             }
             return
         }
+        lifecycleState = VoiceLifecycleState.STOPPING
         _state.value = "Richiesta di chiusura audio in corso…"
         stopJob = serviceScope.launch {
             var assistantStopped = false
@@ -437,8 +463,7 @@ class JuanitaVoiceService : Service() {
                 // AudioRecord.release() can block on some Android audio stacks. Never run
                 // SDK audio teardown on the service/UI main thread.
                 // First stop SDK microphone capture off the main thread. If it does not
-                // acknowledge shutdown, fail closed: never start another Live session on
-                // top of an audio pipeline whose release has not been confirmed.
+                // acknowledge shutdown, fail closed: never start another Live session on                // top of an audio pipeline whose release has not been confirmed.
                 val captureStopped = withTimeoutOrNull(6_000L) {
                     withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
                 } == true
@@ -464,6 +489,7 @@ class JuanitaVoiceService : Service() {
                 if (!assistantStopped) {
                     pendingStartIntent = null
                     pendingStartId = 0
+                    lifecycleState = VoiceLifecycleState.ERROR
                     _state.value = "Chiusura audio non confermata · riprova Termina o arresta forzatamente l'app"
                     updateNotification("Microfono non disattivato con certezza · chiusura richiesta")
                     releaseCpuWakeLock()
@@ -492,6 +518,8 @@ class JuanitaVoiceService : Service() {
                     _memoryState.value = "Memoria in attesa: riprenderà al prossimo collegamento."
                 }
                 startRequested = false
+                lifecycleState = VoiceLifecycleState.IDLE
+                activeIdentityId = null
                 activeAlarmId = null
                 if (assistantStopped) releaseCpuWakeLock()
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -593,9 +621,16 @@ class JuanitaVoiceService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Removing the launcher task is not an explicit request to end a voice conversation.
-        // The started foreground service must keep running while another app is in front
-        // or the display is off. The notification's "Termina" action remains the stop control.
+        // Removing the app from Recents is an explicit app-close gesture. Stop the
+        // foreground voice session through the same awaited teardown path; do not touch
+        // AlarmManager schedules or the encrypted shared memory store.
+        if (lifecycleState != VoiceLifecycleState.IDLE || startRequested || stopJob?.isActive == true) {
+            pendingStartIntent = null
+            pendingStartId = 0
+            requestStop(preserveContinuitySnapshot = true, finalMessage = "App chiusa · sessione vocale terminata")
+        } else {
+            stopSelf()
+        }
         super.onTaskRemoved(rootIntent)
     }
 
@@ -657,15 +692,21 @@ class JuanitaVoiceService : Service() {
 
     private fun updateNotification(message: String) {
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(message))
-    }
+            .notify(NOTIFICATION_ID, buildNotification(message))    }
 
     override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onDestroy() {
+        // Normal destruction is reached only after requestStop() has awaited SDK
+        // microphone and Live-session shutdown. Never launch detached cleanup here:
+        // Android could destroy this Service while that unowned coroutine is still running.
+        if (lifecycleState != VoiceLifecycleState.IDLE && lifecycleState != VoiceLifecycleState.ERROR) {
+            Log.e("JuanitaVoiceService", "Service destroyed before orderly voice shutdown completed: $lifecycleState")
+        }
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
         activeAlarmId = null
+        activeIdentityId = null
         pendingStartIntent = null
         pendingStartId = 0
         releaseCpuWakeLock()
@@ -673,12 +714,7 @@ class JuanitaVoiceService : Service() {
         transcriptWorker?.cancel()
         memoryWorkChannel?.close()
         memoryWorker?.cancel()
-        // Keep potentially blocking SDK audio teardown off Android's main thread.
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            runCatching { assistant.stopAudioCapture() }
-            runCatching { assistant.stop() }
-            audioRouteController.end()
-        }
+        runCatching { audioRouteController.end() }
         serviceScope.cancel()
         super.onDestroy()
     }
