@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence" ]
   workflow_dispatch:
+    inputs:
+      detekt_bootstrap:
+        description: "Generate and commit the initial Detekt baseline (run once)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: android-build-${{ github.ref }}
@@ -44,19 +50,19 @@ jobs:
       - name: Compile Android instrumentation tests
         run: gradle --no-daemon :app:assembleDebugAndroidTest
 
-      # Bootstrap only: generate a baseline from the current PR head.
-      # The generated baseline must be committed before this step is removed and
-      # Detekt becomes a strict regression gate on subsequent commits.
+      # Run only when explicitly requested from Actions. The baseline is committed
+      # by the separate least-privilege job below; normal PR runs never regenerate it.
       - name: Generate initial Detekt baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true
         run: gradle --no-daemon :app:detektBaseline
 
       - name: Run Detekt Kotlin analysis
         run: gradle --no-daemon :app:detekt
 
-      - name: Upload Detekt baseline and reports
+      - name: Upload Detekt report and optional bootstrap baseline
         uses: actions/upload-artifact@v4
         with:
-          name: Juanita-AI-detekt-bootstrap
+          name: Juanita-AI-detekt-report
           path: |
             config/detekt/baseline.xml
             app/build/reports/detekt/**
@@ -128,3 +134,38 @@ jobs:
             echo "ADB state: $(adb get-state)"
             echo "Boot completed: $(adb shell getprop sys.boot_completed)"
             if gradle --no-daemon :app:connectedDebugAndroidTest; then echo "Android instrumentation tests completed successfully."; else result=$?; echo "Instrumentation failed; collecting emulator diagnostics..."; adb devices -l || true; adb logcat -d -b all -t 1200 || true; exit "$result"; fi
+
+  commit-detekt-baseline:
+    name: Commit initial Detekt baseline
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Download generated baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: Juanita-AI-detekt-report
+          path: .
+
+      - name: Commit baseline only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s config/detekt/baseline.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/detekt/baseline.xml
+          if git diff --cached --quiet; then
+            echo "Detekt baseline is already up to date."
+          else
+            git commit -m "build: establish Detekt baseline"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
