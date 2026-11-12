@@ -239,7 +239,8 @@ class JuanitaVoiceService : Service() {
                                 var userTranscriptCount = 0
                                 var bufferedEvent: Pair<String, String>? = null
                                 while (true) {
-                                    val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break                                    bufferedEvent = null
+                                    val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
+                                    bufferedEvent = null
                                     val role = first.first
                                     var combinedText = first.second.trim()
 
@@ -463,7 +464,8 @@ class JuanitaVoiceService : Service() {
                 // AudioRecord.release() can block on some Android audio stacks. Never run
                 // SDK audio teardown on the service/UI main thread.
                 // First stop SDK microphone capture off the main thread. If it does not
-                // acknowledge shutdown, fail closed: never start another Live session on                // top of an audio pipeline whose release has not been confirmed.
+                // acknowledge shutdown, fail closed: never start another Live session on
+                // top of an audio pipeline whose release has not been confirmed.
                 val captureStopped = withTimeoutOrNull(6_000L) {
                     withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
                 } == true
@@ -692,7 +694,8 @@ class JuanitaVoiceService : Service() {
 
     private fun updateNotification(message: String) {
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(message))    }
+            .notify(NOTIFICATION_ID, buildNotification(message))
+    }
 
     override fun onBind(intent: Intent?): IBinder = localBinder
 
