@@ -11,8 +11,9 @@ The optional mode lets the selected identity (Juanita or José) participate in a
 ### Consent and privacy gates
 
 - Disabled by default. The user must explicitly enable the feature and explicitly start a presence session.
-- Microphone access is permitted only while the app is visibly in the foreground and the user-started session is active.
-- If the app loses foreground, permission is revoked, the user pauses/stops, or another audio call takes control, listening must stop immediately.
+- The user starts the session while the app is visibly in the foreground. Background continuation is a separate, explicit opt-in; it is never implied by enabling presence.
+- In the background, microphone access is permitted only while the Android microphone foreground service is active with its persistent user-visible notification and the user-started session remains authorized.
+- If the app loses foreground without background consent, the foreground service is unavailable, permission is revoked, the user pauses/stops, or another audio call takes control, listening must stop immediately.
 - A clear in-app microphone/listening indicator and one-touch pause/stop control are mandatory.
 - No hidden background capture, no wake-word daemon, no raw audio recording, and no new transcript retention beyond the existing user-controlled archive setting.
 - Exactly one selected character is bound to a session. Juanita and José are the only two character slots; each slot has one editable regional configuration, not multiple regional copies. Switching is deliberate in Settings and applies only to the next session; never switch because another name is spoken.
@@ -55,7 +56,7 @@ The policy is fail-closed: unknown or missing prerequisites must never authorize
 ## Prototype implemented in C3
 
 - `ConversationalPresencePolicy` contains pure, fail-closed decisions for listening and proactive speech.
-- Default is disabled; listening requires foreground + explicit user-started session + mic permission + selected identity.
+- Default is disabled; listening requires an explicit user-started session, mic permission and selected identity. Background continuation additionally requires both the active user-visible Android foreground service and separate user consent.
 - Proactive speech has independent opt-in, idle threshold, cooldown, hourly cap, quiet-hours and riding-mode gates.
 - Unit tests cover the principal allow/deny cases.
 - Instrumentation regression test confirms the same regional dossier is injected for masculine and feminine identities without changing grammatical presentation.
@@ -64,8 +65,8 @@ The policy is fail-closed: unknown or missing prerequisites must never authorize
 ## Next integration sequence
 
 1. Confirm C2 and C3 CI.
-2. Add a visible presence control to the existing voice screen/settings, wired to the policy (no new bottom tab).
-3. Add foreground/lifecycle enforcement and an explicit session start/stop.
+2. Add visible presence and background-continuation controls to the existing voice screen/settings, wired to the policy (no new bottom tab).
+3. Add foreground-service/lifecycle enforcement, explicit session start/stop and revocation of background consent when the session ends.
 4. Add a single proactive-turn call to the existing Live session only after cost/billing constraints are verified.
 5. Run scenario tests: quiet user, active user, interruption, app background, mic revoked, another call, riding mode, network loss, selected identity switch.
 6. Physical Samsung test with visible mic indicator and immediate stop/pause verification.
