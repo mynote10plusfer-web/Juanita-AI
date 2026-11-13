@@ -8,6 +8,7 @@ import java.io.File
 import java.util.UUID
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,6 +24,21 @@ class IdentityMemoryNamespaceTest {
         val first = EncryptedMemoryStore.getInstance(appContext)
         val second = EncryptedMemoryStore.getInstance(appContext)
         assertSame("Activity and service must share the same synchronized store", first, second)
+    }
+
+    @Test
+    fun automaticCloudMemoryIsOffByDefaultAndRequiresExplicitOptIn() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        try {
+            assertFalse("SAFE mode must not send transcript excerpts to Gemini by default", store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(true)
+            assertTrue("Automatic extraction is enabled only after explicit opt-in", store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(false)
+            assertFalse(store.isAutomaticMemoryEnabled)
+        } finally {
+            store.clearAll()
+        }
     }
 
     @Test
