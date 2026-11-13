@@ -33,6 +33,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -61,6 +62,7 @@ class JuanitaVoiceService : Service() {
     private var activeAlarmId: String? = null
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
+    private var wakeLockRenewalJob: Job? = null
     /** Latest explicit start requested while the previous session is shutting down. */
     private var pendingStartIntent: Intent? = null
     private var pendingStartId: Int = 0
@@ -433,13 +435,9 @@ class JuanitaVoiceService : Service() {
                 return START_NOT_STICKY
             }
         }
-        // If Android reclaims the process, ask it to redeliver the explicit user-started
-        // session intent. The encrypted continuity snapshot is loaded by the normal start path.
-        return if (intent?.action == ACTION_START && startRequested) {
-            START_REDELIVER_INTENT
-        } else {
-            START_NOT_STICKY
-        }
+        // A process restart must never silently reopen the microphone. The user must
+        // explicitly press Parla again; encrypted continuity remains available then.
+        return START_NOT_STICKY
     }
 
     /**
@@ -646,17 +644,38 @@ class JuanitaVoiceService : Service() {
     /** Keep the CPU awake for the lifetime of an explicitly started Live audio session.
      * This is required on devices that suspend background CPU work when the display turns off.
      */
-    @Suppress("WakelockTimeout")
     private fun acquireCpuWakeLock() {
         if (cpuWakeLock?.isHeld == true) return
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         cpuWakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:JuanitaLiveAudio").apply {
             setReferenceCounted(false)
-            acquire()
+            // The timeout is a final safety net if the service is wedged and cannot run cleanup.
+            acquire(CPU_WAKELOCK_TIMEOUT_MS)
+        }
+        wakeLockRenewalJob?.cancel()
+        wakeLockRenewalJob = serviceScope.launch {
+            while (true) {
+                delay(CPU_WAKELOCK_RENEW_INTERVAL_MS)
+                val lock = cpuWakeLock ?: break
+                if (!lock.isHeld) {
+                    Log.w("JuanitaVoiceService", "CPU wake lock reached its safety timeout before renewal")
+                    break
+                }
+                try {
+                    lock.release()
+                    lock.acquire(CPU_WAKELOCK_TIMEOUT_MS)
+                } catch (error: Exception) {
+                    Log.e("JuanitaVoiceService", "Unable to renew bounded CPU wake lock", error)
+                    releaseCpuWakeLock()
+                    break
+                }
+            }
         }
     }
 
     private fun releaseCpuWakeLock() {
+        wakeLockRenewalJob?.cancel()
+        wakeLockRenewalJob = null
         val lock = cpuWakeLock ?: return
         if (lock.isHeld) runCatching { lock.release() }
         cpuWakeLock = null
@@ -741,6 +760,8 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_IDENTITY_ID = "extra_digital_identity_id"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
+        private const val CPU_WAKELOCK_TIMEOUT_MS = 15 * 60 * 1_000L
+        private const val CPU_WAKELOCK_RENEW_INTERVAL_MS = 5 * 60 * 1_000L
 
         private val _visionState = MutableStateFlow("La visione è inattiva")
         val visionState: StateFlow<String> = _visionState.asStateFlow()
