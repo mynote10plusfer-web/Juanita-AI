@@ -177,6 +177,12 @@ class MainActivity : ComponentActivity() {
         val avatarStore = AvatarProfileStore(applicationContext)
         val digitalIdentityStore = DigitalIdentityStore(applicationContext)
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
+        val initialMemoriesResult = runCatching { memoryStore.listMemories() }
+        val initialReportsResult = runCatching { memoryStore.listImprovementReports() }
+        val initialMemoryLoadError = listOfNotNull(
+            initialMemoriesResult.exceptionOrNull()?.let { "Memorie personali: ${it.localizedMessage ?: it.javaClass.simpleName}" },
+            initialReportsResult.exceptionOrNull()?.let { "Rapporti: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+        ).joinToString(" · ").ifBlank { null }
         val initialActiveDigitalIdentityId = preferences.activeDigitalIdentityId
             ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId && !it.archived } }
             .also { validId ->
@@ -218,21 +224,22 @@ class MainActivity : ComponentActivity() {
                 onActiveDigitalIdentityChanged = { preferences.activeDigitalIdentityId = it },
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
-                initialMemories = memoryStore.listMemories(),
+                initialMemories = initialMemoriesResult.getOrDefault(emptyList()),
+                initialMemoryLoadError = initialMemoryLoadError,
                 // The archive is loaded asynchronously only when its tab is opened; do not scan/decrypt it during Activity composition.
                 initialArchivedConversations = emptyList(),
-                initialImprovementReports = memoryStore.listImprovementReports(),
+                initialImprovementReports = initialReportsResult.getOrDefault(emptyList()),
                 onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
                     memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
                 },
-                onRefreshImprovementReports = { memoryStore.listImprovementReports() },
+                onRefreshImprovementReports = { runCatching { memoryStore.listImprovementReports() }.getOrDefault(emptyList()) },
                 onDeleteImprovementReports = { memoryStore.deleteImprovementReports(it) },
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
-                onRefreshMemories = { memoryStore.listMemories() },
+                onRefreshMemories = { runCatching { memoryStore.listMemories() }.getOrDefault(emptyList()) },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onDeleteMemories = { memoryStore.deleteMemories(it) },
@@ -242,7 +249,7 @@ class MainActivity : ComponentActivity() {
                 onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
                 onListConversationTurns = { memoryStore.listConversationTurns(it) },
                 onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
-                onRefreshArchive = { memoryStore.listArchivedConversations() },
+                onRefreshArchive = { runCatching { memoryStore.listArchivedConversations() }.getOrDefault(emptyList()) },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
                 onSaveAvatarProfile = { avatarStore.save(it) },
@@ -291,6 +298,7 @@ private fun JuanitaApp(
     initialArchiveEnabled: Boolean,
     initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
+    initialMemoryLoadError: String?,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialImprovementReports: List<ImprovementReport>,
     onSaveImprovementReport: (String, String, String, String, String, String, String) -> ImprovementReport,
@@ -388,6 +396,7 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var memoryLoadError by remember { mutableStateOf(initialMemoryLoadError) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     val context = LocalContext.current
     val profileStore = remember(context) { DigitalIdentityStore(context.applicationContext) }
@@ -952,6 +961,15 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "MEMORY") {
+                if (memoryLoadError != null) {
+                    SettingsCard(panel, gold, "ARCHIVIO CIFRATO NON DISPONIBILE") {
+                        Text(
+                            "Non sono riuscita a leggere alcuni dati cifrati. Non ho cancellato né sostituito i file. Non disinstallare l'app e non cancellare i dati: serve prima una procedura di recupero.",
+                            color = Color(0xFFFFCC80), fontSize = 12.sp
+                        )
+                        Text(memoryLoadError.orEmpty(), color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    }
+                }
                 MemoryPrivacySection(
                     panel = panel,
                     gold = gold,
