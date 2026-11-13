@@ -311,9 +311,17 @@ class JuanitaVoiceService : Service() {
                                     }
                                 }
                             }
-                            // Use Android's communication audio mode while Live owns the mic/speaker.
-                            // The previous global mode is restored as soon as audio capture stops.
-                            audioRouteController.begin()
+                            // Acquire audio focus before opening the microphone. Phone calls or
+                            // competing communication sessions trigger the same orderly Stop path.
+                            val audioFocusGranted = audioRouteController.begin {
+                                requestStop(
+                                    preserveContinuitySnapshot = true,
+                                    finalMessage = "Sessione vocale interrotta: priorità audio passata a un'altra app."
+                                )
+                            }
+                            check(audioFocusGranted) {
+                                "Audio occupato da un'altra applicazione: microfono non avviato."
+                            }
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
