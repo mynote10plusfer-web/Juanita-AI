@@ -1086,6 +1086,21 @@ class EncryptedMemoryStore(context: Context) {
     )
 
     companion object {
+        @Volatile
+        private var processInstance: EncryptedMemoryStore? = null
+
+        /**
+         * Production entry point: Activity and foreground service must share one store
+         * instance so the existing synchronized read-modify-write transactions serialize
+         * across the whole app process, not merely per object.
+         */
+        fun getInstance(context: Context): EncryptedMemoryStore =
+            processInstance ?: synchronized(this) {
+                processInstance ?: EncryptedMemoryStore(context.applicationContext).also {
+                    processInstance = it
+                }
+            }
+
         private const val TAG = "EncryptedMemoryStore"
         private val BIOGRAPHY_CATEGORIES = setOf("project", "goal", "important_event", "experience", "person", "relationship", "milestone", "interest")
         private val SEARCH_STOP_WORDS = setOf(
