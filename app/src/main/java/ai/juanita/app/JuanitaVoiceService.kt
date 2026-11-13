@@ -25,6 +25,7 @@ import ai.juanita.app.memory.AutomaticMemoryEngine
 import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.profile.PersonalProfile
 import ai.juanita.app.profile.PersonalProfileStore
+import ai.juanita.app.presence.VoiceSessionCommandMatcher
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID

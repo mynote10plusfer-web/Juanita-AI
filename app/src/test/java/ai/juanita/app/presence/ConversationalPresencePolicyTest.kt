@@ -24,7 +24,7 @@ class ConversationalPresencePolicyTest {
     )
 
     @Test
-    fun listeningFailsClosedByDefaultAndWhenAppLeavesForeground() {
+    fun listeningFailsClosedByDefaultAndWhenAppLeavesForegroundWithoutBackgroundConsent() {
         assertEquals(
             PresenceDecision.BlockListening(PresenceBlockReason.DISABLED),
             ConversationalPresencePolicy.listeningDecision(
@@ -37,6 +37,35 @@ class ConversationalPresencePolicyTest {
             ConversationalPresencePolicy.listeningDecision(
                 enabled,
                 safeContext.copy(appInForeground = false)
+            )
+        )
+    }
+
+    @Test
+    fun backgroundListeningRequiresBothForegroundServiceAndExplicitContinuationConsent() {
+        assertEquals(
+            PresenceDecision.BlockListening(PresenceBlockReason.APP_NOT_FOREGROUND),
+            ConversationalPresencePolicy.listeningDecision(
+                enabled,
+                safeContext.copy(appInForeground = false, foregroundServiceActive = true)
+            )
+        )
+        assertEquals(
+            PresenceDecision.BlockListening(PresenceBlockReason.APP_NOT_FOREGROUND),
+            ConversationalPresencePolicy.listeningDecision(
+                enabled,
+                safeContext.copy(appInForeground = false, backgroundContinuationAuthorized = true)
+            )
+        )
+        assertEquals(
+            PresenceDecision.AllowListening,
+            ConversationalPresencePolicy.listeningDecision(
+                enabled,
+                safeContext.copy(
+                    appInForeground = false,
+                    foregroundServiceActive = true,
+                    backgroundContinuationAuthorized = true
+                )
             )
         )
     }
