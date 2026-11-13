@@ -78,6 +78,8 @@ class JuanitaVoiceService : Service() {
     private var pendingStartId: Int = 0
     private var voicePreviewJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
+    /** Stop Live if bounded transcript intake saturates; never continue silently after losing an event. */
+    private val transcriptOverflowHandled = AtomicBoolean(false)
     private var transcriptWorker: Job? = null
     @Volatile private var activeConversationId: String? = null
     private var memoryWorkChannel: Channel<Unit>? = null
@@ -239,6 +241,7 @@ class JuanitaVoiceService : Service() {
                             // A single ordered worker prevents transcript callbacks racing
                             // with one another or with the final memory flush.
                             val transcriptQueue = Channel<Pair<String, String>>(capacity = 64)
+                            transcriptOverflowHandled.set(false)
                             transcriptChannel = transcriptQueue
                             val memoryQueue = Channel<Unit>(Channel.CONFLATED)
                             memoryWorkChannel = memoryQueue
@@ -344,8 +347,22 @@ class JuanitaVoiceService : Service() {
                                     }
                                     if (previewDurationMillis == 0L) {
                                         val sent = transcriptQueue.trySend(role to text)
-                                        if (sent.isFailure && role.equals("USER", ignoreCase = true)) {
-                                            _memoryState.value = "Coda trascrizioni piena: alcuni testi non sono stati acquisiti."
+                                        if (
+                                            sent.isFailure &&
+                                            !sent.isClosed &&
+                                            transcriptOverflowHandled.compareAndSet(false, true)
+                                        ) {
+                                            // A full bounded queue means the durable transcript worker
+                                            // cannot keep up. Continuing would silently lose context.
+                                            // Fail closed and preserve the already-persisted snapshot.
+                                            _memoryState.value =
+                                                "Coda trascrizioni satura: sessione interrotta per evitare ulteriori perdite di contesto."
+                                            serviceScope.launch {
+                                                requestStop(
+                                                    preserveContinuitySnapshot = true,
+                                                    finalMessage = "Conversazione interrotta: coda trascrizioni satura. I turni già salvati restano disponibili."
+                                                )
+                                            }
                                         }
                                     }
                                 },
