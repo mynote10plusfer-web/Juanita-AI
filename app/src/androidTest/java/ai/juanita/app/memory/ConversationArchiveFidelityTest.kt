@@ -3,6 +3,8 @@ package ai.juanita.app.memory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
+import java.io.File
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -108,6 +110,28 @@ class ConversationArchiveFidelityTest {
         } finally {
             store.clearContinuitySnapshot(sessionId)
             store.setConversationArchiveEnabled(archiveWasEnabled)
+        }
+    }
+
+    @Test
+    fun recallReportsUnreadableArchiveInsteadOfTreatingItAsNoHistory() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "corrupt-" + UUID.randomUUID()
+        val archiveDirectory = File(context.filesDir, "conversation_archive").apply { mkdirs() }
+        val corruptArchive = File(archiveDirectory, "$sessionId.enc")
+
+        try {
+            // Simulate an unreadable encrypted archive without touching any user data.
+            corruptArchive.writeBytes(byteArrayOf(1, 2, 3, 4))
+            val failure = runCatching {
+                EncryptedMemoryStore(context).buildRelevantRecallContext("ricordo conversazione")
+            }.exceptionOrNull()
+
+            assertNotNull("Recall must surface the unreadable archive instead of returning an empty result.", failure)
+            assertTrue(failure is IllegalStateException)
+            assertTrue(failure?.message.orEmpty().contains("retrieval is incomplete"))
+        } finally {
+            corruptArchive.delete()
         }
     }
 
