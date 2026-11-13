@@ -1,5 +1,20 @@
 # Juanita AI — Product requirements and implementation roadmap
 
+## 2026-11-13 — User-approved roadmap priority correction: Avatar last
+
+**DECISION: CONFIRMED BY USER.** The Avatar tab remains one of the six existing tabs, but all substantive Avatar development is postponed to the final product phase. Do not implement photorealistic avatar generation, image-to-avatar conversion, avatar animation, lip-sync, gaze, expressions or hosted/local rendering work until the rest of the application is complete, stable and accepted.
+
+Revised delivery order:
+1. **Reliability and device safety (current priority):** resolve lifecycle/audio shutdown, microphone release, reconnect limits, WakeLock, audio focus/routing, storage integrity, memory concurrency and continuity. Validate build/tests and then physically test on the user's Samsung devices, including thermal/battery behavior, screen responsiveness and fingerprint/touch recovery.
+2. **C3 controlled conversational presence:** integrate existing policy logic into the UI and existing Live session with explicit user control, visible state, immediate pause/stop, no hidden listening and no unsolicited activation while riding.
+3. **C4 character engine and learning:** complete the unified character editor and profile behavior; preserve separate personalities and one active character while sharing memory; complete automatic memory, retrieval, correction and knowledge-learning behavior.
+4. **C5 scalable encrypted memory/archive:** complete crash-safe migration from legacy encrypted storage, retain the existing Keystore key and all data, remove destructive caps only after migration proof, add backup/restore, indexes, pagination and performance/heap benchmarks.
+5. **Personal Organizer and Agenda:** reminders, tasks, recurring schedules, due dates, Android calendar integration and upcoming-day views, with reliable local notifications and voice management.
+6. **Avatar — LAST:** only after phases 1–5 are implemented, tested on-device and accepted. Then implement profile-bound generation from description/photo, preview, animation and lip-sync, subject to the existing privacy and no-paid-services constraints.
+
+The Avatar tab may remain visible as a placeholder/metadata area, but it must not take engineering priority or introduce background CPU/GPU/network load while reliability is being established. This decision supersedes earlier roadmap sequences that placed avatar work before the Organizer/Agenda.
+
+
 Last updated: 2026-11-11 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. New microphone shutdown, reconnect serialization and character-switch mitigations have been committed; exact-head CI is pending. Physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
 
 ## 2026-11-11 — character voice preview, obsolete mic test removal and session identity
@@ -1742,7 +1757,7 @@ The earlier Phase A/B/C plan and current PR #40 implementation constrain the arc
 - **Not yet complete:** unified editor still needs per-profile provider voice ID and preview, profile-bound avatar selection, language behavior/conversational style fields, full 15-trait editing, profile duplication semantics for avatar assets, and review/preview validation. The existing separate settings must not remain an alternative source of truth once this is integrated.
 - CI for the exact latest commit is pending. No new APK from this slice is validated yet.
 
-**Next execution order remains C3 → C4 → C5**, with the user-approved Personal Organizer requirements retained for the next product package after the safety-critical phase is accepted. Do not declare the profile editor, memory scaling, presence or Organizer complete from code presence alone.
+**Updated execution order (user-confirmed 2026-11-13):** first complete stability and device-safety gates; then C3 controlled conversational presence; then C4 character/personality and memory-learning work; then C5 scalable encrypted storage and validation; then the Personal Organizer and full Agenda. **Avatar is explicitly moved to the very last product phase** and must not be developed beyond preserving existing metadata/current static portrait until all prior phases are complete, stable, validated on the user's Samsung devices and accepted by the user. Do not declare any phase complete from code presence alone.
 
 ## C4.6 — Persisted per-character voice and complete personality controls
 
