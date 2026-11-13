@@ -145,27 +145,27 @@ class VoiceAudioRouteController(context: Context) {
         onFocusLost = null
         try {
             if (deviceCallbackRegistered) {
-                audioManager.unregisterAudioDeviceCallback(deviceCallback)
+                runCatching { audioManager.unregisterAudioDeviceCallback(deviceCallback) }
+                    .onFailure { Log.w(TAG, "Could not unregister audio-device listener", it) }
                 deviceCallbackRegistered = false
             }
             if (restoreMode != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val previousDevice = previousCommunicationDevice
                 previousCommunicationDevice = null
-                val stillAvailable = previousDevice?.let { old ->
-                    audioManager.availableCommunicationDevices.firstOrNull { it.id == old.id }
-                }
-                if (stillAvailable != null) {
-                    audioManager.setCommunicationDevice(stillAvailable)
-                } else {
-                    audioManager.clearCommunicationDevice()
-                }
+                runCatching {
+                    val stillAvailable = previousDevice?.let { old ->
+                        audioManager.availableCommunicationDevices.firstOrNull { it.id == old.id }
+                    }
+                    if (stillAvailable != null) audioManager.setCommunicationDevice(stillAvailable)
+                    else audioManager.clearCommunicationDevice()
+                }.onFailure { Log.w(TAG, "Could not restore previous communication device", it) }
             }
+            // Restore MODE even if unregistering a listener or restoring a headset route failed.
             if (restoreMode != null) {
-                audioManager.mode = restoreMode
-                Log.i(TAG, "Voice route ended; restored AudioManager mode=$restoreMode")
+                runCatching { audioManager.mode = restoreMode }
+                    .onSuccess { Log.i(TAG, "Voice route ended; restored AudioManager mode=$restoreMode") }
+                    .onFailure { Log.w(TAG, "Could not restore previous Android audio mode", it) }
             }
-        } catch (error: Exception) {
-            Log.w(TAG, "Could not restore previous Android audio mode", error)
         } finally {
             if (focusGranted) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
