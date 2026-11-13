@@ -131,7 +131,7 @@ internal fun MemoryPrivacySection(
             }
             Text(if (autoMemoryEnabled) memoryStatus else "Memoria automatica in pausa.",
                 color = if (autoMemoryEnabled) gold else Color(0xFF9A9DA4), fontSize = 11.sp)
-            Text("Per selezionare i ricordi, brevi estratti testuali vengono inviati a Gemini. Nel livello gratuito Google può usare i contenuti inviati per migliorare i propri prodotti, secondo i suoi termini. Non viene salvato l’audio e non serve attivare l’archivio completo. Puoi disattivare questa funzione in qualsiasi momento.",
+            Text("MODALITÀ SAFE: questa funzione è disattivata nelle nuove installazioni. Se la attivi, brevi estratti testuali delle conversazioni vengono inviati a Google Gemini per selezionare i ricordi; si applicano le condizioni e le regole di trattamento dati di Google e l'uso può consumare quota o generare costi se il progetto è configurato con fatturazione. L'audio non viene salvato. Puoi continuare a inserire e modificare ricordi manualmente: restano cifrati sul telefono e non vengono inviati da questa schermata.",
                 color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
