@@ -93,7 +93,7 @@ class JuanitaVoiceService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        memoryStore = EncryptedMemoryStore(applicationContext)
+        memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
         automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
         personalProfileStore = PersonalProfileStore(applicationContext)
         createNotificationChannel()
@@ -186,7 +186,7 @@ class JuanitaVoiceService : Service() {
                                     DigitalIdentityStore(applicationContext).get(requestedId)
                                 } ?: throw IllegalStateException("L'identità selezionata non esiste più. Selezionala di nuovo nelle impostazioni.")
                             }
-                            memoryStore = EncryptedMemoryStore(applicationContext)
+                            memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
                             automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
 
                             val conversationId = UUID.randomUUID().toString()
