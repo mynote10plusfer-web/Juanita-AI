@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
@@ -417,9 +418,7 @@ class JuanitaVoiceService : Service() {
                         } catch (error: Exception) {
                             val captureStopped = stopAudioCaptureWithDeadline(6_000L)
                             if (captureStopped) audioRouteController.end()
-                            val assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
-                                runCatching { withContext(Dispatchers.IO) { assistant.stop() } }.isSuccess
-                            } == true)
+                            val assistantStopped = captureStopped && stopAssistantWithDeadline(8_000L)
                             if (assistantStopped) {
                                 _shutdownConfirmed.value = true
                                 _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
@@ -460,23 +459,39 @@ class JuanitaVoiceService : Service() {
      * Run them on one dedicated daemon worker and use Future.get for a real wall-clock
      * deadline. On timeout the worker is interrupted and the service fails closed.
      */
+    private suspend fun runAudioTeardownWithDeadline(
+        operation: String,
+        timeoutMillis: Long,
+        teardown: () -> Boolean
+    ): Boolean = withContext(Dispatchers.IO) {
+        val future = audioTeardownExecutor.submit<Boolean> { teardown() }
+        try {
+            future.get(timeoutMillis, TimeUnit.MILLISECONDS)
+        } catch (timeout: TimeoutException) {
+            future.cancel(true)
+            Log.e("JuanitaVoiceService", "$operation exceeded ${timeoutMillis}ms")
+            false
+        } catch (failure: ExecutionException) {
+            Log.e("JuanitaVoiceService", "$operation failed", failure.cause ?: failure)
+            false
+        } catch (interrupted: InterruptedException) {
+            future.cancel(true)
+            Thread.currentThread().interrupt()
+            Log.w("JuanitaVoiceService", "$operation wait was interrupted", interrupted)
+            false
+        }
+    }
+
     private suspend fun stopAudioCaptureWithDeadline(timeoutMillis: Long): Boolean =
-        withContext(Dispatchers.IO) {
-            val future = audioTeardownExecutor.submit<Boolean> { assistant.stopAudioCapture() }
-            try {
-                future.get(timeoutMillis, TimeUnit.MILLISECONDS)
-            } catch (timeout: TimeoutException) {
-                future.cancel(true)
-                Log.e("JuanitaVoiceService", "SDK microphone teardown exceeded ${timeoutMillis}ms")
-                false
-            } catch (failure: ExecutionException) {
-                Log.e("JuanitaVoiceService", "SDK microphone teardown failed", failure.cause ?: failure)
-                false
-            } catch (interrupted: InterruptedException) {
-                future.cancel(true)
-                Thread.currentThread().interrupt()
-                Log.w("JuanitaVoiceService", "SDK microphone teardown wait was interrupted", interrupted)
-                false
+        runAudioTeardownWithDeadline("SDK microphone teardown", timeoutMillis) {
+            assistant.stopAudioCapture()
+        }
+
+    private suspend fun stopAssistantWithDeadline(timeoutMillis: Long): Boolean =
+        runAudioTeardownWithDeadline("Gemini Live session close", timeoutMillis) {
+            runBlocking {
+                assistant.stop()
+                true
             }
         }
 
@@ -510,10 +525,7 @@ class JuanitaVoiceService : Service() {
                 // top of an audio pipeline whose release has not been confirmed.
                 val captureStopped = stopAudioCaptureWithDeadline(6_000L)
                 if (captureStopped) audioRouteController.end()
-                assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
-                    withContext(Dispatchers.IO) { assistant.stop() }
-                    true
-                } == true)
+                assistantStopped = captureStopped && stopAssistantWithDeadline(8_000L)
                 if (!assistantStopped) {
                     Log.e("JuanitaVoiceService", "Voice shutdown not confirmed; queued restart will be discarded")
                     pendingStartIntent = null
