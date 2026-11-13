@@ -330,10 +330,10 @@ class JuanitaVoiceService : Service() {
                                     }
                                 },
                                 onArchiveSearch = { query ->
-                                    memoryStore.buildRelevantRecallContext(
-                                        query,
-                                        excludeSessionId = conversationId
-                                    )
+                                    // Include earlier turns from this same conversation as well
+                                    // as older sessions. The bounded continuity snapshot is not
+                                    // a substitute for searchable full-session history.
+                                    memoryStore.buildRelevantRecallContext(query)
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {
