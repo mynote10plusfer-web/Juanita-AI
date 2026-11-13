@@ -472,6 +472,10 @@ fun DigitalIdentitySection(
                                         Text(source.publisher, color = Color(0xFFB9BBC1), fontSize = 10.sp)
                                         Text(source.url, color = Color(0xFF8AB4F8), fontSize = 9.sp)
                                         Text(source.summary, color = Color(0xFFB9BBC1), fontSize = 10.sp)
+                                        if (source.geographicScope.isNotBlank()) {
+                                            Text("Ambito geografico: ${source.geographicScope}", color = Color(0xFFB9BBC1), fontSize = 10.sp)
+                                        }
+                                        Text("Tema: ${source.topic} · Affidabilità indicativa: ${(source.confidence.coerceIn(0f, 1f) * 100).toInt()}%", color = Color(0xFFB9BBC1), fontSize = 10.sp)
                                     }
                                 }
                                 Button(
