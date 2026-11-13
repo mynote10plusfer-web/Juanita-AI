@@ -835,6 +835,12 @@ class EncryptedMemoryStore(context: Context) {
             if (record.optString("kind") == "memory" && record.optString("id") == id) {
                 record.put("text", newText.trim().take(MAX_MEMORY_TEXT_LENGTH))
                 record.put("topic", MemoryTopicClassifier.classify(newText))
+                // Editing a memory is an explicit user correction: preserve its original
+                // creation time while recording the correction's provenance and confidence.
+                record.put("source", "user_corrected")
+                record.put("confidence", 1.0)
+                record.put("confirmed", true)
+                record.put("updatedAt", System.currentTimeMillis())
                 updated = true
                 break
             }
