@@ -1,5 +1,9 @@
 # Juanita AI — Product requirements and implementation roadmap
 
+## 2026-11-13 — Character editor completeness (PR #40)
+
+**STATUS: IMPLEMENTED; EXACT-HEAD CI PENDING.** The identity model and system instruction already define 19 independent personality dimensions, but the Compose editor exposed only 16. Added the missing expressiveness, formality and empathy controls to the create/edit form, voice-preview draft and saved profile. Added regression assertions for encrypted round-trip persistence and runtime instruction output. This completes the 19-control editor surface; it does not by itself prove that Gemini consistently expresses every trait in live conversation. Physical conversational evaluation remains required.
+
 ## 2026-11-13 — User-approved roadmap priority correction: Avatar last
 
 **DECISION: CONFIRMED BY USER.** The Avatar tab remains one of the six existing tabs, but all substantive Avatar development is postponed to the final product phase. Do not implement photorealistic avatar generation, image-to-avatar conversion, avatar animation, lip-sync, gaze, expressions or hosted/local rendering work until the rest of the application is complete, stable and accepted.
