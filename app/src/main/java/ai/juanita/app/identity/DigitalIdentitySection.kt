@@ -79,6 +79,9 @@ fun DigitalIdentitySection(
     var warmth by remember { mutableStateOf(0.7f) }
     var humour by remember { mutableStateOf(0.6f) }
     var curiosity by remember { mutableStateOf(0.8f) }
+    var expressiveness by remember { mutableStateOf(0.7f) }
+    var formality by remember { mutableStateOf(0.3f) }
+    var empathy by remember { mutableStateOf(0.8f) }
     var seriousness by remember { mutableStateOf(0.5f) }
     var directness by remember { mutableStateOf(0.55f) }
     var sociability by remember { mutableStateOf(0.6f) }
@@ -109,6 +112,9 @@ fun DigitalIdentitySection(
         warmth = 0.7f
         humour = 0.6f
         curiosity = 0.8f
+        expressiveness = 0.7f
+        formality = 0.3f
+        empathy = 0.8f
         seriousness = 0.5f
         directness = 0.55f
         sociability = 0.6f
@@ -141,6 +147,9 @@ fun DigitalIdentitySection(
         warmth = identity.personality.warmth
         humour = identity.personality.humour
         curiosity = identity.personality.curiosity
+        expressiveness = identity.personality.expressiveness
+        formality = identity.personality.formality
+        empathy = identity.personality.empathy
         seriousness = identity.personality.seriousness
         directness = identity.personality.directness
         sociability = identity.personality.sociability
@@ -339,7 +348,8 @@ fun DigitalIdentitySection(
                         languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
                         personality = IdentityPersonality(
                             irony = irony, sweetness = sweetness, sensuality = sensuality, friendliness = friendliness,
-                            warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness,
+                            warmth = warmth, humour = humour, curiosity = curiosity, expressiveness = expressiveness,
+                            formality = formality, empathy = empathy, seriousness = seriousness,
                             directness = directness, sociability = sociability, spontaneity = spontaneity,
                             patience = patience, optimism = optimism, assertiveness = assertiveness,
                             playfulness = playfulness, discretion = discretion
@@ -368,6 +378,9 @@ fun DigitalIdentitySection(
                 TraitControl("Calore", warmth, { warmth = it })
                 TraitControl("Umorismo", humour, { humour = it })
                 TraitControl("Curiosità", curiosity, { curiosity = it })
+                TraitControl("Espressività", expressiveness, { expressiveness = it })
+                TraitControl("Formalità", formality, { formality = it })
+                TraitControl("Empatia", empathy, { empathy = it })
                 TraitControl("Serietà", seriousness, { seriousness = it })
                 Text("MODO DI RELAZIONARSI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 TraitControl("Franchezza", directness, { directness = it })
@@ -395,7 +408,8 @@ fun DigitalIdentitySection(
                                 languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
                                 personality = IdentityPersonality(
                                     irony = irony, sweetness = sweetness, sensuality = sensuality, friendliness = friendliness,
-                                    warmth = warmth, humour = humour, curiosity = curiosity, seriousness = seriousness,
+                                    warmth = warmth, humour = humour, curiosity = curiosity, expressiveness = expressiveness,
+                                    formality = formality, empathy = empathy, seriousness = seriousness,
                                     directness = directness, sociability = sociability, spontaneity = spontaneity,
                                     patience = patience, optimism = optimism, assertiveness = assertiveness,
                                     playfulness = playfulness, discretion = discretion
