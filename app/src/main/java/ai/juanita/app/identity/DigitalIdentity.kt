@@ -2,7 +2,7 @@ package ai.juanita.app.identity
 
 import java.util.UUID
 
-/** Shared memory is intentional: only the character configuration changes when switching identity. */
+/** Shared namespace for user facts; private episodes are separately scoped by the stable identity ID. */
 const val SHARED_IDENTITY_MEMORY_NAMESPACE = "shared"
 
 /** Stable voice IDs exposed by the current Gemini Live voice catalogue. */
@@ -67,7 +67,7 @@ data class CulturalDossier(
 
 /**
  * One independently configured character in the user's extensible profile collection. Identity settings are
- * stored independently; all profiles intentionally use the common user-memory namespace.
+ * stored independently; common user facts are shared, while private episodes use this profile's stable ID.
  */
 data class DigitalIdentity(
     val id: String = UUID.randomUUID().toString(),
