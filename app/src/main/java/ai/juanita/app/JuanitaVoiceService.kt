@@ -417,7 +417,10 @@ class JuanitaVoiceService : Service() {
                             throw cancelled
                         } catch (error: Exception) {
                             val captureStopped = stopAudioCaptureWithDeadline(6_000L)
-                            if (captureStopped) audioRouteController.end()
+                            // Restore Android's global communication route even when the SDK
+                            // recorder fails to acknowledge shutdown. Do not keep MODE_IN_COMMUNICATION
+                            // or audio focus held while the service remains in fail-closed ERROR.
+                            audioRouteController.end()
                             val assistantStopped = captureStopped && stopAssistantWithDeadline(8_000L)
                             if (assistantStopped) {
                                 _shutdownConfirmed.value = true
@@ -524,7 +527,9 @@ class JuanitaVoiceService : Service() {
                 // acknowledge shutdown, fail closed: never start another Live session on
                 // top of an audio pipeline whose release has not been confirmed.
                 val captureStopped = stopAudioCaptureWithDeadline(6_000L)
-                if (captureStopped) audioRouteController.end()
+                // Audio routing and focus are process-wide Android state, not proof that
+                // the SDK recorder stopped. Always restore/release them independently.
+                audioRouteController.end()
                 assistantStopped = captureStopped && stopAssistantWithDeadline(8_000L)
                 if (!assistantStopped) {
                     Log.e("JuanitaVoiceService", "Voice shutdown not confirmed; queued restart will be discarded")
