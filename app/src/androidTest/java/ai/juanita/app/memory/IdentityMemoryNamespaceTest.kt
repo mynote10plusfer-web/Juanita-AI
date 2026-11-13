@@ -165,6 +165,12 @@ class IdentityMemoryNamespaceTest {
             assertEquals("user_corrected", updated.source)
             assertEquals(1.0f, updated.confidence, 0.0f)
             assertTrue(updated.confirmedByUser)
+
+            val reloaded = EncryptedMemoryStore(isolatedContext()).listMemories().single { it.id == saved.id }
+            assertEquals("user_corrected", reloaded.source)
+            assertEquals(1.0f, reloaded.confidence, 0.0f)
+            assertTrue("Explicit user correction must survive encrypted persistence", reloaded.confirmedByUser)
+            assertEquals(corrected, reloaded.text)
         } finally {
             store.clearAll()
         }
