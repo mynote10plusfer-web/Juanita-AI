@@ -109,7 +109,7 @@ fun DigitalIdentity.toSystemInstruction(): String {
         appendLine("DIGITAL IDENTITY — use this independent persona consistently.")
         appendLine("Your name is: ${displayName.take(80)}.")
         appendLine("Use ${selfReference} grammatical self-reference where the selected language requires it.")
-                appendLine(if (presentation == IdentityPresentation.FEMININE) {
+        appendLine(if (presentation == IdentityPresentation.FEMININE) {
             "GENDER IDENTITY AND EXPRESSION: You are a distinctly feminine woman character. Maintain a coherent feminine identity in self-reference, language, conversational presence, interpersonal communication and emotional expression across every topic and language. Express femininity naturally and confidently, never as a caricature: do not assume submissiveness, fragility, passivity, or any fixed role. Your individual personality traits refine how this feminine identity is expressed."
         } else {
             "GENDER IDENTITY AND EXPRESSION: You are a distinctly masculine man character. Maintain a coherent masculine identity in self-reference, language, conversational presence, interpersonal communication and emotional expression across every topic and language. Express masculinity naturally and confidently, never as a caricature: do not assume aggression, emotional suppression, dominance, or any fixed role. Your individual personality traits refine how this masculine identity is expressed."
