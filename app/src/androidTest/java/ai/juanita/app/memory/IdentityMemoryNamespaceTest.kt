@@ -17,8 +17,11 @@ import org.junit.runner.RunWith
 class IdentityMemoryNamespaceTest {
     @Test
     fun productionFactoryReturnsOneProcessWideEncryptedStoreInstance() {
-        val first = EncryptedMemoryStore.getInstance(isolatedContext())
-        val second = EncryptedMemoryStore.getInstance(isolatedContext())
+        // Use the real target application context: the process singleton must never
+        // retain a test-only ContextWrapper or redirect production storage into cacheDir.
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
+        val first = EncryptedMemoryStore.getInstance(appContext)
+        val second = EncryptedMemoryStore.getInstance(appContext)
         assertSame("Activity and service must share the same synchronized store", first, second)
     }
 
