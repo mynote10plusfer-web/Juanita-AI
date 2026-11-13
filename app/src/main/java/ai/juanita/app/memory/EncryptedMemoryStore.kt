@@ -44,6 +44,20 @@ class EncryptedMemoryStore(context: Context) {
     // Character configuration is kept in DigitalIdentityStore, never in a memory namespace.
     private val preferences = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    init {
+        // The user selected SAFE memory mode. On the first launch after this change,
+        // revoke any legacy implicit/default cloud-extraction setting. A later explicit
+        // opt-in from the Memory screen is preserved across normal restarts.
+        if (!preferences.getBoolean(KEY_SAFE_MEMORY_DEFAULT_APPLIED, false)) {
+            check(
+                preferences.edit()
+                    .putBoolean(KEY_AUTO_MEMORY_ENABLED, false)
+                    .putBoolean(KEY_SAFE_MEMORY_DEFAULT_APPLIED, true)
+                    .commit()
+            ) { "Unable to apply SAFE memory defaults" }
+        }
+    }
+
     val isConversationArchiveEnabled: Boolean
         get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, true)
 
@@ -1166,6 +1180,7 @@ class EncryptedMemoryStore(context: Context) {
         private const val PREFS_NAME = "juanita_encrypted_memory"
         private const val KEY_ARCHIVE_ENABLED = "conversation_archive_enabled"
         private const val KEY_AUTO_MEMORY_ENABLED = "automatic_memory_enabled"
+        private const val KEY_SAFE_MEMORY_DEFAULT_APPLIED = "safe_memory_default_applied"
         private const val KEY_MEMORY_CLEAR_VERSION = "memory_clear_version"
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
         private const val KEY_LAST_ARCHIVE_PURGE_AT = "conversation_archive_last_purge_at"
