@@ -402,7 +402,7 @@ class EncryptedMemoryStore(context: Context) {
             ) {
                 record.put("confidence", maxOf(record.optDouble("confidence", 0.0), confidence.toDouble()))
                 record.put("lastSeenAt", System.currentTimeMillis())
-                writeRecords(records)
+                writeRecords(records, synchronous = true)
                 return runCatching { jsonToMemory(record) }.getOrNull()
             }
         }
@@ -418,7 +418,8 @@ class EncryptedMemoryStore(context: Context) {
             topic = MemoryTopicClassifier.classify(text)
         )
         records.put(memoryToJson(item))
-        writeRecords(records)
+        // Persist the curated fact before the pending transcript batch is acknowledged.
+        writeRecords(records, synchronous = true)
         return item
     }
 
@@ -531,7 +532,8 @@ class EncryptedMemoryStore(context: Context) {
         )
         val records = readRecords()
         records.put(memoryToJson(item))
-        writeRecords(records)
+        // Confirm the encrypted write before telling the user the memory was saved.
+        writeRecords(records, synchronous = true)
         return item
     }
 
