@@ -635,7 +635,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000, personaId: String? = null): String {
         // Read-only context assembly: do not rewrite the complete encrypted store at session start.
-        val durableMemories = (personaId?.let(::listMemoriesForPersona) ?: listMemories()).take(60)
+        val durableMemories = (if (personaId == null) listMemories().filter { it.personaId == null } else listMemoriesForPersona(personaId)).take(60)
         val memoryLines = durableMemories
             .take(40)
             .map { item ->
@@ -727,7 +727,7 @@ class EncryptedMemoryStore(context: Context) {
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
         val routedTopic = MemoryTopicClassifier.classify(query)
-        val relevantMemories = (personaId?.let(::listMemoriesForPersona) ?: listMemories()).mapNotNull { memory ->
+        val relevantMemories = (if (personaId == null) listMemories().filter { it.personaId == null } else listMemoriesForPersona(personaId)).mapNotNull { memory ->
             val body = normalizeSearchText(memory.text)
             val hits = terms.count { term -> body.contains(term) }
             val topicMatch = memory.topic == routedTopic
