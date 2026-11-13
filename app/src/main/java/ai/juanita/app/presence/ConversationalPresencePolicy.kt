@@ -81,7 +81,9 @@ object ConversationalPresencePolicy {
         val normalized = settings.normalized()
         val reason = when {
             !normalized.enabled -> PresenceBlockReason.DISABLED
-            !context.appInForeground -> PresenceBlockReason.APP_NOT_FOREGROUND
+            !context.appInForeground &&
+                !(context.foregroundServiceActive && context.backgroundContinuationAuthorized) ->
+                PresenceBlockReason.APP_NOT_FOREGROUND
             !context.userExplicitlyStartedSession -> PresenceBlockReason.SESSION_NOT_STARTED_BY_USER
             !context.microphonePermissionGranted -> PresenceBlockReason.MICROPHONE_PERMISSION_MISSING
             !context.activeIdentityAvailable -> PresenceBlockReason.IDENTITY_NOT_SELECTED
