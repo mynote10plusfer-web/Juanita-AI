@@ -530,7 +530,7 @@ class EncryptedMemoryStore(context: Context) {
     /** Shared user knowledge plus memories belonging only to the selected character. */
     @Synchronized
     fun listMemoriesForPersona(personaId: String): List<MemoryItem> =
-        listMemories().filter { it.personaId == null || it.personaId == personaId }
+        listMemories().filter { it.personaId == personaId }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
@@ -705,7 +705,7 @@ class EncryptedMemoryStore(context: Context) {
         purgeExpiredArchive()
         val phrase = normalized.takeIf { it.length >= 5 }
         return allArchivedTurns().asSequence()
-            .filter { it.first != excludeSessionId && (it.second.personaId == null || it.second.personaId == personaId) }
+            .filter { it.first != excludeSessionId && (it.second.personaId == personaId) }
             .mapNotNull { (sessionId, turn) ->
             val body = normalizeSearchText(turn.text)
             val matches = terms.count { term -> body.contains(term) }
