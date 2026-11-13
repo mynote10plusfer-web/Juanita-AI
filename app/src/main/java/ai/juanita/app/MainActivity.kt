@@ -173,7 +173,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preferences = AssistantPreferences(applicationContext)
-        val memoryStore = EncryptedMemoryStore(applicationContext)
+        val memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
         val avatarStore = AvatarProfileStore(applicationContext)
         val digitalIdentityStore = DigitalIdentityStore(applicationContext)
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
