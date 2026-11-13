@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
+import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.KeyStore
@@ -760,8 +761,25 @@ class EncryptedMemoryStore(context: Context) {
             }
         }
         sessionArchiveFiles().forEach { file ->
-            val turns = runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).filter { it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive }
-            if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
+            // A decryption/read failure is not an empty archive. Preserve the original
+            // bytes so a transient Keystore problem or damaged file cannot erase history.
+            val archivedTurns = try {
+                readSessionArchive(file)
+            } catch (error: Exception) {
+                Log.w(TAG, "Skipping archive range deletion because a session could not be read: ${file.name}", error)
+                return@forEach
+            }
+            val retainedTurns = archivedTurns.filter {
+                it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive
+            }
+            if (retainedTurns.isEmpty()) {
+                if (!file.delete() && file.exists()) {
+                    Log.w(TAG, "Unable to delete empty conversation archive: ${file.name}")
+                }
+            } else {
+                runCatching { writeSessionArchive(file, retainedTurns) }
+                    .onFailure { Log.w(TAG, "Unable to update conversation archive: ${file.name}", it) }
+            }
         }
     }
 
@@ -822,11 +840,35 @@ class EncryptedMemoryStore(context: Context) {
         if (lastPurge > 0L && (now - lastPurge).coerceAtLeast(0L) < MILLIS_PER_DAY) return
         val cutoff = now - days * MILLIS_PER_DAY
         filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
+        var purgeCompleted = true
         sessionArchiveFiles().forEach { file ->
-            val turns = runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).filter { it.timestampMillis >= cutoff }
-            if (turns.isEmpty()) file.delete() else writeSessionArchive(file, turns)
+            // Never interpret a decryption failure as an empty archive: doing so would
+            // delete the only copy of that conversation. Leave it byte-for-byte intact.
+            val archivedTurns = try {
+                readSessionArchive(file)
+            } catch (error: Exception) {
+                purgeCompleted = false
+                Log.w(TAG, "Skipping retention purge because a session archive could not be read: ${file.name}", error)
+                return@forEach
+            }
+            val retainedTurns = archivedTurns.filter { it.timestampMillis >= cutoff }
+            if (retainedTurns.isEmpty()) {
+                if (!file.delete() && file.exists()) {
+                    purgeCompleted = false
+                    Log.w(TAG, "Unable to delete expired conversation archive: ${file.name}")
+                }
+            } else {
+                runCatching { writeSessionArchive(file, retainedTurns) }
+                    .onFailure {
+                        purgeCompleted = false
+                        Log.w(TAG, "Unable to rewrite retained conversation archive: ${file.name}", it)
+                    }
+            }
         }
-        preferences.edit().putLong(KEY_LAST_ARCHIVE_PURGE_AT, now).apply()
+        // Retry on a later access if any archive could not be safely processed.
+        if (purgeCompleted) {
+            preferences.edit().putLong(KEY_LAST_ARCHIVE_PURGE_AT, now).apply()
+        }
     }
 
     /** Merge encrypted per-session archives with legacy transcript records. */
