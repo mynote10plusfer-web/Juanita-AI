@@ -49,12 +49,10 @@ class EncryptedMemoryStore(context: Context) {
         // revoke any legacy implicit/default cloud-extraction setting. A later explicit
         // opt-in from the Memory screen is preserved across normal restarts.
         if (!preferences.getBoolean(KEY_SAFE_MEMORY_DEFAULT_APPLIED, false)) {
-            check(
-                preferences.edit()
-                    .putBoolean(KEY_AUTO_MEMORY_ENABLED, false)
-                    .putBoolean(KEY_SAFE_MEMORY_DEFAULT_APPLIED, true)
-                    .commit()
-            ) { "Unable to apply SAFE memory defaults" }
+            preferences.edit()
+                .putBoolean(KEY_AUTO_MEMORY_ENABLED, false)
+                .putBoolean(KEY_SAFE_MEMORY_DEFAULT_APPLIED, true)
+                .apply()
         }
     }
 
