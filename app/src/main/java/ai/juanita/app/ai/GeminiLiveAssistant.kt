@@ -310,7 +310,9 @@ class GeminiLiveAssistant {
                 }
             }
         this.sessionFactory = { context ->
-            val next = model.connect()
+            // Recovery handshakes need the same hard deadline as the first connection;
+            // otherwise a lost network can leave the recovery mutex held indefinitely.
+            val next = withTimeout(LIVE_CONNECT_TIMEOUT_MS) { model.connect() }
             try {
                 if (context.isNotBlank()) {
                     next.send(
