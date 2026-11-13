@@ -42,6 +42,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 private enum class VoiceLifecycleState { IDLE, STARTING, ACTIVE, STOPPING, ERROR }
@@ -50,6 +54,11 @@ private enum class VoiceLifecycleState { IDLE, STARTING, ACTIVE, STOPPING, ERROR
 class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val assistant = GeminiLiveAssistant()
+    // One dedicated worker serializes blocking SDK recorder teardown. A timed-out native
+    // call is interrupted and the service remains fail-closed; no second recorder is opened.
+    private val audioTeardownExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "JuanitaAudioTeardown").apply { isDaemon = true }
+    }
     private val audioRouteController by lazy { VoiceAudioRouteController(applicationContext) }
     private lateinit var memoryStore: EncryptedMemoryStore
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
@@ -406,9 +415,7 @@ class JuanitaVoiceService : Service() {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {
-                            val captureStopped = withTimeoutOrNull(6_000L) {
-                                withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
-                            } == true
+                            val captureStopped = stopAudioCaptureWithDeadline(6_000L)
                             if (captureStopped) audioRouteController.end()
                             val assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
                                 runCatching { withContext(Dispatchers.IO) { assistant.stop() } }.isSuccess
@@ -449,6 +456,31 @@ class JuanitaVoiceService : Service() {
     }
 
     /**
+     * AudioRecord/SDK stop calls are synchronous and may ignore coroutine cancellation.
+     * Run them on one dedicated daemon worker and use Future.get for a real wall-clock
+     * deadline. On timeout the worker is interrupted and the service fails closed.
+     */
+    private suspend fun stopAudioCaptureWithDeadline(timeoutMillis: Long): Boolean =
+        withContext(Dispatchers.IO) {
+            val future = audioTeardownExecutor.submit<Boolean> { assistant.stopAudioCapture() }
+            try {
+                future.get(timeoutMillis, TimeUnit.MILLISECONDS)
+            } catch (timeout: TimeoutException) {
+                future.cancel(true)
+                Log.e("JuanitaVoiceService", "SDK microphone teardown exceeded ${timeoutMillis}ms")
+                false
+            } catch (failure: ExecutionException) {
+                Log.e("JuanitaVoiceService", "SDK microphone teardown failed", failure.cause ?: failure)
+                false
+            } catch (interrupted: InterruptedException) {
+                future.cancel(true)
+                Thread.currentThread().interrupt()
+                Log.w("JuanitaVoiceService", "SDK microphone teardown wait was interrupted", interrupted)
+                false
+            }
+        }
+
+    /**
      * Stop audio first. Memory extraction is best-effort cleanup and must never
      * keep the microphone open while a network request is pending.
      */
@@ -476,9 +508,7 @@ class JuanitaVoiceService : Service() {
                 // First stop SDK microphone capture off the main thread. If it does not
                 // acknowledge shutdown, fail closed: never start another Live session on
                 // top of an audio pipeline whose release has not been confirmed.
-                val captureStopped = withTimeoutOrNull(6_000L) {
-                    withContext(Dispatchers.IO) { assistant.stopAudioCapture() }
-                } == true
+                val captureStopped = stopAudioCaptureWithDeadline(6_000L)
                 if (captureStopped) audioRouteController.end()
                 assistantStopped = captureStopped && (withTimeoutOrNull(8_000L) {
                     withContext(Dispatchers.IO) { assistant.stop() }
@@ -752,6 +782,7 @@ class JuanitaVoiceService : Service() {
         memoryWorkChannel?.close()
         memoryWorker?.cancel()
         runCatching { audioRouteController.end() }
+        audioTeardownExecutor.shutdownNow()
         serviceScope.cancel()
         super.onDestroy()
     }
