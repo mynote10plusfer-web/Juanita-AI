@@ -188,6 +188,33 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun legacyUntaggedConversationTurnsAreNotInjectedIntoCharacterPrivateRecall() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val legacySession = "legacy-${UUID.randomUUID()}"
+        val privateSession = "private-${UUID.randomUUID()}"
+        val legacyPhrase = "Episodio legacy non attribuito ${UUID.randomUUID()}"
+        val privatePhrase = "Episodio privato Juanita ${UUID.randomUUID()}"
+        try {
+            // Null personaId represents a pre-migration transcript whose character
+            // ownership cannot be proven. It must not leak into any private persona.
+            store.appendConversationTurn(legacySession, "USER", legacyPhrase)
+            store.appendConversationTurn(privateSession, "USER", privatePhrase, personaId = "juanita-1")
+
+            val privateHits = store.searchArchivedTurns(legacyPhrase, personaId = "juanita-1")
+            val privateContext = store.buildAssistantContext(personaId = "juanita-1")
+            val recalledPrivate = store.buildRelevantRecallContext(legacyPhrase, personaId = "juanita-1")
+
+            assertTrue(privateHits.none { it.sessionId == legacySession })
+            assertTrue(!privateContext.contains(legacyPhrase))
+            assertTrue(!recalledPrivate.contains(legacyPhrase))
+            assertTrue(privateContext.contains(privatePhrase))
+        } finally {
+            store.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
