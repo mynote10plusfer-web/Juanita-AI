@@ -538,6 +538,10 @@ class JuanitaVoiceService : Service() {
                     _state.value = "Chiusura audio non confermata · riavvia il telefono prima di riaprire Juanita"
                     updateNotification("Chiusura audio non confermata · riavvio richiesto")
                 } else {
+                    // The microphone and Live connection are now confirmed closed. Signal
+                    // the UI immediately; encrypted-memory flushing is best-effort cleanup
+                    // and must never make the phone appear frozen or prevent a safe exit.
+                    _shutdownConfirmed.value = true
                     _state.value = "Microfono disattivato · salvataggio dei ricordi…"
                     updateNotification("Microfono disattivato · salvataggio in corso")
                 }
@@ -556,17 +560,25 @@ class JuanitaVoiceService : Service() {
                     return@launch
                 }
                 // Audio is stopped before draining callbacks or waiting on network work.
-                withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                // Each cleanup step is isolated: a corrupt archive, Keystore error, or
+                // failed memory request must not strand the service in STOPPING.
+                runCatching {
+                    withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
+                }.onFailure { Log.w("JuanitaVoiceService", "Transcript drain failed after audio shutdown", it) }
                 if (!preserveContinuitySnapshot) {
-                    withContext(Dispatchers.IO) {
-                        runCatching { memoryStore.clearContinuitySnapshots() }
-                    }
+                    runCatching {
+                        withContext(Dispatchers.IO) { memoryStore.clearContinuitySnapshots() }
+                    }.onFailure { Log.w("JuanitaVoiceService", "Continuity cleanup failed", it) }
                 }
                 activeConversationId = null
-                withTimeoutOrNull(5_000L) { drainMemoryWorker() }
-                val flushedCount = withTimeoutOrNull(5_000L) {
-                    withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
-                }
+                runCatching {
+                    withTimeoutOrNull(5_000L) { drainMemoryWorker() }
+                }.onFailure { Log.w("JuanitaVoiceService", "Memory worker drain failed after audio shutdown", it) }
+                val flushedCount = runCatching {
+                    withTimeoutOrNull(5_000L) {
+                        withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
+                    }
+                }.onFailure { Log.w("JuanitaVoiceService", "Final automatic-memory flush failed", it) }.getOrNull()
                 if (flushedCount != null && flushedCount > 0) {
                     _memoryState.value = "Memoria aggiornata: $flushedCount ricordi salvati o confermati."
                 } else if (flushedCount == -1) {
@@ -832,7 +844,7 @@ class JuanitaVoiceService : Service() {
          * Requests an orderly stop and waits for the service's explicit teardown
          * acknowledgement. The caller must not destroy its Activity before this returns true.
          */
-        suspend fun stopAndAwait(context: Context, timeoutMillis: Long = 15_000L): Boolean {
+        suspend fun stopAndAwait(context: Context, timeoutMillis: Long = 20_000L): Boolean {
             require(timeoutMillis > 0L)
             _shutdownConfirmed.value = false
             return try {
