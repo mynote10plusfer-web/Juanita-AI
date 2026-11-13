@@ -530,7 +530,7 @@ class EncryptedMemoryStore(context: Context) {
     /** Shared user knowledge plus memories belonging only to the selected character. */
     @Synchronized
     fun listMemoriesForPersona(personaId: String): List<MemoryItem> =
-        listMemories().filter { it.personaId == personaId }
+        listMemories().filter { it.personaId == null || it.personaId == personaId }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
@@ -659,7 +659,7 @@ class EncryptedMemoryStore(context: Context) {
 
         val recentTurns = if (isConversationArchiveEnabled) {
             allArchivedTurns().map { it.second }
-                .filter { it.personaId == null || it.personaId == personaId }
+                .filter { it.personaId == personaId }
                 .sortedBy { it.timestampMillis }
                 .takeLast(maxTurns.coerceIn(1, 80))
         } else emptyList()
