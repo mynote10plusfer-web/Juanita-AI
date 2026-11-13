@@ -938,6 +938,11 @@ private fun JuanitaApp(
                     )
                     Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Button(
+                        onClick = { showExitConfirmation = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Esci e chiudi completamente") }
                 }
                 SettingsCard(panel, gold, "USCITA SICURA") {
                     Text("Quando esci, Juanita attende la conferma dello spegnimento del microfono e della sessione vocale. Le sveglie e la memoria restano intatte.",
