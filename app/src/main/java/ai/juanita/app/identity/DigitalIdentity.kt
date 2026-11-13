@@ -59,7 +59,9 @@ data class CulturalSource(
     val retrievedAtMillis: Long = System.currentTimeMillis(),
     val topic: String = "general",
     val confidence: Float = 0.5f,
-    val summary: String = ""
+    val summary: String = "",
+    /** Country/region/locality covered by this source, not a personality assumption. */
+    val geographicScope: String = ""
 )
 
 data class CulturalDossier(
