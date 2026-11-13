@@ -48,8 +48,14 @@ class EncryptedMemoryStore(context: Context) {
         get() = preferences.getBoolean(KEY_ARCHIVE_ENABLED, true)
 
     /** Curated facts and the complete encrypted transcript archive are independent layers. */
+    /**
+     * SAFE default: automatic extraction sends transcript excerpts to Gemini.
+     * Keep it off on fresh installs; the user can explicitly enable it after
+     * reviewing the disclosure in the Memory screen. Manually saved memories
+     * remain local and encrypted regardless of this setting.
+     */
     val isAutomaticMemoryEnabled: Boolean
-        get() = preferences.getBoolean(KEY_AUTO_MEMORY_ENABLED, true)
+        get() = preferences.getBoolean(KEY_AUTO_MEMORY_ENABLED, false)
 
     val memoryClearVersion: Long
         get() = preferences.getLong(KEY_MEMORY_CLEAR_VERSION, 0L)
