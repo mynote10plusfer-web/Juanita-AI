@@ -92,6 +92,26 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun editingAMemoryMarksItAsAnExplicitUserCorrection() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val original = "Preferenza iniziale correzione test"
+        val corrected = "Preferenza corretta confermata dall'utente"
+        try {
+            val saved = store.addMemory(original, source = "automatic", confidence = 0.84f, confirmedByUser = false)
+            assertTrue(store.updateMemory(saved.id, corrected))
+
+            val updated = store.listMemories().single { it.id == saved.id }
+            assertEquals(corrected, updated.text)
+            assertEquals("user_corrected", updated.source)
+            assertEquals(1.0f, updated.confidence)
+            assertTrue(updated.confirmedByUser)
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
     fun retentionAndRangeDeletionPreserveUnreadableSessionArchiveBytes() {
         val context = isolatedContext()
         val store = EncryptedMemoryStore(context)
