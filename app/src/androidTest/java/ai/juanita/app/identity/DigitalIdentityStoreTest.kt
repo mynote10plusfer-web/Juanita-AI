@@ -287,6 +287,12 @@ class DigitalIdentityStoreTest {
         assertTrue(masculineInstruction.contains("Vos, tú e usted"))
         assertTrue(feminineInstruction.contains("feminine grammatical self-reference"))
         assertTrue(masculineInstruction.contains("masculine grammatical self-reference"))
+        assertTrue(feminineInstruction.contains("distinctly feminine woman character"))
+        assertTrue(feminineInstruction.contains("feminine identity in self-reference, language, conversational presence"))
+        assertTrue(masculineInstruction.contains("distinctly masculine man character"))
+        assertTrue(masculineInstruction.contains("masculine identity in self-reference, language, conversational presence"))
+        assertTrue(feminineInstruction.contains("never as a caricature"))
+        assertTrue(masculineInstruction.contains("never as a caricature"))
         assertEquals(feminine.culturalDossier, masculine.culturalDossier)
         assertEquals(feminine.origin, masculine.origin)
     }
