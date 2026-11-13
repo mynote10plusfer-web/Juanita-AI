@@ -1,5 +1,16 @@
 # Juanita AI — Product requirements and implementation roadmap
 
+## 2026-11-13 — C2/C5 regression coverage and CI emulator baseline
+
+**STATUS: REGRESSION TESTS ADDED; EXACT-HEAD CI RUNNING. C3/C4/C5 IMPLEMENTATION IS NOT DECLARED COMPLETE.**
+
+- C2: added an encrypted-store round-trip assertion proving every cultural source retains its declared geographic scope after profile persistence and reload.
+- C5: added instrumentation coverage for the encrypted pending automatic-memory queue: persistence across store recreation, the eight-turn bound, and invalidation when automatic memory is disabled. Automatic extraction remains OFF by default; no cloud request is introduced by this test.
+- CI: API 35 emulator was removed from the blocking emulator matrix after repeated runner startup failures. API 31 remains the CI instrumentation baseline; Android 15 / API 35 must still be physically tested on the user's Samsung device before release.
+- The successful APK build on commit 0961f72 is a build artifact only, not a release candidate: its API 31 instrumentation run was cancelled by the next commit. The latest source commit is 483b0d3 and its exact-head checks are pending.
+- C3 remains a policy prototype, not integrated into the Live service. Do not silently gate or change the existing voice-call behavior; design and implement a separate explicitly enabled presence path with foreground/permission/audio lifecycle enforcement and visible pause/stop controls.
+- C4/C5 remain in progress: no claims of semantic memory, complete learning, crash-safe transcript journaling, scalable indexing, or complete archive recovery until implemented and tested.
+
 ## 2026-11-13 — Character editor completeness (PR #40)
 
 **STATUS: IMPLEMENTED; EXACT-HEAD CI PENDING.** The identity model and system instruction already define 19 independent personality dimensions, but the Compose editor exposed only 16. Added the missing expressiveness, formality and empathy controls to the create/edit form, voice-preview draft and saved profile. Added regression assertions for encrypted round-trip persistence and runtime instruction output. This completes the 19-control editor surface; it does not by itself prove that Gemini consistently expresses every trait in live conversation. Physical conversational evaluation remains required.
