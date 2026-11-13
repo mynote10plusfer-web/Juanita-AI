@@ -284,6 +284,12 @@ class EncryptedMemoryStore(context: Context) {
             .filter { it.optString("kind") == "continuity_snapshot" }
             .maxByOrNull { it.optLong("updatedAt") }
             ?: return ""
+        val snapshotAge = (System.currentTimeMillis() - latest.optLong("updatedAt")).coerceAtLeast(0L)
+        if (snapshotAge > MAX_CONTINUITY_AGE_MS) {
+            // Keep the encrypted archive intact, but do not present an old conversation
+            // as if it were the immediately preceding session.
+            return ""
+        }
 
         val carried = JSONObject(latest.toString()).apply {
             put("sessionId", newSessionId)
@@ -306,6 +312,10 @@ class EncryptedMemoryStore(context: Context) {
         val record = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
             it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId
         }
+        val snapshotAge = record?.let {
+            (System.currentTimeMillis() - it.optLong("updatedAt")).coerceAtLeast(0L)
+        } ?: 0L
+        if (snapshotAge > MAX_CONTINUITY_AGE_MS) return ""
         val turnsJson = record?.optJSONArray("turns") ?: JSONArray()
         val turns = buildList {
             for (index in 0 until turnsJson.length()) {
@@ -1041,8 +1051,11 @@ class EncryptedMemoryStore(context: Context) {
         // may have been invalidated or lost. Generating a replacement would make the old
         // data permanently unreadable and could overwrite it on the next write. Fail closed.
         val hasEncryptedPreferences = preferences.getString(KEY_ENCRYPTED_DATA, null) != null
-        val hasEncryptedSessionArchive = sessionArchiveDirectory().listFiles()
-            ?.any { it.isFile && it.name.endsWith(".enc") && it.length() > 0L } == true
+        val archiveFiles = sessionArchiveDirectory().listFiles()
+            ?: throw IllegalStateException("Impossibile verificare l'archivio cifrato locale.")
+        val hasEncryptedSessionArchive = archiveFiles.any {
+            it.isFile && (it.name.endsWith(".enc") || it.name.endsWith(".enc.tmp")) && it.length() > 0L
+        }
         check(!hasEncryptedPreferences && !hasEncryptedSessionArchive) {
             "La chiave di cifratura locale non è disponibile. I dati esistenti sono stati preservati; non verrà generata una nuova chiave."
         }
@@ -1133,5 +1146,6 @@ class EncryptedMemoryStore(context: Context) {
         private const val MAX_CONTINUITY_TURN_CHARS = 3_600
         private const val MAX_CONTINUITY_CHARS = 16_000
         private const val MAX_CONTINUITY_CONTEXT_CHARS = 16_000
+        private const val MAX_CONTINUITY_AGE_MS = 24 * MILLIS_PER_DAY
     }
 }
