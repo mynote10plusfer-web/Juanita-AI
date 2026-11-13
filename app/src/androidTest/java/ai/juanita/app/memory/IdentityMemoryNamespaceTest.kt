@@ -42,6 +42,22 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun safeModeDisablesLegacyAutomaticMemoryPreferenceOnce() {
+        val context = isolatedContext()
+        val preferences = context.getSharedPreferences("test_shared_memory_juanita_encrypted_memory", Context.MODE_PRIVATE)
+        preferences.edit().putBoolean("automatic_memory_enabled", true).commit()
+        try {
+            val store = EncryptedMemoryStore(context)
+            assertFalse("SAFE mode must revoke a legacy enabled/default state on first upgrade", store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(true)
+            assertTrue("A new explicit user opt-in must persist", store.isAutomaticMemoryEnabled)
+            assertTrue(EncryptedMemoryStore(context).isAutomaticMemoryEnabled)
+        } finally {
+            preferences.edit().clear().commit()
+        }
+    }
+
+    @Test
     fun sharedKnowledgeIsVisibleToEveryCharacterWhileConversationHistoryIsIdentityScoped() {
         val context = isolatedContext()
         val juanitaMemory = EncryptedMemoryStore(context)
