@@ -25,6 +25,7 @@ import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.liveGenerationConfig
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
@@ -333,7 +334,9 @@ class GeminiLiveAssistant {
         this.onConnectionState = onConnectionState
         this.onContinuityContext = onContinuityContext
         manualStop = false
-        val connected = model.connect()
+        // Bound the handshake so a cancelled/failed startup cannot hold the lifecycle
+        // mutex indefinitely and prevent an explicit Stop from completing.
+        val connected = withTimeout(LIVE_CONNECT_TIMEOUT_MS) { model.connect() }
         if (manualStop) {
             // Stop may have been requested while the WebSocket handshake was in flight.
             // No audio pipeline has been opened yet, so close the handshake without
@@ -597,6 +600,7 @@ class GeminiLiveAssistant {
     companion object {
         private const val TAG = "GeminiLiveAssistant"
         private const val MAX_AUTOMATIC_RECOVERIES = 1
+        private const val LIVE_CONNECT_TIMEOUT_MS = 20_000L
 
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
         const val DEFAULT_VOICE = "Kore"
