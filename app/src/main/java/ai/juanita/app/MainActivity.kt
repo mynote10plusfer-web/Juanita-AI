@@ -433,6 +433,7 @@ private fun JuanitaApp(
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
     var showExitConfirmation by remember { mutableStateOf(false) }
+    var exitInProgress by remember { mutableStateOf(false) }
     val hostActivity = context as? Activity
     DisposableEffect(hostActivity, callScreenVisible) {
         val window = hostActivity?.window
@@ -447,6 +448,24 @@ private fun JuanitaApp(
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
+
+    fun performSafeExit() {
+        if (exitInProgress) return
+        exitInProgress = true
+        uiScope.launch {
+            val stopped = JuanitaVoiceService.stopAndAwait(context)
+            exitInProgress = false
+            if (stopped) {
+                showExitConfirmation = false
+                callScreenVisible = false
+                hostActivity?.finishAndRemoveTask()
+            } else {
+                showExitConfirmation = false
+                liveStartError = "Non posso confermare la chiusura completa del microfono e della sessione. Juanita resta aperta: riprova Termina e non avviare un'altra conversazione."
+            }
+        }
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -910,6 +929,15 @@ private fun JuanitaApp(
                     Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
+                SettingsCard(panel, gold, "USCITA SICURA") {
+                    Text("Quando esci, Juanita attende la conferma dello spegnimento del microfono e della sessione vocale. Le sveglie e la memoria restano intatte.",
+                        color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                    Button(
+                        onClick = { showExitConfirmation = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Esci e chiudi completamente") }
+                }
 
                 }
 
@@ -1045,16 +1073,18 @@ private fun JuanitaApp(
               }
               if (showExitConfirmation) {
                   AlertDialog(
-                      onDismissRequest = { showExitConfirmation = false },
-                      title = { Text("Uscire da Juanita AI?") },
-                      text = { Text("La conversazione vocale verrà interrotta, il microfono disattivato e il servizio chiuso. Le sveglie programmate e i dati salvati resteranno intatti.") },
+                      onDismissRequest = { if (!exitInProgress) showExitConfirmation = false },
+                      title = { Text(if (exitInProgress) "Chiusura in corso…" else "Uscire da Juanita AI?") },
+                      text = {
+                          Text(
+                              if (exitInProgress) "Sto attendendo la conferma del servizio vocale. Non chiuderò la schermata finché il microfono non risulterà disattivato."
+                              else "La conversazione vocale verrà interrotta e il servizio dovrà confermare la chiusura. Le sveglie programmate e i dati salvati resteranno intatti."
+                          )
+                      },
                       confirmButton = {
-                          TextButton(onClick = {
-                              showExitConfirmation = false
-                              JuanitaVoiceService.stop(context)
-                              callScreenVisible = false
-                              hostActivity?.finishAndRemoveTask()
-                          }) { Text("Esci e chiudi", color = Color(0xFFFF8A80)) }
+                          TextButton(onClick = { performSafeExit() }, enabled = !exitInProgress) {
+                              Text(if (exitInProgress) "Attendi…" else "Esci e chiudi", color = Color(0xFFFF8A80))
+                          }
                       },
                       dismissButton = {
                           TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
