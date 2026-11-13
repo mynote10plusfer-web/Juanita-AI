@@ -88,7 +88,9 @@ class JuanitaVoiceService : Service() {
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
             if (!videoFrameInFlight.compareAndSet(false, true)) return
-            serviceScope.launch {
+            // JPEG compression and the Live image upload are CPU/network work;
+            // never execute them on the service's Main.immediate scope.
+            serviceScope.launch(Dispatchers.IO) {
                 try {
                     runCatching { assistant.sendVideoFrame(bitmap) }
                         .onFailure { _visionState.value = "Invio immagine non riuscito: ${it.localizedMessage ?: "errore"}" }
