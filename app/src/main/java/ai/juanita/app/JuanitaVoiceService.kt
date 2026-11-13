@@ -1,5 +1,6 @@
 package ai.juanita.app
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.graphics.Bitmap
 import android.os.Binder
@@ -76,6 +77,8 @@ class JuanitaVoiceService : Service() {
     /** Latest explicit start requested while the previous session is shutting down. */
     private var pendingStartIntent: Intent? = null
     private var pendingStartId: Int = 0
+    /** Set only by an explicit spoken close-application command; acted on after confirmed audio shutdown. */
+    private var closeApplicationAfterStop = false
     private var voicePreviewJob: Job? = null
     private var transcriptChannel: Channel<Pair<String, String>>? = null
     /** Stop Live if bounded transcript intake saturates; never continue silently after losing an event. */
@@ -357,6 +360,33 @@ class JuanitaVoiceService : Service() {
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
+                                    if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true)) {
+                                        val activeName = selectedIdentity?.displayName?.takeIf { it.isNotBlank() } ?: "Juanita"
+                                        when (VoiceSessionCommandMatcher.match(text, activeName)) {
+                                            VoiceSessionCommandMatcher.Command.STOP_SESSION -> {
+                                                pendingStartIntent = null
+                                                pendingStartId = 0
+                                                serviceScope.launch {
+                                                    requestStop(
+                                                        preserveContinuitySnapshot = true,
+                                                        finalMessage = "Comando vocale ricevuto · conversazione terminata"
+                                                    )
+                                                }
+                                            }
+                                            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION -> {
+                                                pendingStartIntent = null
+                                                pendingStartId = 0
+                                                closeApplicationAfterStop = true
+                                                serviceScope.launch {
+                                                    requestStop(
+                                                        preserveContinuitySnapshot = true,
+                                                        finalMessage = "Comando vocale ricevuto · applicazione chiusa"
+                                                    )
+                                                }
+                                            }
+                                            null -> Unit
+                                        }
+                                    }
                                     if (initialPrompt.isNotBlank() && alarmId != null && role.equals("ASSISTANT", ignoreCase = true)) {
                                         // Keep the local alarm sounding until Gemini's first spoken response transcript.
                                         JuanitaAlarmRingingService.stop(this@JuanitaVoiceService, alarmId)
@@ -633,6 +663,18 @@ class JuanitaVoiceService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 if (assistantStopped) {
                     _state.value = finalMessage ?: "Conversazione terminata"
+                }
+                if (assistantStopped && closeApplicationAfterStop) {
+                    closeApplicationAfterStop = false
+                    // Close only this app's task, and only after the microphone and Live
+                    // session have both acknowledged shutdown. This is not a force-stop.
+                    runCatching {
+                        getSystemService(ActivityManager::class.java).appTasks.forEach { task ->
+                            task.finishAndRemoveTask()
+                        }
+                    }.onFailure {
+                        Log.w("JuanitaVoiceService", "Unable to remove Juanita task after spoken exit", it)
+                    }
                 }
                 val queuedStart = if (assistantStopped) pendingStartIntent else null
                 pendingStartIntent = null
