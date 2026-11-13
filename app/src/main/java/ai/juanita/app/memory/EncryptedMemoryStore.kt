@@ -224,29 +224,29 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     @Synchronized
-    fun appendConversationTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis()) {
+    fun appendConversationTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis(), personaId: String? = null) {
         if (!isConversationArchiveEnabled || text.isBlank()) return
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
-        appendEncryptedSessionTurn(ArchivedTurn(UUID.randomUUID().toString(), safeRole, text, timestampMillis), sessionId)
+        appendEncryptedSessionTurn(ArchivedTurn(UUID.randomUUID().toString(), safeRole, text, timestampMillis, personaId), sessionId)
         purgeExpiredArchive()
     }
 
     /** Short-lived active-session continuity, encrypted and independent of the optional archive. */
     @Synchronized
-    fun appendContinuityTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis()) {
+    fun appendContinuityTurn(sessionId: String, role: String, text: String, timestampMillis: Long = System.currentTimeMillis(), personaId: String? = null) {
         if (text.isBlank()) return
         require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         val records = readRecords()
         val previous = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
-            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId
+            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId
         }
         val turns = mutableListOf<ArchivedTurn>()
         val oldTurns = previous?.optJSONArray("turns") ?: JSONArray()
         for (index in 0 until oldTurns.length()) {
             val item = oldTurns.optJSONObject(index) ?: continue
-            turns += ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt"))
+            turns += ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt"), personaId)
         }
         turns += ArchivedTurn(UUID.randomUUID().toString(), safeRole, text.take(MAX_CONTINUITY_TURN_CHARS), timestampMillis)
         while (turns.size > MAX_CONTINUITY_TURNS || turns.sumOf { it.text.length } > MAX_CONTINUITY_CHARS) {
@@ -256,11 +256,11 @@ class EncryptedMemoryStore(context: Context) {
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") == "continuity_snapshot" && record.optString("sessionId") == sessionId) continue
+            if (record.optString("kind") == "continuity_snapshot" && record.optString("sessionId") == sessionId && record.optString("personaId").takeIf { it.isNotBlank() } == personaId) continue
             kept.put(record)
         }
         kept.put(JSONObject().apply {
-            put("kind", "continuity_snapshot"); put("sessionId", sessionId); put("updatedAt", timestampMillis)
+            put("kind", "continuity_snapshot"); put("sessionId", sessionId); put("personaId", personaId ?: ""); put("updatedAt", timestampMillis)
             put("turns", JSONArray().apply {
                 turns.forEach { turn ->
                     put(JSONObject().apply {
@@ -278,12 +278,12 @@ class EncryptedMemoryStore(context: Context) {
      * multiple stale snapshots. The snapshot remains encrypted in the existing local store.
      */
     @Synchronized
-    fun carryForwardLatestContinuitySnapshot(newSessionId: String): String {
+    fun carryForwardLatestContinuitySnapshot(newSessionId: String, personaId: String? = null): String {
         require(newSessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
         val records = readRecords()
         val latest = (0 until records.length())
             .mapNotNull { records.optJSONObject(it) }
-            .filter { it.optString("kind") == "continuity_snapshot" }
+            .filter { it.optString("kind") == "continuity_snapshot" && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId }
             .maxByOrNull { it.optLong("updatedAt") }
             ?: return ""
         val snapshotAge = (System.currentTimeMillis() - latest.optLong("updatedAt")).coerceAtLeast(0L)
@@ -309,7 +309,7 @@ class EncryptedMemoryStore(context: Context) {
 
     /** Build a bounded chronological recovery packet from the encrypted active-session snapshot. */
     @Synchronized
-    fun buildContinuityContext(sessionId: String, recentFallback: String = ""): String {
+    fun buildContinuityContext(sessionId: String, recentFallback: String = "", personaId: String? = null): String {
         val records = readRecords()
         val record = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
             it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId
@@ -703,10 +703,9 @@ class EncryptedMemoryStore(context: Context) {
         if (terms.isEmpty()) return emptyList()
         purgeExpiredArchive()
         val phrase = normalized.takeIf { it.length >= 5 }
-        return allArchivedTurns().asSequence().filter { it.first != excludeSessionId }.map { it.second }
-            .filter { it.personaId == null || it.personaId == personaId }
-            .mapNotNull { turn ->
-            val sessionId = ""
+        return allArchivedTurns().asSequence()
+            .filter { it.first != excludeSessionId && (it.second.personaId == null || it.second.personaId == personaId) }
+            .mapNotNull { (sessionId, turn) ->
             val body = normalizeSearchText(turn.text)
             val matches = terms.count { term -> body.contains(term) }
             if (matches == 0) return@mapNotNull null
