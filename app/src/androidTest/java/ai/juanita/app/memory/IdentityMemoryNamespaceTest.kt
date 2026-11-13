@@ -166,6 +166,28 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun interruptedContinuityIsRecoveredOnlyByTheSameCharacter() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val juanitaSession = "juanita-continuity-${UUID.randomUUID()}"
+        val joseSession = "jose-continuity-${UUID.randomUUID()}"
+        val juanitaText = "Filo privato Juanita ${UUID.randomUUID()}"
+        val joseText = "Filo privato Jose ${UUID.randomUUID()}"
+        try {
+            store.appendContinuityTurn(juanitaSession, "USER", juanitaText, personaId = "juanita-1")
+            store.appendContinuityTurn(joseSession, "USER", joseText, personaId = "jose-1")
+            assertTrue(store.buildContinuityContext(juanitaSession, personaId = "juanita-1").contains(juanitaText))
+            assertTrue(!store.buildContinuityContext(juanitaSession, personaId = "jose-1").contains(juanitaText))
+            assertTrue(store.buildContinuityContext(joseSession, personaId = "jose-1").contains(joseText))
+            assertTrue(!store.buildContinuityContext(joseSession, personaId = "juanita-1").contains(joseText))
+            assertTrue(store.carryForwardLatestContinuitySnapshot("juanita-next", "juanita-1").contains(juanitaText))
+            assertTrue(!store.buildContinuityContext("juanita-next", personaId = "jose-1").contains(juanitaText))
+        } finally {
+            store.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
