@@ -210,13 +210,13 @@ class JuanitaVoiceService : Service() {
                             // optional transcript archive and survives an unexpected disconnect.
                             val recoveredContinuityContext = withContext(Dispatchers.IO) {
                                 runCatching {
-                                    memoryStore.carryForwardLatestContinuitySnapshot(conversationId)
+                                    memoryStore.carryForwardLatestContinuitySnapshot(conversationId, selectedIdentity?.id)
                                 }.getOrDefault("")
                             }
                             // Restore relevant local memories and recent turns before opening
                             // the new Live session. Nothing is uploaded to a separate memory store.
                             val localContext = withContext(Dispatchers.IO) {
-                                memoryStore.buildAssistantContext()
+                                memoryStore.buildAssistantContext(personaId = selectedIdentity?.id)
                             }
                             val loadedProfile = withContext(Dispatchers.IO) {
                                 runCatching { personalProfileStore.load() }.getOrElse {
@@ -281,13 +281,13 @@ class JuanitaVoiceService : Service() {
                                     if (combinedText.isBlank()) continue
                                     // Archive errors must never block automatic memory.
                                     try {
-                                        memoryStore.appendConversationTurn(conversationId, role, combinedText)
+                                        memoryStore.appendConversationTurn(conversationId, role, combinedText, personaId = selectedIdentity?.id)
                                     } catch (archiveFailure: Exception) {
                                         _memoryState.value = "Archivio conversazione non riuscito: ${archiveFailure.localizedMessage ?: archiveFailure.javaClass.simpleName}"
                                     }
                                     try {
                                         // Session-only continuity persists even when full transcript archiving is paused.
-                                        memoryStore.appendContinuityTurn(conversationId, role, combinedText)
+                                        memoryStore.appendContinuityTurn(conversationId, role, combinedText, personaId = selectedIdentity?.id)
                                     } catch (continuityFailure: Exception) {
                                         _memoryState.value = "Continuità locale non aggiornata: " + continuityFailure.javaClass.simpleName
                                     }
@@ -370,11 +370,11 @@ class JuanitaVoiceService : Service() {
                                     // Include earlier turns from this same conversation as well
                                     // as older sessions. The bounded continuity snapshot is not
                                     // a substitute for searchable full-session history.
-                                    memoryStore.buildRelevantRecallContext(query)
+                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id)
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {
-                                        memoryStore.buildContinuityContext(conversationId, recentTranscript)
+                                        memoryStore.buildContinuityContext(conversationId, recentTranscript, selectedIdentity?.id)
                                     }
                                 },
                                 onProfileUpdate = { fields ->
