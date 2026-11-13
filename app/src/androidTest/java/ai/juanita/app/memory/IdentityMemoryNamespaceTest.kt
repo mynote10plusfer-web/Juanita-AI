@@ -72,6 +72,12 @@ class IdentityMemoryNamespaceTest {
             }
             assertEquals(-2, store.enqueuePendingAutomaticMemoryTurn("Overflow", clearVersion))
 
+            val encryptedPayload = context.getSharedPreferences(
+                "juanita_encrypted_memory", Context.MODE_PRIVATE
+            ).getString("encrypted_records", null).orEmpty()
+            assertTrue("Pending transcript excerpts must be persisted in the encrypted store", encryptedPayload.isNotBlank())
+            assertFalse("Plain transcript excerpts must never appear in preferences", encryptedPayload.contains(turns.first()))
+
             val recreatedStore = EncryptedMemoryStore(isolatedContext())
             assertEquals("Pending turns must survive store recreation", turns,
                 recreatedStore.readPendingAutomaticMemoryTurns(clearVersion))
