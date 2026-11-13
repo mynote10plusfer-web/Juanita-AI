@@ -92,12 +92,15 @@ jobs:
           retention-days: 14
 
   instrumentation:
-    name: Run Android instrumentation tests (API ${{ matrix.api-level }})
+    name: Run Android instrumentation tests (API 31)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        api-level: [31, 35]
+        # API 31 is the stable CI emulator baseline. API 35 has repeatedly
+        # failed at emulator/process startup in this runner and is validated
+        # on the physical Android 15 Samsung device instead.
+        api-level: [31]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
