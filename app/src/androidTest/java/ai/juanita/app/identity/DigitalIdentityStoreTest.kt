@@ -266,6 +266,10 @@ class DigitalIdentityStoreTest {
         val restored = DigitalIdentityStore(isolatedContext()).get(base.id)!!
         assertEquals(456L, restored.culturalDossier?.approvedAtMillis)
         assertEquals(3, restored.culturalDossier?.sources?.size)
+        assertEquals(
+            CulturalDossierCatalog.dossiers.first().sources.map { it.geographicScope },
+            restored.culturalDossier?.sources?.map { it.geographicScope }
+        )
         assertTrue(restored.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
 
         store.update(restored.copy(culturalDossier = null))
