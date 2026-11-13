@@ -137,6 +137,20 @@ class IdentityMemoryNamespaceTest {
             assertTrue(juanitaOnly !in joseMemories)
             assertTrue(joseOnly in joseMemories)
             assertTrue(joseOnly !in juanitaMemories)
+
+            val juanitaContext = store.buildAssistantContext(personaId = "juanita-1")
+            val joseContext = store.buildAssistantContext(personaId = "jose-1")
+            assertTrue(juanitaContext.contains(shared))
+            assertTrue(joseContext.contains(shared))
+            assertTrue(juanitaContext.contains(juanitaOnly))
+            assertTrue(!juanitaContext.contains(joseOnly))
+            assertTrue(joseContext.contains(joseOnly))
+            assertTrue(!joseContext.contains(juanitaOnly))
+
+            val juanitaRecall = store.buildRelevantRecallContext("Fatto comune", personaId = "juanita-1")
+            val joseRecall = store.buildRelevantRecallContext("Fatto comune", personaId = "jose-1")
+            assertTrue(juanitaRecall.contains(shared))
+            assertTrue(joseRecall.contains(shared))
         } finally {
             store.clearAll()
         }
