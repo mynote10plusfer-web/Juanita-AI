@@ -895,7 +895,18 @@ class EncryptedMemoryStore(context: Context) {
         }
         sessionArchiveFiles().forEach { file ->
             val sessionId = file.nameWithoutExtension
-            runCatching { readSessionArchive(file) }.getOrDefault(emptyList()).forEach { result += sessionId to it }
+            // Never turn a decryption/read failure into an empty conversation: that would
+            // make retrieval silently claim that historical information does not exist.
+            val turns = try {
+                readSessionArchive(file)
+            } catch (failure: Exception) {
+                Log.w(TAG, "Unable to read encrypted conversation archive during recall: ${file.name}", failure)
+                throw IllegalStateException(
+                    "Historical conversation retrieval is incomplete because an encrypted archive could not be read.",
+                    failure
+                )
+            }
+            turns.forEach { result += sessionId to it }
         }
         return result
     }
