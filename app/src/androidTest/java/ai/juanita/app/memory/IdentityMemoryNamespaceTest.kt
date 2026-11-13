@@ -85,6 +85,9 @@ class IdentityMemoryNamespaceTest {
             recreatedStore.setAutomaticMemoryEnabled(false)
             assertTrue("Disabling automatic memory must invalidate queued transcript excerpts",
                 recreatedStore.readPendingAutomaticMemoryTurns().isEmpty())
+            recreatedStore.setAutomaticMemoryEnabled(true)
+            assertTrue("Re-enabling memory must not resurrect excerpts from an earlier consent period",
+                recreatedStore.readPendingAutomaticMemoryTurns(clearVersion).isEmpty())
         } finally {
             store.clearAll()
         }
