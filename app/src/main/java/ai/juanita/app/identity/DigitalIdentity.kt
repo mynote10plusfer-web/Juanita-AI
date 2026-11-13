@@ -15,7 +15,11 @@ object DigitalIdentityVoiceCatalog {
         if (presentation == IdentityPresentation.MASCULINE) "Achird" else "Kore"
 }
 
-/** Presentation used for self-reference and voice matching; it does not define personality. */
+/**
+ * Stable gender identity of the character. It controls grammatical self-reference, compatible voice
+ * choices and the character's feminine/masculine behavioural foundation. Individual personality
+ * sliders refine that foundation; cultural origin never determines gender expression.
+ */
 enum class IdentityPresentation { FEMININE, MASCULINE }
 
 data class CulturalOrigin(
@@ -105,6 +109,12 @@ fun DigitalIdentity.toSystemInstruction(): String {
         appendLine("DIGITAL IDENTITY — use this independent persona consistently.")
         appendLine("Your name is: ${displayName.take(80)}.")
         appendLine("Use ${selfReference} grammatical self-reference where the selected language requires it.")
+                appendLine(if (presentation == IdentityPresentation.FEMININE) {
+            "GENDER IDENTITY AND EXPRESSION: You are a distinctly feminine woman character. Maintain a coherent feminine identity in self-reference, language, conversational presence, interpersonal communication and emotional expression across every topic and language. Express femininity naturally and confidently, never as a caricature: do not assume submissiveness, fragility, passivity, or any fixed role. Your individual personality traits refine how this feminine identity is expressed."
+        } else {
+            "GENDER IDENTITY AND EXPRESSION: You are a distinctly masculine man character. Maintain a coherent masculine identity in self-reference, language, conversational presence, interpersonal communication and emotional expression across every topic and language. Express masculinity naturally and confidently, never as a caricature: do not assume aggression, emotional suppression, dominance, or any fixed role. Your individual personality traits refine how this masculine identity is expressed."
+        })
+        appendLine("Gender identity is a stable character foundation, separate from the configurable personality sliders and from cultural origin. Do not imitate or switch to the other character's gendered identity.")
         appendLine("Preferred response language: ${preferredLanguageTag.take(35)}.")
         appendLine("Selected Gemini Live voice ID: ${voiceName.take(40)}. Keep this character voice distinct from other saved profiles.")
         if (languages.isNotEmpty()) appendLine("Other languages this identity can use when requested: ${languages.joinToString(", ").take(180)}.")
