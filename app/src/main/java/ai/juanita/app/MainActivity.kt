@@ -179,10 +179,11 @@ class MainActivity : ComponentActivity() {
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
         val initialMemoriesResult = runCatching { memoryStore.listMemories() }
         val initialReportsResult = runCatching { memoryStore.listImprovementReports() }
-        val initialMemoryLoadError = listOfNotNull(
+        val memoryLoadErrors = listOfNotNull(
             initialMemoriesResult.exceptionOrNull()?.let { "Memorie personali: ${it.localizedMessage ?: it.javaClass.simpleName}" },
             initialReportsResult.exceptionOrNull()?.let { "Rapporti: ${it.localizedMessage ?: it.javaClass.simpleName}" }
-        ).joinToString(" · ").ifBlank { null }
+        ).joinToString(" · ")
+        val initialMemoryLoadError = memoryLoadErrors.takeIf { it.isNotBlank() }
         val initialActiveDigitalIdentityId = preferences.activeDigitalIdentityId
             ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId && !it.archived } }
             .also { validId ->
