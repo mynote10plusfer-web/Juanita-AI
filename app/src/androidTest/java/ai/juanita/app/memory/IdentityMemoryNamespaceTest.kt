@@ -29,7 +29,7 @@ class IdentityMemoryNamespaceTest {
     @Test
     fun automaticCloudMemoryIsOffByDefaultAndRequiresExplicitOptIn() {
         val context = isolatedContext()
-        context.getSharedPreferences("test_shared_memory_juanita_encrypted_memory", Context.MODE_PRIVATE).edit().clear().commit()
+        context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE).edit().clear().commit()
         val store = EncryptedMemoryStore(context)
         try {
             assertFalse("SAFE mode must not send transcript excerpts to Gemini by default", store.isAutomaticMemoryEnabled)
@@ -45,7 +45,7 @@ class IdentityMemoryNamespaceTest {
     @Test
     fun safeModeDisablesLegacyAutomaticMemoryPreferenceOnce() {
         val context = isolatedContext()
-        val preferences = context.getSharedPreferences("test_shared_memory_juanita_encrypted_memory", Context.MODE_PRIVATE)
+        val preferences = context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE)
         preferences.edit().clear().putBoolean("automatic_memory_enabled", true).commit()
         try {
             val store = EncryptedMemoryStore(context)
