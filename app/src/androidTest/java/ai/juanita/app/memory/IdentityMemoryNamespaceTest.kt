@@ -59,6 +59,32 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun encryptedAutomaticMemoryQueueSurvivesStoreRecreationAndRemainsBounded() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val turns = (1..8).map { "Turno automatico cifrato $it ${UUID.randomUUID()}" }
+        try {
+            assertFalse(store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(true)
+            val clearVersion = store.memoryClearVersion
+            turns.forEachIndexed { index, turn ->
+                assertEquals(index + 1, store.enqueuePendingAutomaticMemoryTurn(turn, clearVersion))
+            }
+            assertEquals(-2, store.enqueuePendingAutomaticMemoryTurn("Overflow", clearVersion))
+
+            val recreatedStore = EncryptedMemoryStore(isolatedContext())
+            assertEquals("Pending turns must survive store recreation", turns,
+                recreatedStore.readPendingAutomaticMemoryTurns(clearVersion))
+
+            recreatedStore.setAutomaticMemoryEnabled(false)
+            assertTrue("Disabling automatic memory must invalidate queued transcript excerpts",
+                recreatedStore.readPendingAutomaticMemoryTurns().isEmpty())
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
     fun sharedKnowledgeIsVisibleToEveryCharacterWhileConversationHistoryIsIdentityScoped() {
         val context = isolatedContext()
         val juanitaMemory = EncryptedMemoryStore(context)
