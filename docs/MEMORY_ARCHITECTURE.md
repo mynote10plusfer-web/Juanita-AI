@@ -8,6 +8,17 @@ Juanita must maintain reliable continuity across minutes, sessions, process deat
 
 The same user memory is shared by all selectable Juanita/José personas. Persona voice, language, style and character remain separate. Only one persona may be active at a time.
 
+## Memory ownership: shared user knowledge vs private character episodes
+
+The encrypted local store has two logical ownership levels:
+
+- **Shared user knowledge** (personaId = null): durable facts about the user, stable preferences, corrections, goals and projects that every character may use.
+- **Character-private memory** (personaId = stable DigitalIdentity.id): memories and episodes belonging to one exact saved character. A second Juanita profile is not automatically allowed to read the first Juanita's private episodes; José cannot claim Juanita's conversations as his own.
+- **Conversation transcripts and continuity snapshots** are tagged with the active character ID and retrieved only by that exact ID. An untagged legacy transcript is retained on disk but is not injected into a character's private recall, because its original speaker identity cannot be proven.
+- **Automatic factual extraction** currently promotes eligible user facts into the shared layer. Character-private semantic extraction and user controls for reviewing/moving a memory between scopes remain future work; private conversational continuity is already isolated at the transcript and recall layer.
+
+A memory record must carry its ownership scope through encryption, persistence, recall, editing, deletion, export and migration. Never infer ownership from the display name or gender alone: use the stable identity ID. Gender/presentation controls voice and grammatical self-reference; it is not a security boundary or a substitute for identity ownership.
+
 ## Non-negotiable storage rule
 
 **Persist first, cache in RAM second.** RAM is the fast working memory, never the only copy of a user turn or durable fact. Each eligible transcript event must be committed to an encrypted local journal/archive before asynchronous consolidation can acknowledge it as safely retained. If Android kills the process, the next launch reconstructs the working context from durable state.
