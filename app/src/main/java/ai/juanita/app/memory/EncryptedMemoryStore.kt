@@ -28,6 +28,8 @@ data class MemoryItem(
     val confidence: Float,
     val confirmedByUser: Boolean,
     val sensitive: Boolean,
+    /** Null is shared user knowledge; a non-null ID belongs to one character only. */
+    val personaId: String? = null,
     /** Shared subject index; legacy records default to a derived topic at read time. */
     val topic: String = "general"
 )
@@ -491,7 +493,8 @@ class EncryptedMemoryStore(context: Context) {
         confidence: Float = 1f,
         confirmedByUser: Boolean = true,
         sensitive: Boolean = false,
-        topic: String = MemoryTopicClassifier.classify(text)
+        topic: String = MemoryTopicClassifier.classify(text),
+        personaId: String? = null
     ): MemoryItem {
         require(text.isNotBlank()) { "Memory text cannot be blank" }
         require(!sensitive || confirmedByUser) { "Sensitive memories require explicit confirmation" }
@@ -504,6 +507,7 @@ class EncryptedMemoryStore(context: Context) {
             confidence = confidence.coerceIn(0f, 1f),
             confirmedByUser = confirmedByUser,
             sensitive = sensitive,
+            personaId = personaId,
             topic = topic
         )
         val records = readRecords()
@@ -521,6 +525,11 @@ class EncryptedMemoryStore(context: Context) {
             runCatching { jsonToMemory(record) }.getOrNull()?.let(::add)
         }
     }.sortedByDescending { it.createdAtMillis }
+
+    /** Shared user knowledge plus memories belonging only to the selected character. */
+    @Synchronized
+    fun listMemoriesForPersona(personaId: String): List<MemoryItem> =
+        listMemories().filter { it.personaId == null || it.personaId == personaId }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
@@ -591,7 +600,8 @@ class EncryptedMemoryStore(context: Context) {
         val id: String,
         val role: String,
         val text: String,
-        val timestampMillis: Long
+        val timestampMillis: Long,
+        val personaId: String? = null
     )
 
     /** Deletes only this session's turns in [startInclusive, endExclusive). */
@@ -622,9 +632,9 @@ class EncryptedMemoryStore(context: Context) {
      * this bounded excerpt is sent to the Live model. Stored text is never instructions.
      */
     @Synchronized
-    fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000): String {
+    fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000, personaId: String? = null): String {
         // Read-only context assembly: do not rewrite the complete encrypted store at session start.
-        val durableMemories = listMemories().take(60)
+        val durableMemories = (personaId?.let(::listMemoriesForPersona) ?: listMemories()).take(60)
         val memoryLines = durableMemories
             .take(40)
             .map { item ->
@@ -648,6 +658,7 @@ class EncryptedMemoryStore(context: Context) {
 
         val recentTurns = if (isConversationArchiveEnabled) {
             allArchivedTurns().map { it.second }
+                .filter { it.personaId == null || it.personaId == personaId }
                 .sortedBy { it.timestampMillis }
                 .takeLast(maxTurns.coerceIn(1, 80))
         } else emptyList()
@@ -686,13 +697,16 @@ class EncryptedMemoryStore(context: Context) {
      * Lightweight on-device lexical ranking: phrase match, token overlap, recency.
      */
     @Synchronized
-    fun searchArchivedTurns(query: String, limit: Int = 8, excludeSessionId: String? = null): List<ArchivedSearchHit> {
+    fun searchArchivedTurns(query: String, limit: Int = 8, excludeSessionId: String? = null, personaId: String? = null): List<ArchivedSearchHit> {
         val normalized = normalizeSearchText(query)
         val terms = normalized.split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return emptyList()
         purgeExpiredArchive()
         val phrase = normalized.takeIf { it.length >= 5 }
-        return allArchivedTurns().asSequence().filter { it.first != excludeSessionId }.mapNotNull { (sessionId, turn) ->
+        return allArchivedTurns().asSequence().filter { it.first != excludeSessionId }.map { it.second }
+            .filter { it.personaId == null || it.personaId == personaId }
+            .mapNotNull { turn ->
+            val sessionId = ""
             val body = normalizeSearchText(turn.text)
             val matches = terms.count { term -> body.contains(term) }
             if (matches == 0) return@mapNotNull null
@@ -708,12 +722,12 @@ class EncryptedMemoryStore(context: Context) {
 
     /** Search both curated facts and full episodic history for a live conversational cue. */
     @Synchronized
-    fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null): String {
+    fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null, personaId: String? = null): String {
         if (query.isBlank()) return ""
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
         val routedTopic = MemoryTopicClassifier.classify(query)
-        val relevantMemories = listMemories().mapNotNull { memory ->
+        val relevantMemories = (personaId?.let(::listMemoriesForPersona) ?: listMemories()).mapNotNull { memory ->
             val body = normalizeSearchText(memory.text)
             val hits = terms.count { term -> body.contains(term) }
             val topicMatch = memory.topic == routedTopic
@@ -724,7 +738,7 @@ class EncryptedMemoryStore(context: Context) {
         }.sortedWith(compareByDescending<Pair<MemoryItem, Int>> { it.second }
             .thenByDescending { it.first.confidence }
             .thenByDescending { it.first.createdAtMillis }).take(8)
-        val episodes = searchArchivedTurns(query, 8, excludeSessionId)
+        val episodes = searchArchivedTurns(query, 8, excludeSessionId, personaId)
         if (relevantMemories.isEmpty() && episodes.isEmpty()) return ""
         return buildString {
             appendLine("RECALLED PERSONAL EXPERIENCES — retrieved from the shared encrypted local archive.")
@@ -935,7 +949,7 @@ class EncryptedMemoryStore(context: Context) {
         return buildList {
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue
-                add(ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt")))
+                add(ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt"), item.optString("personaId").takeIf { it.isNotBlank() }))
             }
         }
     }
@@ -948,6 +962,7 @@ class EncryptedMemoryStore(context: Context) {
                     put("role", turn.role)
                     put("text", turn.text)
                     put("createdAt", turn.timestampMillis)
+                    put("personaId", turn.personaId ?: "")
                 })
             }
         }
@@ -1094,6 +1109,7 @@ class EncryptedMemoryStore(context: Context) {
         put("confirmed", item.confirmedByUser)
         put("sensitive", item.sensitive)
         put("topic", item.topic)
+        put("personaId", item.personaId ?: "")
     }
 
     private fun jsonToMemory(json: JSONObject) = MemoryItem(
@@ -1106,7 +1122,8 @@ class EncryptedMemoryStore(context: Context) {
         confirmedByUser = json.optBoolean("confirmed", false),
         sensitive = json.optBoolean("sensitive", false),
         topic = json.optString("topic").takeIf { it.isNotBlank() }
-            ?: MemoryTopicClassifier.classify(json.optString("text"))
+            ?: MemoryTopicClassifier.classify(json.optString("text")),
+        personaId = json.optString("personaId").takeIf { it.isNotBlank() }
     )
 
     companion object {
