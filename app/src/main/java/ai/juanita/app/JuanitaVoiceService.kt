@@ -86,6 +86,22 @@ class JuanitaVoiceService : Service() {
     private var memoryWorker: Job? = null
     private val videoFrameInFlight = AtomicBoolean(false)
     @Volatile private var cpuWakeLock: PowerManager.WakeLock? = null
+    private var thermalListenerRegistered = false
+    private val thermalStatusListener = PowerManager.OnThermalStatusChangedListener { status ->
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            status >= PowerManager.THERMAL_STATUS_SEVERE
+        ) {
+            serviceScope.launch {
+                if (lifecycleState == VoiceLifecycleState.ACTIVE) {
+                    Log.w("JuanitaVoiceService", "Severe device thermal status ($status); stopping Live audio to protect the phone")
+                    requestStop(
+                        preserveContinuitySnapshot = true,
+                        finalMessage = "Sessione terminata per proteggere il telefono dal surriscaldamento"
+                    )
+                }
+            }
+        }
+    }
 
     inner class LocalBinder : Binder() {
         fun sendVideoFrame(bitmap: Bitmap) {
@@ -422,6 +438,7 @@ class JuanitaVoiceService : Service() {
                                     .putBoolean(profilePromptKey, true).apply()
                             }
                             lifecycleState = VoiceLifecycleState.ACTIVE
+                            startThermalMonitoring()
                             _state.value = if (previewDurationMillis > 0L) "Anteprima della voce Gemini in corso…"
                                 else "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
                             updateNotification(if (previewDurationMillis > 0L) "Anteprima voce Gemini" else "Conversazione vocale attiva")
@@ -536,6 +553,7 @@ class JuanitaVoiceService : Service() {
             return
         }
         lifecycleState = VoiceLifecycleState.STOPPING
+        stopThermalMonitoring()
         _state.value = "Richiesta di chiusura audio in corso…"
         stopJob = serviceScope.launch {
             var assistantStopped = false
@@ -727,6 +745,32 @@ class JuanitaVoiceService : Service() {
         super.onTaskRemoved(rootIntent)
     }
 
+    /**
+     * Android reports device-wide thermal pressure. Stop only the active voice session at
+     * SEVERE or above; lower levels are advisory and must not interrupt ordinary use.
+     */
+    private fun startThermalMonitoring() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || thermalListenerRegistered) return
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        runCatching {
+            powerManager.addThermalStatusListener(
+                androidx.core.content.ContextCompat.getMainExecutor(this),
+                thermalStatusListener
+            )
+            thermalListenerRegistered = true
+        }.onFailure {
+            Log.w("JuanitaVoiceService", "Thermal monitoring unavailable; voice session safety fallback remains active", it)
+        }
+    }
+
+    private fun stopThermalMonitoring() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !thermalListenerRegistered) return
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        runCatching { powerManager.removeThermalStatusListener(thermalStatusListener) }
+            .onFailure { Log.w("JuanitaVoiceService", "Unable to unregister thermal listener", it) }
+        thermalListenerRegistered = false
+    }
+
     /** Keep the CPU awake for the lifetime of an explicitly started Live audio session.
      * This is required on devices that suspend background CPU work when the display turns off.
      */
@@ -824,6 +868,7 @@ class JuanitaVoiceService : Service() {
         activeIdentityId = null
         pendingStartIntent = null
         pendingStartId = 0
+        stopThermalMonitoring()
         releaseCpuWakeLock()
         transcriptChannel?.close()
         transcriptWorker?.cancel()
