@@ -243,6 +243,7 @@ class DigitalIdentityStore(context: Context) {
                 put("topic", source.topic)
                 put("confidence", source.confidence.toDouble())
                 put("summary", source.summary)
+                put("geographicScope", source.geographicScope)
             }) }
         })
     }
@@ -314,7 +315,8 @@ class DigitalIdentityStore(context: Context) {
                 retrievedAtMillis = item.optLong("retrievedAtMillis", 0L),
                 topic = item.optString("topic", "general"),
                 confidence = item.optDouble("confidence", 0.5).toFloat().coerceIn(0f, 1f),
-                summary = item.optString("summary")
+                summary = item.optString("summary"),
+                geographicScope = item.optString("geographicScope")
             )
         }
         val approved = json.opt("approvedAtMillis")
