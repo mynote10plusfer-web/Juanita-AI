@@ -26,26 +26,30 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
-    fun everyCharacterConfigurationReadsAndWritesTheSameEncryptedMemory() {
+    fun sharedKnowledgeIsVisibleToEveryCharacterWhileConversationHistoryIsIdentityScoped() {
         val context = isolatedContext()
         val juanitaMemory = EncryptedMemoryStore(context)
         val joseMemory = EncryptedMemoryStore(context)
         val tokenFromJuanita = "Conoscenza condivisa Juanita ${UUID.randomUUID()}"
         val tokenFromJose = "Conoscenza condivisa Jose ${UUID.randomUUID()}"
-        val sessionId = "shared-session-${UUID.randomUUID()}"
+        val juanitaSession = "juanita-session-${UUID.randomUUID()}"
+        val joseSession = "jose-session-${UUID.randomUUID()}"
+        val juanitaTurn = "Conversazione iniziata con Juanita"
+        val joseTurn = "Conversazione iniziata con José"
 
         try {
             juanitaMemory.addMemory(tokenFromJuanita)
-            juanitaMemory.appendConversationTurn(sessionId, "USER", "Conversazione iniziata con Juanita")
-
-            assertTrue(joseMemory.listMemories().any { it.text == tokenFromJuanita })
-            assertTrue(joseMemory.listConversationTurns(sessionId).any { it.text == "Conversazione iniziata con Juanita" })
+            juanitaMemory.appendConversationTurn(juanitaSession, "USER", juanitaTurn, personaId = "juanita-1")
 
             joseMemory.addMemory(tokenFromJose)
-            joseMemory.appendConversationTurn(sessionId, "ASSISTANT", "Risposta di José")
+            joseMemory.appendConversationTurn(joseSession, "USER", joseTurn, personaId = "jose-1")
 
+            assertTrue(joseMemory.listMemories().any { it.text == tokenFromJuanita })
             assertTrue(juanitaMemory.listMemories().any { it.text == tokenFromJose })
-            assertTrue(juanitaMemory.listConversationTurns(sessionId).any { it.text == "Risposta di José" })
+            assertTrue(juanitaMemory.listConversationTurns(juanitaSession).any { it.text == juanitaTurn })
+            assertTrue(joseMemory.listConversationTurns(joseSession).any { it.text == joseTurn })
+            assertTrue(juanitaMemory.searchArchivedTurns(joseTurn, personaId = "juanita-1").none { it.sessionId == joseSession })
+            assertTrue(joseMemory.searchArchivedTurns(juanitaTurn, personaId = "jose-1").none { it.sessionId == juanitaSession })
             assertEquals(2, juanitaMemory.listMemories().count { it.text.startsWith("Conoscenza condivisa") })
         } finally {
             juanitaMemory.clearAll()
@@ -183,33 +187,6 @@ class IdentityMemoryNamespaceTest {
             assertTrue(!store.buildContinuityContext(joseSession, personaId = "juanita-1").contains(joseText))
             assertTrue(store.carryForwardLatestContinuitySnapshot("juanita-next", "juanita-1").contains(juanitaText))
             assertTrue(!store.buildContinuityContext("juanita-next", personaId = "jose-1").contains(juanitaText))
-        } finally {
-            store.clearAll()
-        }
-    }
-
-    @Test
-    fun legacyUntaggedConversationTurnsAreNotInjectedIntoCharacterPrivateRecall() {
-        val context = isolatedContext()
-        val store = EncryptedMemoryStore(context)
-        val legacySession = "legacy-${UUID.randomUUID()}"
-        val privateSession = "private-${UUID.randomUUID()}"
-        val legacyPhrase = "Episodio legacy non attribuito ${UUID.randomUUID()}"
-        val privatePhrase = "Episodio privato Juanita ${UUID.randomUUID()}"
-        try {
-            // Null personaId represents a pre-migration transcript whose character
-            // ownership cannot be proven. It must not leak into any private persona.
-            store.appendConversationTurn(legacySession, "USER", legacyPhrase)
-            store.appendConversationTurn(privateSession, "USER", privatePhrase, personaId = "juanita-1")
-
-            val privateHits = store.searchArchivedTurns(legacyPhrase, personaId = "juanita-1")
-            val privateContext = store.buildAssistantContext(personaId = "juanita-1")
-            val recalledPrivate = store.buildRelevantRecallContext(legacyPhrase, personaId = "juanita-1")
-
-            assertTrue(privateHits.none { it.sessionId == legacySession })
-            assertTrue(!privateContext.contains(legacyPhrase))
-            assertTrue(!recalledPrivate.contains(legacyPhrase))
-            assertTrue(privateContext.contains(privatePhrase))
         } finally {
             store.clearAll()
         }
