@@ -6,6 +6,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import java.util.UUID
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -72,6 +73,32 @@ class IdentityMemoryNamespaceTest {
             assertTrue(projectRecall.contains("topic=projects_technology"))
         } finally {
             juanitaMemory.clearAll()
+        }
+    }
+
+    @Test
+    fun retentionAndRangeDeletionPreserveUnreadableSessionArchiveBytes() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "corrupt-${UUID.randomUUID()}"
+        val archiveFile = File(File(context.filesDir, "conversation_archive"), "$sessionId.enc")
+        val corruptedBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05)
+
+        try {
+            store.appendConversationTurn(sessionId, "USER", "Archivio da proteggere")
+            assertTrue("Expected an encrypted session archive", archiveFile.exists())
+
+            // Simulate a truncated/corrupted ciphertext or a transient Keystore read failure.
+            archiveFile.writeBytes(corruptedBytes)
+            store.archiveRetentionDays = 7
+            assertTrue("Retention must not delete an unreadable archive", archiveFile.exists())
+            assertArrayEquals("Retention must preserve unreadable bytes", corruptedBytes, archiveFile.readBytes())
+
+            store.deleteArchiveRange(0L, System.currentTimeMillis() + 1L)
+            assertTrue("Range deletion must not delete an unreadable archive", archiveFile.exists())
+            assertArrayEquals("Range deletion must preserve unreadable bytes", corruptedBytes, archiveFile.readBytes())
+        } finally {
+            store.clearAll()
         }
     }
 
