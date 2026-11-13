@@ -246,6 +246,7 @@ class DigitalIdentityStoreTest {
                 assertTrue(source.publisher.isNotBlank())
                 assertTrue(source.url.startsWith("https://"))
                 assertTrue(source.confidence in 0f..1f)
+                assertTrue("Every source must declare its geographic scope", source.geographicScope.isNotBlank())
             }
             assertNull(dossier.approvedAtMillis)
         }
