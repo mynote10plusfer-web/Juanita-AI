@@ -104,7 +104,7 @@ class IdentityMemoryNamespaceTest {
             val updated = store.listMemories().single { it.id == saved.id }
             assertEquals(corrected, updated.text)
             assertEquals("user_corrected", updated.source)
-            assertEquals(1.0f, updated.confidence)
+            assertEquals(1.0f, updated.confidence, 0.0f)
             assertTrue(updated.confirmedByUser)
         } finally {
             store.clearAll()
