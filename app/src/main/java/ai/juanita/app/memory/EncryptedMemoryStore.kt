@@ -240,7 +240,7 @@ class EncryptedMemoryStore(context: Context) {
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         val records = readRecords()
         val previous = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
-            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId
+            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId
         }
         val turns = mutableListOf<ArchivedTurn>()
         val oldTurns = previous?.optJSONArray("turns") ?: JSONArray()
@@ -248,7 +248,7 @@ class EncryptedMemoryStore(context: Context) {
             val item = oldTurns.optJSONObject(index) ?: continue
             turns += ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt"), personaId)
         }
-        turns += ArchivedTurn(UUID.randomUUID().toString(), safeRole, text.take(MAX_CONTINUITY_TURN_CHARS), timestampMillis)
+        turns += ArchivedTurn(UUID.randomUUID().toString(), safeRole, text.take(MAX_CONTINUITY_TURN_CHARS), timestampMillis, personaId)
         while (turns.size > MAX_CONTINUITY_TURNS || turns.sumOf { it.text.length } > MAX_CONTINUITY_CHARS) {
             if (turns.size <= 1) break
             turns.removeAt(0)
@@ -300,11 +300,11 @@ class EncryptedMemoryStore(context: Context) {
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "continuity_snapshot") kept.put(record)
+            if (record.optString("kind") != "continuity_snapshot" || record.optString("personaId").takeIf { it.isNotBlank() } != personaId) kept.put(record)
         }
         kept.put(carried)
         writeRecords(kept, synchronous = true)
-        return buildContinuityContext(newSessionId)
+        return buildContinuityContext(newSessionId, personaId = personaId)
     }
 
     /** Build a bounded chronological recovery packet from the encrypted active-session snapshot. */
@@ -312,7 +312,8 @@ class EncryptedMemoryStore(context: Context) {
     fun buildContinuityContext(sessionId: String, recentFallback: String = "", personaId: String? = null): String {
         val records = readRecords()
         val record = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
-            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId
+            it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId &&
+                it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId
         }
         val snapshotAge = record?.let {
             (System.currentTimeMillis() - it.optLong("updatedAt")).coerceAtLeast(0L)
