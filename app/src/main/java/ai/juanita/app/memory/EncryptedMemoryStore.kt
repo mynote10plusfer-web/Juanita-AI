@@ -1036,6 +1036,17 @@ class EncryptedMemoryStore(context: Context) {
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply { load(null) }
         (keyStore.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+
+        // If ciphertext already exists, a missing Keystore alias means the original key
+        // may have been invalidated or lost. Generating a replacement would make the old
+        // data permanently unreadable and could overwrite it on the next write. Fail closed.
+        val hasEncryptedPreferences = preferences.getString(KEY_ENCRYPTED_DATA, null) != null
+        val hasEncryptedSessionArchive = sessionArchiveDirectory().listFiles()
+            ?.any { it.isFile && it.name.endsWith(".enc") && it.length() > 0L } == true
+        check(!hasEncryptedPreferences && !hasEncryptedSessionArchive) {
+            "La chiave di cifratura locale non è disponibile. I dati esistenti sono stati preservati; non verrà generata una nuova chiave."
+        }
+
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEY_STORE)
         generator.init(
             KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
