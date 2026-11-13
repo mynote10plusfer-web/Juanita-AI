@@ -8,12 +8,20 @@ import java.io.File
 import java.util.UUID
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class IdentityMemoryNamespaceTest {
+    @Test
+    fun productionFactoryReturnsOneProcessWideEncryptedStoreInstance() {
+        val first = EncryptedMemoryStore.getInstance(isolatedContext())
+        val second = EncryptedMemoryStore.getInstance(isolatedContext())
+        assertSame("Activity and service must share the same synchronized store", first, second)
+    }
+
     @Test
     fun everyCharacterConfigurationReadsAndWritesTheSameEncryptedMemory() {
         val context = isolatedContext()
@@ -98,6 +106,7 @@ class IdentityMemoryNamespaceTest {
             assertTrue("Range deletion must not delete an unreadable archive", archiveFile.exists())
             assertArrayEquals("Range deletion must preserve unreadable bytes", corruptedBytes, archiveFile.readBytes())
         } finally {
+            store.archiveRetentionDays = 0
             store.clearAll()
         }
     }
