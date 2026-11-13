@@ -114,6 +114,58 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun sharedFactsAreVisibleToBothCharactersButPrivateMemoriesStayIsolated() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val shared = "Fatto comune ${UUID.randomUUID()}"
+        val juanitaOnly = "Ricordo privato Juanita ${UUID.randomUUID()}"
+        val joseOnly = "Ricordo privato Jose ${UUID.randomUUID()}"
+        try {
+            store.addMemory(shared)
+            store.addMemory(juanitaOnly, personaId = "juanita-1")
+            store.addMemory(joseOnly, personaId = "jose-1")
+            val juanitaMemories = store.listMemoriesForPersona("juanita-1").map { it.text }
+            val joseMemories = store.listMemoriesForPersona("jose-1").map { it.text }
+            assertTrue(shared in juanitaMemories)
+            assertTrue(shared in joseMemories)
+            assertTrue(juanitaOnly in juanitaMemories)
+            assertTrue(juanitaOnly !in joseMemories)
+            assertTrue(joseOnly in joseMemories)
+            assertTrue(joseOnly !in juanitaMemories)
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun conversationRecallIsScopedToTheActiveCharacter() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val juanitaSession = "juanita-${UUID.randomUUID()}"
+        val joseSession = "jose-${UUID.randomUUID()}"
+        val juanitaPhrase = "Juanita episodio esclusivo ${UUID.randomUUID()}"
+        val josePhrase = "Jose episodio esclusivo ${UUID.randomUUID()}"
+        try {
+            store.appendConversationTurn(juanitaSession, "USER", juanitaPhrase, personaId = "juanita-1")
+            store.appendConversationTurn(joseSession, "USER", josePhrase, personaId = "jose-1")
+            val juanitaHits = store.searchArchivedTurns(juanitaPhrase, personaId = "juanita-1")
+            val joseHits = store.searchArchivedTurns(josePhrase, personaId = "jose-1")
+            val juanitaRecall = store.buildRelevantRecallContext(juanitaPhrase, personaId = "juanita-1")
+            val joseRecall = store.buildRelevantRecallContext(josePhrase, personaId = "jose-1")
+            assertTrue(juanitaHits.any { it.sessionId == juanitaSession })
+            assertTrue(juanitaHits.none { it.sessionId == joseSession })
+            assertTrue(joseHits.any { it.sessionId == joseSession })
+            assertTrue(joseHits.none { it.sessionId == juanitaSession })
+            assertTrue(juanitaRecall.contains(juanitaPhrase))
+            assertTrue(!juanitaRecall.contains(josePhrase))
+            assertTrue(joseRecall.contains(josePhrase))
+            assertTrue(!joseRecall.contains(juanitaPhrase))
+        } finally {
+            store.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
