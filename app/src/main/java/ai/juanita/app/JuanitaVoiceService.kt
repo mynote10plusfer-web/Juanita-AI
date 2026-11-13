@@ -35,6 +35,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -124,9 +125,11 @@ class JuanitaVoiceService : Service() {
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
                 if (instruction.isBlank()) {
                     _state.value = "Impossibile avviare: istruzioni mancanti"
+                    _shutdownConfirmed.value = true
                     stopSelf(startId)
                     return START_NOT_STICKY
                 }
+                _shutdownConfirmed.value = false
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
@@ -401,6 +404,7 @@ class JuanitaVoiceService : Service() {
                                 runCatching { withContext(Dispatchers.IO) { assistant.stop() } }.isSuccess
                             } == true)
                             if (assistantStopped) {
+                                _shutdownConfirmed.value = true
                                 _state.value = "Connessione non riuscita: ${error.localizedMessage ?: "controlla rete e App Check"}"
                                 updateNotification("Connessione non riuscita · microfono disattivato")
                                 withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
@@ -534,10 +538,13 @@ class JuanitaVoiceService : Service() {
                 pendingStartId = 0
                 if (queuedStart != null) {
                     // Restart is permitted only after both SDK audio capture and the
-                    // Live session close have completed successfully.
+                    // Live session close have completed successfully. Keep the public
+                    // shutdown signal false across the hand-off to the queued session.
+                    _shutdownConfirmed.value = false
                     stopJob = null
                     onStartCommand(queuedStart, 0, queuedStartId)
                 } else {
+                    _shutdownConfirmed.value = true
                     stopJob = null
                     stopSelf()
                 }
@@ -740,6 +747,27 @@ class JuanitaVoiceService : Service() {
 
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
+
+        // True only after the service has confirmed microphone and Live-session teardown.
+        private val _shutdownConfirmed = MutableStateFlow(true)
+
+        /**
+         * Requests an orderly stop and waits for the service's explicit teardown
+         * acknowledgement. The caller must not destroy its Activity before this returns true.
+         */
+        suspend fun stopAndAwait(context: Context, timeoutMillis: Long = 15_000L): Boolean {
+            require(timeoutMillis > 0L)
+            _shutdownConfirmed.value = false
+            return try {
+                context.applicationContext.startService(
+                    Intent(context, JuanitaVoiceService::class.java).setAction(ACTION_STOP)
+                )
+                withTimeoutOrNull(timeoutMillis) { _shutdownConfirmed.first { it } } == true
+            } catch (error: Exception) {
+                Log.e("JuanitaVoiceService", "Unable to request confirmed voice shutdown", error)
+                false
+            }
+        }
 
         private val _memoryState = MutableStateFlow("Memoria automatica pronta.")
         val memoryState: StateFlow<String> = _memoryState.asStateFlow()
