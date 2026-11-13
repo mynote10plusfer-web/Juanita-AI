@@ -530,7 +530,7 @@ class EncryptedMemoryStore(context: Context) {
     /** Shared user knowledge plus memories belonging only to the selected character. */
     @Synchronized
     fun listMemoriesForPersona(personaId: String): List<MemoryItem> =
-        listMemories().filter { it.personaId == null || it.personaId == personaId }
+        listMemories().filter { it.personaId == personaId }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
