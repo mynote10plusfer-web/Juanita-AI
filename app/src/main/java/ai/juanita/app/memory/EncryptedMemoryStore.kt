@@ -631,7 +631,70 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun listConversationTurns(sessionId: String): List<ArchivedTurn> {
         purgeExpiredArchive()
-        return allArchivedTurns().filter { it.first == sessionId }.map { it.second }.sortedBy { it.timestampMillis }
+        return readSessionArchive(sessionArchiveFile(sessionId), sessionId)
+    }
+
+    /**
+     * Reads one chronological page without decrypting every append-only journal frame.
+     * Legacy packed archives are decoded once for compatibility; new journal frames are
+     * indexed from their authenticated filename metadata and only the requested page is
+     * decrypted. The returned page is oldest-first, matching listConversationTurns().
+     */
+    @Synchronized
+    fun listConversationTurnsPage(
+        sessionId: String,
+        pageIndex: Int = 0,
+        pageSize: Int = 50
+    ): ArchivedTurnPage {
+        require(pageIndex >= 0) { "Page index cannot be negative" }
+        require(pageSize in 1..200) { "Page size must be between 1 and 200" }
+        purgeExpiredArchive()
+
+        data class Entry(
+            val timestampMillis: Long,
+            val id: String,
+            val packedTurn: ArchivedTurn? = null,
+            val journalFrame: File? = null
+        )
+
+        val entries = mutableListOf<Entry>()
+        val packedTurns = readPackedSessionArchive(sessionArchiveFile(sessionId))
+        val seenIds = packedTurns.mapTo(mutableSetOf()) { it.id }
+        packedTurns.forEach { entries += Entry(it.timestampMillis, it.id, packedTurn = it) }
+
+        val journal = sessionJournalDirectory(sessionId)
+        if (journal.exists()) {
+            val frames = journal.listFiles { frame -> frame.isFile && frame.name.endsWith(".enc") }
+                ?: throw IllegalStateException("Unable to list encrypted transcript frames")
+            frames.forEach { frame ->
+                val stem = frame.name.removeSuffix(".enc")
+                val separator = stem.indexOf('_')
+                require(separator > 0) { "Invalid encrypted transcript frame name: ${frame.name}" }
+                val timestamp = stem.substring(0, separator).toLongOrNull()
+                    ?: throw IllegalStateException("Invalid transcript timestamp: ${frame.name}")
+                val id = stem.substring(separator + 1)
+                if (id.isNotBlank() && seenIds.add(id)) {
+                    entries += Entry(timestamp, id, journalFrame = frame)
+                }
+            }
+        }
+
+        entries.sortWith(compareBy<Entry> { it.timestampMillis }.thenBy { it.id })
+        val startLong = pageIndex.toLong() * pageSize.toLong()
+        val start = minOf(startLong, entries.size.toLong()).toInt()
+        val end = minOf(start.toLong() + pageSize, entries.size.toLong()).toInt()
+        val pageTurns = entries.subList(start, end).map { entry ->
+            entry.packedTurn ?: readEncryptedJournalFrame(
+                checkNotNull(entry.journalFrame) { "Archive page entry has no backing record" }
+            )
+        }
+        return ArchivedTurnPage(
+            turns = pageTurns,
+            pageIndex = pageIndex,
+            pageSize = pageSize,
+            totalCount = entries.size,
+            hasMore = end < entries.size
+        )
     }
 
     data class ArchivedTurn(
@@ -640,6 +703,14 @@ class EncryptedMemoryStore(context: Context) {
         val text: String,
         val timestampMillis: Long,
         val personaId: String? = null
+    )
+
+    data class ArchivedTurnPage(
+        val turns: List<ArchivedTurn>,
+        val pageIndex: Int,
+        val pageSize: Int,
+        val totalCount: Int,
+        val hasMore: Boolean
     )
 
     /** Deletes only this session's turns in [startInclusive, endExclusive). */
@@ -1065,22 +1136,27 @@ class EncryptedMemoryStore(context: Context) {
         item.optLong("createdAt"), item.optString("personaId").takeIf { it.isNotBlank() }
     )
 
-    /** Reads old packed files plus new frames; IDs deduplicate an interrupted compaction. */
-    private fun readSessionArchive(file: File, sessionId: String = file.nameWithoutExtension): List<ArchivedTurn> {
-        val turns = mutableListOf<ArchivedTurn>()
-        if (file.exists()) {
-            val packed = file.readBytes()
-            require(packed.size > GCM_IV_LENGTH) { "Encrypted conversation archive is invalid" }
-            val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
-            val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-            val array = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+    /** Reads the legacy packed file independently so journal pages need decrypt only selected frames. */
+    private fun readPackedSessionArchive(file: File): List<ArchivedTurn> {
+        if (!file.exists()) return emptyList()
+        val packed = file.readBytes()
+        require(packed.size > GCM_IV_LENGTH) { "Encrypted conversation archive is invalid" }
+        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+        val array = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+        return buildList {
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue
-                turns += jsonToArchivedTurn(item)
+                add(jsonToArchivedTurn(item))
             }
         }
+    }
+
+    /** Reads old packed files plus new frames; IDs deduplicate an interrupted compaction. */
+    private fun readSessionArchive(file: File, sessionId: String = file.nameWithoutExtension): List<ArchivedTurn> {
+        val turns = readPackedSessionArchive(file).toMutableList()
         val journal = sessionJournalDirectory(sessionId)
         if (journal.exists()) {
             val frames = journal.listFiles { frame -> frame.isFile && frame.name.endsWith(".enc") }
