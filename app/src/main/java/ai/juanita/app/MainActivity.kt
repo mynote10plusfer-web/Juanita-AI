@@ -156,6 +156,13 @@ class MainActivity : ComponentActivity() {
     private lateinit var preferences: AssistantPreferences
     private var keepScreenOnForCall = false
     private var screenOffReceiverRegistered = false
+    /** Requests the Compose call window to disappear without stopping an opted-in Live session. */
+    var screenOffUiDismissRequested by mutableStateOf(false)
+        private set
+
+    fun consumeScreenOffUiDismissRequest() {
+        screenOffUiDismissRequested = false
+    }
 
     // Keep every Juanita UI window (including the full-screen Compose avatar Dialog)
     // behind Samsung/Android keyguard as soon as the physical display turns off.
@@ -164,6 +171,10 @@ class MainActivity : ComponentActivity() {
     private val screenOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: android.content.Context?, intent: Intent?) {
             if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                // Dismiss the full-screen call/avatar window independently from the
+                // voice service. onDismiss would stop Live, which is not what screen-off
+                // means when the user explicitly authorized background continuation.
+                screenOffUiDismissRequested = true
                 moveTaskToBack(true)
             }
         }
@@ -486,6 +497,15 @@ private fun JuanitaApp(
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
+    val screenOffUiDismissRequested = (this@MainActivity)?.screenOffUiDismissRequested == true
+    LaunchedEffect(screenOffUiDismissRequested) {
+        if (screenOffUiDismissRequested) {
+            // Hide only the separate UI window; the foreground service owns the
+            // Live session and independently applies the user's background consent.
+            callScreenVisible = false
+            (this@MainActivity)?.consumeScreenOffUiDismissRequest()
+        }
+    }
     var showExitConfirmation by remember { mutableStateOf(false) }
     var exitInProgress by remember { mutableStateOf(false) }
     val hostActivity = context as? Activity
