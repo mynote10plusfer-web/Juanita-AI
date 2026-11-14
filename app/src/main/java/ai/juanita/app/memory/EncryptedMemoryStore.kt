@@ -1230,26 +1230,51 @@ class EncryptedMemoryStore(context: Context) {
 
     private fun persistMemoryFiles(records: JSONArray) {
         val directory = memoryDirectory()
-        val desired = linkedMapOf<String, ByteArray>()
+        // Keep the desired plaintext only in memory for this transaction. Existing encrypted
+        // files are compared before writing so adding one fact does not rewrite the entire archive.
+        val desired = linkedMapOf<String, String>()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") != "memory") continue
             val id = record.optString("id")
             require(id.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid memory ID" }
+            desired["$id.mem"] = record.toString()
+        }
+
+        desired.forEach { (name, plaintext) ->
+            val target = File(directory, name)
+            val unchanged = if (target.isFile) runCatching {
+                val packed = target.readBytes()
+                require(packed.size > GCM_IV_LENGTH) { "Encrypted memory file is invalid: $name" }
+                val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+                val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+                String(cipher.doFinal(ciphertext), Charsets.UTF_8) == plaintext
+            }.getOrDefault(false) else false
+            if (unchanged) return@forEach
+
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-            desired["$id.mem"] = cipher.iv + cipher.doFinal(record.toString().toByteArray(Charsets.UTF_8))
-        }
-        desired.forEach { (name, packed) ->
-            val target = File(directory, name)
+            val packed = cipher.iv + cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
             val temporary = File(directory, "$name.tmp")
-            FileOutputStream(temporary).use { output -> output.write(packed); output.fd.sync() }
+            FileOutputStream(temporary).use { output ->
+                output.write(packed)
+                output.fd.sync()
+            }
             try {
-                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+                Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                )
             } catch (_: Exception) {
                 Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
             }
         }
+
+        // Obsolete records are retired only after every desired record is durably written.
         val keepNames = desired.keys
         val existing = directory.listFiles { file -> file.isFile && file.name.endsWith(".mem") }
             ?: throw IllegalStateException("Unable to verify encrypted memory files")
@@ -1257,7 +1282,6 @@ class EncryptedMemoryStore(context: Context) {
             check(file.delete()) { "Unable to delete obsolete encrypted memory ${file.name}" }
         }
     }
-
 
     /** Memory records are stored independently and are not truncated by count or aggregate size. */
     private fun applyStorageLimits(records: JSONArray): JSONArray {
