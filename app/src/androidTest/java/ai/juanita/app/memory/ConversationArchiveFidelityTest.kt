@@ -181,6 +181,33 @@ class ConversationArchiveFidelityTest {
 
 
     @Test
+    fun storesMoreThanOneHundredMemoriesAndMoreThanThirtyTwoThousandCharacters() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = EncryptedMemoryStore(context)
+        val ids = mutableSetOf<String>()
+        val longText = "Ricordo esteso — " + "contenuto verificabile áβč. ".repeat(45)
+        try {
+            repeat(105) { index ->
+                val item = store.addMemory(
+                    text = "Memoria-$index — $longText",
+                    category = "general",
+                    source = "user_saved",
+                    confirmedByUser = true
+                )
+                ids += item.id
+            }
+            val restored = EncryptedMemoryStore(context).listMemories().filter { it.id in ids }
+            assertEquals("All 105 independent memory records must survive recreation", 105, restored.size)
+            assertTrue("Aggregate memory text must exceed the removed 32 KB ceiling",
+                restored.sumOf { it.text.length } > 32_000)
+            assertTrue("A single memory must no longer be truncated to 500 characters",
+                restored.all { it.text.length > 500 })
+        } finally {
+            store.deleteMemories(ids)
+        }
+    }
+
+    @Test
     fun migratesLegacyTranscriptRecordsBeforeTheOldThreeHundredTurnLimitCanDropThem() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val sessionId = "legacy-migration-" + UUID.randomUUID()
