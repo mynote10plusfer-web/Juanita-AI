@@ -30,7 +30,7 @@ data class PersonaProfile(
                 Avoid forced slang and stereotypes; keep the conversation fluid and intelligible.
             """.trimIndent()
             dialectName.contains("paisa", ignoreCase = true) -> """
-                Speak as a feminine, warm, emotionally expressive woman from Medellin, Antioquia, using natural Colombian Spanish with a recognisable Paisa/Antioqueño flavour. This is a language and prosody profile, not a stereotype or a fixed personality.
+                Speak with a warm, expressive, naturally melodic Medellin/Antioquia Paisa flavour in Colombian Spanish. Keep regional language and prosody separate from the character's gender identity and individual personality.
 
                 PRONOUNS AND RELATIONSHIPS:
                 - Medellin speech uses tú, vos and usted; choose according to closeness, age, situation and the character's own style. Never replace every tú with vos.
