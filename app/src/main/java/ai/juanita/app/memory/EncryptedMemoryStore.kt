@@ -969,7 +969,7 @@ class EncryptedMemoryStore(context: Context) {
             }
             turns.forEach { result += sessionId to it }
         }
-        return result
+        return result.distinctBy { (sessionId, turn) -> sessionId to turn.id }
     }
 
     private fun sessionArchiveDirectory(): File =
@@ -1006,7 +1006,14 @@ class EncryptedMemoryStore(context: Context) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val packed = cipher.iv + cipher.doFinal(archivedTurnToJson(turn).toString().toByteArray(Charsets.UTF_8))
-        val destination = File(directory, "\${turn.timestampMillis.toString().padStart(16, '0')}_\${turn.id}.enc")
+        val destinationName = turn.timestampMillis.toString().padStart(16, '0') + "_" + turn.id + ".enc"
+        val destination = File(directory, destinationName)
+        if (destination.exists()) {
+            check(readEncryptedJournalFrame(destination) == turn) {
+                "Transcript frame ID collision or corrupted existing frame: " + destination.name
+            }
+            return
+        }
         val temporary = File(directory, destination.name + ".tmp")
         FileOutputStream(temporary).use { output -> output.write(packed); output.fd.sync() }
         try {
@@ -1014,6 +1021,16 @@ class EncryptedMemoryStore(context: Context) {
         } catch (_: Exception) {
             Files.move(temporary.toPath(), destination.toPath())
         }
+    }
+
+    private fun readEncryptedJournalFrame(frame: File): ArchivedTurn {
+        val packed = frame.readBytes()
+        require(packed.size > GCM_IV_LENGTH) { "Encrypted transcript frame is invalid: " + frame.name }
+        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+        return jsonToArchivedTurn(JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8)))
     }
 
     private fun archivedTurnToJson(turn: ArchivedTurn): JSONObject = JSONObject().apply {
@@ -1050,14 +1067,10 @@ class EncryptedMemoryStore(context: Context) {
             val frames = journal.listFiles { frame -> frame.isFile && frame.name.endsWith(".enc") }
                 ?: throw IllegalStateException("Unable to list encrypted transcript frames")
             frames.sortedBy { it.name }.forEach { frame ->
-                val packed = frame.readBytes()
-                require(packed.size > GCM_IV_LENGTH) { "Encrypted transcript frame is invalid: \${frame.name}" }
-                val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
-                val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
-                val cipher = Cipher.getInstance(TRANSFORMATION)
-                cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-                turns += jsonToArchivedTurn(JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8)))
+                turns += readEncryptedJournalFrame(frame)
             }
+        }
+        return turns.distinctBy { it.id }.sortedBy { it.timestampMillis }            }
         }
         return turns.distinctBy { it.id }.sortedBy { it.timestampMillis }
     }
@@ -1119,8 +1132,43 @@ class EncryptedMemoryStore(context: Context) {
         return JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
     }
 
+    /**
+     * Migrates pre-journal transcript records before applying the legacy SharedPreferences
+     * turn ceiling. Journal frames are fsynced first; the old encrypted records are removed
+     * only in the same committed preference write. Stable IDs make retries after process death
+     * idempotent, so an interrupted migration cannot duplicate or discard a turn.
+     */
+    private fun migrateLegacyTranscriptRecords(records: JSONArray): JSONArray {
+        val retained = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "turn") {
+                retained.put(record)
+                continue
+            }
+            val sessionId = record.optString("sessionId")
+            val turnId = record.optString("id")
+            if (sessionId.isBlank() || turnId.isBlank()) {
+                retained.put(record)
+                continue
+            }
+            appendEncryptedSessionTurn(
+                ArchivedTurn(
+                    id = turnId,
+                    role = record.optString("role"),
+                    text = record.optString("text"),
+                    timestampMillis = record.optLong("createdAt"),
+                    personaId = record.optString("personaId").takeIf { it.isNotBlank() }
+                ),
+                sessionId
+            )
+        }
+        return retained
+    }
+
     private fun writeRecords(records: JSONArray, synchronous: Boolean = false) {
-        val boundedRecords = applyStorageLimits(records)
+        val migratedRecords = migrateLegacyTranscriptRecords(records)
+        val boundedRecords = applyStorageLimits(migratedRecords)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(boundedRecords.toString().toByteArray(Charsets.UTF_8))
