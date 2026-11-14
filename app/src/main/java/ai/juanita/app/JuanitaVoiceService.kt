@@ -66,6 +66,11 @@ class JuanitaVoiceService : Service() {
     private val audioTeardownExecutor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "JuanitaAudioTeardown").apply { isDaemon = true }
     }
+    // File cleanup is deliberately isolated from the voice-service lifecycle. A slow
+    // encrypted-store monitor or SharedPreferences commit must never keep the mic service alive.
+    private val continuityCleanupExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "JuanitaContinuityCleanup").apply { isDaemon = true }
+    }
     private val audioRouteController by lazy { VoiceAudioRouteController(applicationContext) }
     private lateinit var memoryStore: EncryptedMemoryStore
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
@@ -643,11 +648,8 @@ class JuanitaVoiceService : Service() {
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
         if (stopJob?.isActive == true) {
-            if (!preserveContinuitySnapshot) {
-                serviceScope.launch(Dispatchers.IO) {
-                    runCatching { memoryStore.clearContinuitySnapshots() }
-                }
-            }
+            // The first stop owns teardown and snapshot cleanup. A duplicate Stop must
+            // never launch a second archive rewrite that can race the next conversation.
             return
         }
         lifecycleState = VoiceLifecycleState.STOPPING
@@ -700,29 +702,25 @@ class JuanitaVoiceService : Service() {
                 runCatching {
                     withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                 }.onFailure { Log.w("JuanitaVoiceService", "Transcript drain failed after audio shutdown", it) }
-                if (!preserveContinuitySnapshot) {
+                // Remove only this completed session's transient continuity snapshot,
+                // and do it off the critical shutdown path. The ID-scoped delete cannot
+                // erase a snapshot written by a later conversation if this worker is delayed.
+                val completedConversationId = activeConversationId
+                if (!preserveContinuitySnapshot && !completedConversationId.isNullOrBlank()) {
                     runCatching {
-                        withContext(Dispatchers.IO) { memoryStore.clearContinuitySnapshots() }
-                    }.onFailure { Log.w("JuanitaVoiceService", "Continuity cleanup failed", it) }
+                        continuityCleanupExecutor.execute {
+                            runCatching { memoryStore.clearContinuitySnapshot(completedConversationId) }
+                                .onFailure { Log.w("JuanitaVoiceService", "Deferred continuity cleanup failed", it) }
+                        }
+                    }.onFailure { Log.w("JuanitaVoiceService", "Unable to schedule continuity cleanup", it) }
                 }
                 activeConversationId = null
+                // Transcript turns are persisted to the encrypted pending-memory queue before
+                // acknowledgement. Do not make service shutdown depend on Gemini memory curation:
+                // any unfinished batch remains encrypted and retryable on a later conversation.
                 runCatching {
                     withTimeoutOrNull(5_000L) { drainMemoryWorker() }
                 }.onFailure { Log.w("JuanitaVoiceService", "Memory worker drain failed after audio shutdown", it) }
-                val flushedCount = runCatching {
-                    withTimeoutOrNull(5_000L) {
-                        withContext(Dispatchers.IO) { automaticMemoryEngine.flush() }
-                    }
-                }.onFailure { Log.w("JuanitaVoiceService", "Final automatic-memory flush failed", it) }.getOrNull()
-                if (flushedCount != null && flushedCount > 0) {
-                    _memoryState.value = "Memoria aggiornata: $flushedCount ricordi salvati o confermati."
-                } else if (flushedCount == -1) {
-                    _memoryState.value = "Memoria in attesa: rete o quota non disponibili; riproverò al prossimo collegamento."
-                } else if (flushedCount != null) {
-                    _memoryState.value = "Controllo completato: nessun nuovo ricordo durevole da aggiungere."
-                } else {
-                    _memoryState.value = "Memoria in attesa: riprenderà al prossimo collegamento."
-                }
                 startRequested = false
                 lifecycleState = VoiceLifecycleState.IDLE
                 activeIdentityId = null
@@ -991,6 +989,9 @@ class JuanitaVoiceService : Service() {
         memoryWorker?.cancel()
         runCatching { audioRouteController.end() }
         audioTeardownExecutor.shutdownNow()
+        // shutdown() lets an already-running ID-scoped file cleanup finish without
+        // delaying Service destruction or touching microphone resources.
+        continuityCleanupExecutor.shutdown()
         serviceScope.cancel()
         super.onDestroy()
     }
