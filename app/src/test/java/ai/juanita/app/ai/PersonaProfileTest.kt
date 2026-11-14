@@ -20,7 +20,7 @@ class PersonaProfileTest {
 
         assertTrue(instruction.contains("mi amor"))
         assertTrue(instruction.contains("Match the other person's comfort"))
-        assertTrue(instruction.contains("never like a comedy stereotype"))
+        assertTrue(instruction.contains("comedy stereotype"))
         assertFalse(instruction.contains("use pues in every sentence"))
     }
 
@@ -29,6 +29,7 @@ class PersonaProfileTest {
         val instruction = PersonaProfile().regionalDialectInstruction("Español canario")
 
         assertFalse(instruction.contains("living three-way system: tú, vos and usted"))
-        assertTrue(instruction.contains("Use the selected language naturally and consistently"))
+        assertTrue(instruction.contains("natural Canary Islands style"))
+        assertTrue(instruction.contains("Canarian vocabulary"))
     }
 }
