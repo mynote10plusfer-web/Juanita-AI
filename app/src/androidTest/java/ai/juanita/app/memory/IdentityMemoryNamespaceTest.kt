@@ -165,7 +165,7 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
-    fun editingAMemoryMarksItAsAnExplicitUserCorrection() {
+    fun editingAMemorySupersedesTheOldFactAndPreservesCorrectionHistory() {
         val context = isolatedContext()
         val store = EncryptedMemoryStore(context)
         val original = "Preferenza iniziale correzione test"
@@ -174,17 +174,27 @@ class IdentityMemoryNamespaceTest {
             val saved = store.addMemory(original, source = "automatic", confidence = 0.84f, confirmedByUser = false)
             assertTrue(store.updateMemory(saved.id, corrected))
 
-            val updated = store.listMemories().single { it.id == saved.id }
-            assertEquals(corrected, updated.text)
+            val updated = store.listMemories().single { it.text == corrected }
+            assertTrue("A correction must receive a new stable record ID", updated.id != saved.id)
             assertEquals("user_corrected", updated.source)
             assertEquals(1.0f, updated.confidence, 0.0f)
             assertTrue(updated.confirmedByUser)
+            assertEquals("Only the corrected fact may remain in ordinary recall", 1, store.listMemories().size)
 
-            val reloaded = EncryptedMemoryStore(isolatedContext()).listMemories().single { it.id == saved.id }
+            val history = store.listAllMemories()
+            val superseded = history.single { it.id == saved.id }
+            assertEquals(original, superseded.text)
+            assertEquals(updated.id, superseded.supersededBy)
+
+            val restored = EncryptedMemoryStore(isolatedContext())
+            val reloaded = restored.listMemories().single { it.text == corrected }
+            assertEquals(updated.id, reloaded.id)
             assertEquals("user_corrected", reloaded.source)
             assertEquals(1.0f, reloaded.confidence, 0.0f)
             assertTrue("Explicit user correction must survive encrypted persistence", reloaded.confirmedByUser)
-            assertEquals(corrected, reloaded.text)
+            val restoredHistory = restored.listAllMemories().single { it.id == saved.id }
+            assertEquals(original, restoredHistory.text)
+            assertEquals(reloaded.id, restoredHistory.supersededBy)
         } finally {
             store.clearAll()
         }
