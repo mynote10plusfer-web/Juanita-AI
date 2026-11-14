@@ -109,43 +109,6 @@ class ConversationArchiveFidelityTest {
 
     @Test
     fun carriesForwardLatestInterruptedSnapshotToNewSession() {
-    @Test
-    fun migratesLegacyTranscriptRecordsBeforeTheOldThreeHundredTurnLimitCanDropThem() {
-        val context = InstrumentationRegistry.getInstrumentation().targetContext
-        val sessionId = "legacy-migration-" + UUID.randomUUID()
-        val store = EncryptedMemoryStore(context)
-        val legacyRecords = JSONArray()
-        val expected = (0 until 301).map { index ->
-            val id = "legacy-turn-" + index
-            legacyRecords.put(JSONObject().apply {
-                put("kind", "turn")
-                put("id", id)
-                put("sessionId", sessionId)
-                put("role", if (index % 2 == 0) "USER" else "ASSISTANT")
-                put("text", "Legacy transcript entry " + index)
-                put("createdAt", 1_800_000_000_000L + index)
-                put("personaId", "persona-legacy")
-            })
-            "Legacy transcript entry " + index
-        }
-        try {
-            val writer = EncryptedMemoryStore::class.java.getDeclaredMethod(
-                "writeRecords",
-                JSONArray::class.java,
-                Boolean::class.javaPrimitiveType
-            ).apply { isAccessible = true }
-            writer.invoke(store, legacyRecords, true)
-            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
-            assertEquals("Legacy turns must migrate before the old 300-turn ceiling is applied", 301, restored.size)
-            assertEquals(expected, restored.map { it.text })
-            assertTrue(restored.all { it.personaId == "persona-legacy" })
-        } finally {
-            store.deleteConversation(sessionId)
-            store.clearAll()
-        }
-    }
-
-
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val olderSession = "interrupted-old-" + UUID.randomUUID()
         val latestSession = "interrupted-latest-" + UUID.randomUUID()
@@ -213,6 +176,43 @@ class ConversationArchiveFidelityTest {
             assertTrue(failure?.message.orEmpty().contains("retrieval is incomplete"))
         } finally {
             corruptArchive.delete()
+        }
+    }
+
+
+    @Test
+    fun migratesLegacyTranscriptRecordsBeforeTheOldThreeHundredTurnLimitCanDropThem() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "legacy-migration-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val legacyRecords = JSONArray()
+        val expected = (0 until 301).map { index ->
+            val id = "legacy-turn-" + index
+            legacyRecords.put(JSONObject().apply {
+                put("kind", "turn")
+                put("id", id)
+                put("sessionId", sessionId)
+                put("role", if (index % 2 == 0) "USER" else "ASSISTANT")
+                put("text", "Legacy transcript entry " + index)
+                put("createdAt", 1_800_000_000_000L + index)
+                put("personaId", "persona-legacy")
+            })
+            "Legacy transcript entry " + index
+        }
+        try {
+            val writer = EncryptedMemoryStore::class.java.getDeclaredMethod(
+                "writeRecords",
+                JSONArray::class.java,
+                Boolean::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+            writer.invoke(store, legacyRecords, true)
+            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
+            assertEquals("Legacy turns must migrate before the old 300-turn ceiling is applied", 301, restored.size)
+            assertEquals(expected, restored.map { it.text })
+            assertTrue(restored.all { it.personaId == "persona-legacy" })
+        } finally {
+            store.deleteConversation(sessionId)
+            store.clearAll()
         }
     }
 
