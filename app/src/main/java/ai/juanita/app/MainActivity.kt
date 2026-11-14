@@ -192,11 +192,16 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        // Background continuation is a per-session opt-in. The service decides whether
-        // to keep Live running or perform a confirmed microphone shutdown.
-        runCatching {
-            startService(Intent(this, JuanitaVoiceService::class.java)
-                .setAction(JuanitaVoiceService.ACTION_ACTIVITY_BACKGROUND))
+        // A task moved behind the lock screen/Home may keep an explicitly authorized
+        // Live session in the foreground service. A task that is actually finishing
+        // must never enqueue a background-continuation command: explicit app exit wins.
+        if (!isFinishing && !isChangingConfigurations) {
+            runCatching {
+                startService(Intent(this, JuanitaVoiceService::class.java)
+                    .setAction(JuanitaVoiceService.ACTION_ACTIVITY_BACKGROUND))
+            }.onFailure {
+                Log.w("MainActivity", "Unable to notify voice service that UI moved to background", it)
+            }
         }
         super.onStop()
     }
