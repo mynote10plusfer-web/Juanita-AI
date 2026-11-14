@@ -85,6 +85,27 @@ class ConversationArchiveFidelityTest {
     }
 
     @Test
+    fun compactsJournalWithoutLosingTurnsAndAllowsSubsequentAppend() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "compact-${UUID.randomUUID()}"
+        val store = EncryptedMemoryStore(context)
+        try {
+            repeat(6) { index ->
+                store.appendConversationTurn(sessionId, "USER", "messaggio-$index", 1_800_000_000_000L + index)
+            }
+            store.deleteConversationRange(sessionId, 1_800_000_000_002L, 1_800_000_000_004L)
+            val directory = File(context.filesDir, "conversation_archive")
+            assertTrue(File(directory, "$sessionId.enc").isFile)
+            assertTrue(!File(directory, "$sessionId.journal").exists())
+            store.appendConversationTurn(sessionId, "ASSISTANT", "dopo-compattazione", 1_800_000_000_006L)
+            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
+            assertEquals(listOf("messaggio-0", "messaggio-1", "messaggio-4", "messaggio-5", "dopo-compattazione"), restored.map { it.text })
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
+    @Test
     fun carriesForwardLatestInterruptedSnapshotToNewSession() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val olderSession = "interrupted-old-" + UUID.randomUUID()

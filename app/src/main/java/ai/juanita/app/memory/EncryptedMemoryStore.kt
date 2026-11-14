@@ -1163,8 +1163,10 @@ class EncryptedMemoryStore(context: Context) {
         val hasEncryptedPreferences = preferences.getString(KEY_ENCRYPTED_DATA, null) != null
         val archiveFiles = sessionArchiveDirectory().listFiles()
             ?: throw IllegalStateException("Impossibile verificare l'archivio cifrato locale.")
-        val hasEncryptedSessionArchive = archiveFiles.any {
-            it.isFile && (it.name.endsWith(".enc") || it.name.endsWith(".enc.tmp")) && it.length() > 0L
+        val hasEncryptedSessionArchive = archiveFiles.any { file ->
+            (file.isFile && (file.name.endsWith(".enc") || file.name.endsWith(".enc.tmp")) && file.length() > 0L) ||
+                (file.isDirectory && file.name.endsWith(".journal") &&
+                    file.listFiles()?.any { frame -> frame.isFile && frame.length() > 0L } == true)
         }
         check(!hasEncryptedPreferences && !hasEncryptedSessionArchive) {
             "La chiave di cifratura locale non è disponibile. I dati esistenti sono stati preservati; non verrà generata una nuova chiave."
