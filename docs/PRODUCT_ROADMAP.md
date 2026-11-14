@@ -1807,3 +1807,28 @@ Implementation update (2026-11-11):
 - The existing background conversation behavior remains intentional when the user merely presses Home, turns off the display or removes the task from Recents. Only the explicit exit action ends the session.
 
 **Validation still required:** exact-head CI, physical Samsung verification of exit during active audio, exit during pending teardown, quick character change/restart, confirmation that microphone and WakeLock are released, and confirmation that scheduled alarms still fire after exit. This change alone does not establish the cause of any thermal shutdown; battery/thermal diagnostics and device logs remain necessary.
+
+
+## 2026-11-14 — C2–C5 implementation checkpoint (PR #40, still draft/unmerged)
+
+This entry supersedes the earlier status labels above where they conflict with the implementation commits below. It does **not** mark the phase complete.
+
+### Implemented on the development branch
+- C2: Paisa/Medellín and Canarian/Tenerife cultural dossiers retain geographic scope and source provenance through encrypted save/load; preview and explicit approval/revocation remain required.
+- C3: background voice continuation is off by default and requires explicit authorization for the active user-started session. Without consent, moving the app to background requests orderly audio/session shutdown while preserving continuity. Spoken commands remain in-session commands (not an always-on wake word): “Juanita, fermati” and “Juanita, chiudi l'applicazione”.
+- C4: automatic memory candidates are ranked; sensitive candidates are excluded; unapproved suggestions are withheld from assistant recall and can be explicitly approved in the memory UI. SAFE mode remains the default; automatic cloud extraction is off until explicit opt-in.
+- C5: conversation turns are stored as independent AES-GCM encrypted journal frames; legacy transcript turns are migrated before the former 300-turn preference cap is applied; compaction and archive compatibility are implemented.
+
+### 2026-11-14 corrective commits
+- `1f49693f76ea174cb36074f70927e552644ea459`: corrected encrypted journal reader structure after CI caught a compile error.
+- `851072834cdc1606e9ce9f3fc5df78e5f37e09b3`: moved two instrumentation test methods back to class scope. The previous CI failure was caused by malformed nested test declarations, not an application runtime assertion.
+- `9d7e53eebf7b6ba263053695574289db4219dc32`: prevents an idle voice Service from remaining started after the background-consent setting changes while no session is active.
+
+### Still required before phase completion
+- C2: review the actual source URLs and content quality of both cultural dossiers; verify that the UI clearly explains dialect confidence and geographic limits.
+- C3: add/finish service lifecycle instrumentation around screen-off, explicit background consent on/off, “ferm ati”/close command teardown, reconnect and notification behavior; verify on physical Samsung devices. No always-listening microphone is permitted.
+- C4: implement an explicit contradiction/supersession workflow for conflicting durable memories, complete the learning/recall correction loop, and verify voice/personality editor behavior including voice preview and identity consistency.
+- C5: add scalable archive indexing and paginated access, backup/export/restore with encryption and key-loss handling, and crash/restart tests over large histories. Audit migration performance on large legacy archives.
+- Release gate: CI instrumentation suite must pass on API 31; then install and test on the user's Samsung Android 12 and Android 15 devices. A debug APK is for testing only; stable v0.11.12 remains untouched. Do not claim C2–C5 complete or publish a final release until these gates pass.
+
+Current development head at the time of this entry: `9d7e53eebf7b6ba263053695574289db4219dc32`. PR #40 remains draft/open/unmerged.
