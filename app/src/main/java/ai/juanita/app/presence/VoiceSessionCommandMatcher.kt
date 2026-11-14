@@ -19,18 +19,27 @@ object VoiceSessionCommandMatcher {
         val nameWords = tokenize(activeIdentityName)
         if (words.isEmpty() || nameWords.isEmpty()) return null
 
-        var offset = if (words.first() in vocatives) 1 else 0
-        if (words.size < offset + nameWords.size) return null
-        if (words.subList(offset, offset + nameWords.size) != nameWords) return null
+        // The active character's name is optional: users naturally say
+        // "fermati" or "chiudi l'app" without always using a wake-name.
+        // If a name is supplied, it must still match the active character.
+        var offset = 0
+        if (words.first() in vocatives) {
+            offset = 1
+            if (words.size < offset + nameWords.size) return null
+            if (words.subList(offset, offset + nameWords.size) != nameWords) return null
+            offset += nameWords.size
+        } else if (words.take(nameWords.size) == nameWords) {
+            offset = nameWords.size
+        }
 
-        var command = words.drop(offset + nameWords.size).joinToString(" ")
+        var command = words.drop(offset).joinToString(" ")
         if (command.isBlank()) return null
         politeSuffixes.firstOrNull { command.endsWith(" $it") }?.let {
             command = command.removeSuffix(" $it").trim()
         }
 
         return when (command) {
-            "chiudi l applicazione", "chiudi applicazione", "chiudi l app",
+            "chiudi l applicazione", "chiudi applicazione", "chiudi l app", "chiudi l app",
             "chiudi app", "esci e chiudi", "chiudi e esci",
             "close application", "close the application", "close app", "exit and close" ->
                 Command.CLOSE_APPLICATION
