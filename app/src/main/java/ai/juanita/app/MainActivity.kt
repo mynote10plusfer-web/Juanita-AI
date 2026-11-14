@@ -596,6 +596,10 @@ private fun JuanitaApp(
                 try {
                     val instruction = buildString {
                         append(activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
+                        if (activeDigitalIdentity != null) {
+                            append("\\n\\n")
+                            append(persona.regionalDialectInstruction(selectedDialect.label))
+                        }
                         val sessionNow = ZonedDateTime.now()
                         append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
                         if (locationContext.isNotBlank()) {
