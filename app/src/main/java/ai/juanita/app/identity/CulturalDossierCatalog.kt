@@ -37,15 +37,6 @@ object CulturalDossierCatalog {
                     summary = "Studio del 2023 sulla vitalità del voseo e la coesistenza di vos, tú e usted a Medellín."
                 ),
                 CulturalSource(
-                    title = "Los fraseos y tuteos del español en Antioquia",
-                    geographicScope = "Antioquia, con osservazioni specifiche su Medellín, Colombia",
-                    url = "https://www.udea.edu.co/wps/portal/udea/web/inicio/udea-noticias/udea-noticia/",
-                    publisher = "Universidad de Antioquia",
-                    topic = "antioquia-pronoun-register",
-                    confidence = 0.88f,
-                    summary = "Approfondimento universitario sulle forme vos, tú e usted e sui loro usi sociali; la distribuzione dipende da età, relazione e contesto."
-                ),
-                CulturalSource(
                     title = "El parcero del español",
                     geographicScope = "Antioquia, Colombia",
                     url = "https://www.udea.edu.co/wps/portal/udea/web/inicio/udea-noticias/udea-noticia/contenido/asnoticias/cultura/parcero-del-espanol/",
