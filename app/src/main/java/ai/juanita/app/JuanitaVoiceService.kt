@@ -140,9 +140,16 @@ class JuanitaVoiceService : Service() {
             ACTION_UPDATE_BACKGROUND_CONSENT -> {
                 backgroundContinuationAuthorized =
                     intent.getBooleanExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, false) && activeAlarmId == null
+                // The consent switch may be changed while no voice session exists.
+                // Do not leave an idle started Service behind just to persist a UI setting;
+                // the preference is owned by MainActivity and is passed on the next start.
+                if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
                 if (!backgroundContinuationAuthorized) {
                     updateNotification("Continuazione in background non autorizzata")
-                } else if (startRequested) {
+                } else {
                     updateNotification("Conversazione · continuazione in background autorizzata")
                 }
                 return START_NOT_STICKY
