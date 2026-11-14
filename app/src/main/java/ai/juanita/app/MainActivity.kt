@@ -502,13 +502,14 @@ private fun JuanitaApp(
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
-    val dismissCallUiOnScreenOff = screenOffUiDismissRequested
+    val screenOffHostActivity = context as? MainActivity
+    val dismissCallUiOnScreenOff = screenOffHostActivity?.screenOffUiDismissRequested == true
     LaunchedEffect(dismissCallUiOnScreenOff) {
         if (dismissCallUiOnScreenOff) {
             // Hide only the separate UI window; the foreground service owns the
             // Live session and independently applies the user's background consent.
             callScreenVisible = false
-            consumeScreenOffUiDismissRequest()
+            screenOffHostActivity?.consumeScreenOffUiDismissRequest()
         }
     }
     var showExitConfirmation by remember { mutableStateOf(false) }
