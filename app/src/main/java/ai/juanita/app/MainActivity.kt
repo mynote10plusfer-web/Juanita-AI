@@ -218,12 +218,6 @@ class MainActivity : ComponentActivity() {
             JuanitaApp(
                 initialLanguageTag = preferences.languageTag,
                 initialOnboardingCompleted = preferences.hasCompletedOnboarding,
-                onCompleteOnboarding = { entries ->
-                    entries.filter { it.isNotBlank() }.forEach { entry ->
-                        memoryStore.addMemory(entry, category = "profile", source = "onboarding", confidence = 1f, confirmedByUser = true)
-                    }
-                    preferences.hasCompletedOnboarding = true
-                },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
                 initialAssistantGender = preferences.assistantGender,
@@ -233,6 +227,7 @@ class MainActivity : ComponentActivity() {
                 initialDigitalIdentities = initialDigitalIdentities,
                 initialActiveDigitalIdentityId = initialActiveDigitalIdentityId,
                 onActiveDigitalIdentityChanged = { preferences.activeDigitalIdentityId = it },
+                onCompleteInitialSetup = { preferences.hasCompletedOnboarding = true },
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
                 initialMemories = initialMemoriesResult.getOrDefault(emptyList()),
@@ -297,7 +292,6 @@ class MainActivity : ComponentActivity() {
 private fun JuanitaApp(
     initialLanguageTag: String,
     initialOnboardingCompleted: Boolean,
-    onCompleteOnboarding: (List<String>) -> Unit,
     initialDialectId: String,
     initialName: String,
     initialAssistantGender: String,
@@ -307,6 +301,7 @@ private fun JuanitaApp(
     initialDigitalIdentities: List<DigitalIdentity>,
     initialActiveDigitalIdentityId: String?,
     onActiveDigitalIdentityChanged: (String?) -> Unit,
+    onCompleteInitialSetup: (String) -> Unit,
     initialArchiveEnabled: Boolean,
     initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
@@ -667,6 +662,29 @@ private fun JuanitaApp(
                 modifier = Modifier.weight(1f).verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                if (showFirstMeeting) {
+                    Text("CONFIGURA IL TUO PERSONAGGIO", color = gold, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Prima di iniziare, crea Juanita o José: scegli la voce, ascoltane un campione, scrivi la biografia e definisci il carattere. Potrai modificare tutto in seguito.", color = Color(0xFFB9BBC1), fontSize = 13.sp)
+                    DigitalIdentitySection(
+                        panel = panel,
+                        gold = gold,
+                        activeIdentityId = activeDigitalIdentityId,
+                        refreshSignal = identityRefreshSignal,
+                        firstRunMode = true,
+                        onFirstIdentityCreated = { id ->
+                            activeDigitalIdentityId = id
+                            onActiveDigitalIdentityChanged(id)
+                            onCompleteInitialSetup(id)
+                            showFirstMeeting = false
+                        },
+                        onActiveIdentityChanged = { id ->
+                            activeDigitalIdentityId = id
+                            onActiveDigitalIdentityChanged(id)
+                        },
+                        onIdentitiesChanged = { digitalIdentities = it },
+                        onPreviewVoice = previewIdentityVoice
+                    )
+                } else {
                 if (selectedSection == "HOME") {
                     JuanitaAvatarCard()
                 }
@@ -1096,7 +1114,7 @@ private fun JuanitaApp(
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
                 }
 
-                if (callScreenVisible) {
+                if (!showFirstMeeting && callScreenVisible) {
                     val activeAvatarName = initialAvatarProfiles
                         .firstOrNull { it.id == initialActiveAvatarProfileId }
                         ?.displayName ?: assistantName
@@ -1107,7 +1125,6 @@ private fun JuanitaApp(
                         voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
                         onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) },
                         onDismiss = {
-                            // Leaving the call UI also ends audio: never leave a hidden hot mic.
                             JuanitaVoiceService.stop(context)
                             callScreenVisible = false
                         },
@@ -1117,30 +1134,16 @@ private fun JuanitaApp(
                         }
                     )
                 }
+                }
               }
-              if (showFirstMeeting) {
-                  FirstMeetingOnboarding(
-                      initialGender = assistantGender,
-                      onComplete = { selectedGender ->
-                          applyAssistantIdentity(selectedGender)
-                          onCompleteOnboarding(emptyList())
-                          memories = onRefreshMemories()
-                          showFirstMeeting = false
-                      },
-                      onSkip = {
-                          onCompleteOnboarding(emptyList())
-                          showFirstMeeting = false
-                      }
-                  )
-              }
-              if (showPermissionOnboarding) {
+              if (!showFirstMeeting && showPermissionOnboarding) {
                   PermissionOnboarding {
                       context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
                           .edit().putBoolean("onboarding_completed", true).apply()
                       showPermissionOnboarding = false
                   }
               }
-              if (showExitConfirmation) {
+              if (!showFirstMeeting && showExitConfirmation) {
                   AlertDialog(
                       onDismissRequest = { if (!exitInProgress) showExitConfirmation = false },
                       title = { Text(if (exitInProgress) "Chiusura in corso…" else "Uscire da Juanita AI?") },
@@ -1163,7 +1166,7 @@ private fun JuanitaApp(
                       textContentColor = Color(0xFFB9BBC1)
                   )
               }
-              NavigationBar(containerColor = panel, contentColor = gold) {
+              if (!showFirstMeeting) NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "ALARM" to "Sveglia", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
                       NavigationBarItem(
                           selected = selectedSection == key,
