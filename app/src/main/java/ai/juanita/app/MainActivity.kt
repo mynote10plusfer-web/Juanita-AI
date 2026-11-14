@@ -217,7 +217,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             JuanitaApp(
                 initialLanguageTag = preferences.languageTag,
-                initialOnboardingCompleted = preferences.hasCompletedOnboarding,
+                initialOnboardingCompleted = preferences.hasCompletedOnboarding && initialDigitalIdentities.any { !it.archived },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
                 initialAssistantGender = preferences.assistantGender,
