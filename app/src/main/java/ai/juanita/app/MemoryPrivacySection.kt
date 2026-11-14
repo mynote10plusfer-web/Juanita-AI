@@ -70,10 +70,11 @@ internal fun MemoryPrivacySection(
     onDeleteMemory: (String) -> Unit,
     onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
+    onConfirmMemory: (String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
-    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
@@ -93,6 +94,7 @@ internal fun MemoryPrivacySection(
     var archiveRangeStart by remember { mutableStateOf("") }
     var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var memoryPage by remember { mutableStateOf(0) }
     val ioScope = rememberCoroutineScope()
     // Refresh once when the Memory tab is opened, never on every streaming status update.
     LaunchedEffect(Unit) {
@@ -107,6 +109,10 @@ internal fun MemoryPrivacySection(
         90 -> "90 giorni"
         else -> "Mai (cancellazione manuale)"
     }
+    val memoryPageSize = 25
+    val memoryPageCount = ((memories.size + memoryPageSize - 1) / memoryPageSize).coerceAtLeast(1)
+    val safeMemoryPage = memoryPage.coerceIn(0, memoryPageCount - 1)
+    val visibleMemories = memories.drop(safeMemoryPage * memoryPageSize).take(memoryPageSize)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -131,11 +137,11 @@ internal fun MemoryPrivacySection(
             }
             Text(if (autoMemoryEnabled) memoryStatus else "Memoria automatica in pausa.",
                 color = if (autoMemoryEnabled) gold else Color(0xFF9A9DA4), fontSize = 11.sp)
-            Text("Per selezionare i ricordi, brevi estratti testuali vengono inviati a Gemini. Nel livello gratuito Google può usare i contenuti inviati per migliorare i propri prodotti, secondo i suoi termini. Non viene salvato l’audio e non serve attivare l’archivio completo. Puoi disattivare questa funzione in qualsiasi momento.",
+            Text("MODALITÀ SAFE: questa funzione è disattivata nelle nuove installazioni. Se la attivi, brevi estratti testuali delle conversazioni vengono inviati a Google Gemini per selezionare i ricordi; si applicano le condizioni e le regole di trattamento dati di Google e l'uso può consumare quota o generare costi se il progetto è configurato con fatturazione. L'audio non viene salvato. Puoi continuare a inserire e modificare ricordi manualmente: il salvataggio non avvia richieste a Gemini. Durante una successiva conversazione Live, i ricordi pertinenti possono essere inclusi nel contesto inviato al modello per risponderti.",
                 color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${memories.size}/100 ricordi · ${memories.sumOf { it.text.length }}/32.000 caratteri", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text("${memories.size} ricordi · ${memories.sumOf { it.text.length }} caratteri · archivio locale senza soglia applicativa", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
                 TextButton(onClick = { ioScope.launch { memories = withContext(Dispatchers.IO) { onRefreshMemories() } } }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
             }
             OutlinedTextField(
@@ -166,13 +172,32 @@ internal fun MemoryPrivacySection(
                         Text("Elimina selezionati (${selectedMemoryIds.size})", color = Color(0xFFE6A0A0), fontSize = 12.sp)
                     }
                 }
-                memories.forEach { item ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Pagina ${safeMemoryPage + 1} di ${memoryPageCount}", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { memoryPage = (safeMemoryPage - 1).coerceAtLeast(0) }, enabled = safeMemoryPage > 0) {
+                        Text("Precedente", color = gold, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { memoryPage = (safeMemoryPage + 1).coerceAtMost(memoryPageCount - 1) }, enabled = safeMemoryPage < memoryPageCount - 1) {
+                        Text("Successiva", color = gold, fontSize = 11.sp)
+                    }
+                }
+                visibleMemories.forEach { item ->
                     Row(verticalAlignment = Alignment.Top) {
                         Checkbox(checked = item.id in selectedMemoryIds, onCheckedChange = { checked -> selectedMemoryIds = if (checked) selectedMemoryIds + item.id else selectedMemoryIds - item.id })
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(item.text, color = Color.White, fontSize = 13.sp)
                             Text("${item.category} · ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAtMillis))}", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                            if (!item.confirmedByUser) {
+                                Text("SUGGERITO · IN ATTESA DELLA TUA CONFERMA · NON ANCORA USATO NELLE RISPOSTE", color = Color(0xFFE4BD69), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!item.confirmedByUser) {
+                                    TextButton(onClick = {
+                                        if (onConfirmMemory(item.id)) {
+                                            memories = memories.map { if (it.id == item.id) it.copy(confirmedByUser = true, source = "user_confirmed") else it }
+                                        }
+                                    }) { Text("Conferma", color = gold, fontSize = 12.sp) }
+                                }
                                 TextButton(onClick = { editingMemory = item; editText = item.text }) { Text("Modifica", color = gold, fontSize = 12.sp) }
                                 TextButton(onClick = { confirmAction = "memory:${item.id}" }) { Text("Elimina", color = gold, fontSize = 12.sp) }
                             }
@@ -271,10 +296,20 @@ internal fun MemoryPrivacySection(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (editText.isNotBlank() && onUpdateMemory(item.id, editText)) {
-                        memories = memories.map { if (it.id == item.id) it.copy(text = editText.trim()) else it }
-                    }
+                    val editedText = editText.trim()
+                    val memoryId = item.id
                     editingMemory = null
+                    if (editedText.isNotBlank()) {
+                        ioScope.launch {
+                            val updated = withContext(Dispatchers.IO) {
+                                onUpdateMemory(memoryId, editedText)
+                            }
+                            if (updated) {
+                                memories = withContext(Dispatchers.IO) { onRefreshMemories() }
+                                memoryPage = 0
+                            }
+                        }
+                    }
                 }) { Text("Salva", color = gold) }
             },
             dismissButton = { TextButton(onClick = { editingMemory = null }) { Text("Annulla") } }
@@ -290,13 +325,15 @@ private fun ConversationArchiveCalendar(
     onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionChanged: (Int) -> Unit,
     onRefresh: () -> List<EncryptedMemoryStore.ArchivedConversation>, onDeleteConversation: (String) -> Unit,
     onDeleteDay: (LocalDate) -> Unit,
-    onListTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onListTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit
 ) {
     var month by remember { mutableStateOf(YearMonth.now()) }
     var day by remember { mutableStateOf(LocalDate.now()) }
     var opened by remember { mutableStateOf<EncryptedMemoryStore.ArchivedConversation?>(null) }
     var turns by remember { mutableStateOf(emptyList<EncryptedMemoryStore.ArchivedTurn>()) }
+    var turnsPageInfo by remember { mutableStateOf<EncryptedMemoryStore.ArchivedTurnPage?>(null) }
+    var turnsLoading by remember { mutableStateOf(false) }
     var fromText by remember { mutableStateOf("") }
     var toText by remember { mutableStateOf("") }
     var confirmDay by remember { mutableStateOf(false) }
@@ -401,7 +438,18 @@ private fun ConversationArchiveCalendar(
                                 opened = session
                                 fromText = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
                                 toText = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
-                                ioScope.launch { turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) } }
+                                turns = emptyList()
+                                turnsPageInfo = null
+                                turnsLoading = true
+                                ioScope.launch {
+                                    runCatching {
+                                        withContext(Dispatchers.IO) { onListTurns(session.sessionId, 0, 50) }
+                                    }.onSuccess { page ->
+                                        turns = page.turns
+                                        turnsPageInfo = page
+                                    }
+                                    turnsLoading = false
+                                }
                             }) { Text("Apri", color = gold) }
                             TextButton(onClick = { onDeleteConversation(session.sessionId) }) { Text("Elimina", color = Color(0xFFE6A0A0)) }
                         }
@@ -453,6 +501,23 @@ private fun ConversationArchiveCalendar(
                             Divider(color = Color(0xFF3B4049))
                         }
                     }
+                    if (turnsLoading) {
+                        Text("Caricamento messaggi…", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                    } else if (turnsPageInfo?.hasMore == true) {
+                        TextButton(onClick = {
+                            val nextPage = (turnsPageInfo?.pageIndex ?: 0) + 1
+                            turnsLoading = true
+                            ioScope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) { onListTurns(session.sessionId, nextPage, 50) }
+                                }.onSuccess { page ->
+                                    turns = turns + page.turns
+                                    turnsPageInfo = page
+                                }
+                                turnsLoading = false
+                            }
+                        }) { Text("Carica altri messaggi (" + ((turnsPageInfo?.totalCount ?: 0) - turns.size) + " rimanenti)", color = gold, fontSize = 10.sp) }
+                    }
                 }
             },
             confirmButton = { TextButton(enabled = from != null && until != null && until > from, onClick = {
@@ -461,7 +526,9 @@ private fun ConversationArchiveCalendar(
                         withContext(Dispatchers.IO) {
                             onDeleteTimeRange(session.sessionId, from, until + 60_000L)
                         }
-                        turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) }
+                        val refreshedPage = withContext(Dispatchers.IO) { onListTurns(session.sessionId, 0, 50) }
+                        turns = refreshedPage.turns
+                        turnsPageInfo = refreshedPage
                         conversations = withContext(Dispatchers.IO) { onRefresh() }
                         if (turns.isEmpty()) opened = null
                     }

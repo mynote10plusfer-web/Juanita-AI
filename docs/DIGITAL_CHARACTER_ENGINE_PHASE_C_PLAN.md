@@ -1,4 +1,6 @@
-# Digital Character Engine — Phase C1 implementation plan
+# Digital Character Engine — Phase C1–C5 implementation plan
+
+**Current priority and authoritative delivery order:** C3 Controlled Conversational Presence → C4 Shared Learning and Computational Affect → C5 End-to-End Integration and Acceptance. The detailed current roadmap is in `docs/PRODUCT_ROADMAP.md`; its 2026-11-10 section supersedes any older phase wording in this document. The architecture is one shared encrypted user memory, two distinct character configurations (Juanita and José), and one active character per session.
 
 **Branch:** `feature/digital-character-engine-phase-c1`
 **Parent:** Phase B head `b8830dd4719a2aae0c07484aa451774745d6c5f9`
@@ -33,27 +35,34 @@ A separate memory namespace is necessary but not sufficient. Each identity needs
 - Cache approved dossiers locally for offline use. Refresh creates a proposal and never overwrites user biography or personal preferences.
 - No paid APIs, subscriptions, credits, billing activation, payment method or hosted GPU. If no reliable free source is available, show a transparent limitation and allow manual source input.
 
-## C3 — Character expression and consistency
+## C3 — Controlled conversational presence (TOP PRIORITY 1)
 
-- Create a behavioral policy layer that maps traits to conversational decisions: greetings, turn-taking, humour timing, directness, disagreement, reassurance, curiosity, boundaries and social initiative.
-- Add examples and counterexamples per selected regional style, with source attribution for cultural details.
-- Keep the same character across text and voice sessions; voice/accent selection is a separate capability and must be verified, not promised by prompt alone.
-- Avoid catchphrase spam, exaggerated slang and caricature.
-- Evaluate with scenario suites: casual chat, disagreement, practical help, relationship advice, vulnerability, humour, formal topics and multilingual code-switching.
+- Use the fail-closed policy and active-name matcher already prototyped in PR #39.
+- Add explicit foreground presence controls, a visible microphone/listening indicator, active-character display and one-touch pause/stop in existing tabs only.
+- Listening and proactive speech require separate opt-ins. Defaults remain disabled; foreground, user-started session, permission, network and one selected identity are mandatory.
+- Only the selected character name may call the character into a user-started foreground session. Saying the inactive character's name never switches identity or starts another session; switching occurs only in Settings and takes effect on the next session.
+- Keep proactive initiatives bounded (idle threshold, cooldown, hourly cap, quiet hours) and always suppressed while riding. Never infer consent from silence.
+- Preserve Gemini Live SDK-managed audio. No second microphone/receiver/TTS, no background wake-word daemon, no raw audio storage. Add in-session initiative only if the current SDK exposes a safe serialized operation and project costs are verified; otherwise document the limitation and keep it disabled.
+- Acceptance: lifecycle/permission/stop/network fail-closed tests, barge-in, inactive-name isolation, riding suppression, CI and physical Samsung validation.
 
-## C4 — Individual learning and computational affect
+## C4 — Shared learning, character development and computational affect (TOP PRIORITY 2)
 
-- Detect candidate preferences/corrections, classify provenance and propose durable updates.
-- Require confirmation before changing stable traits, values, biography or sensitive details.
-- Keep temporary affect bounded, evidence-labelled, correctable and expiring; never silently store an inferred feeling as a permanent memory.
-- Preserve the non-manipulation and emotional-safety requirements in `EMOTIONAL_INTELLIGENCE_SPEC.md`.
+- Both characters use the same encrypted local user-memory store and conversation archive. Knowledge, user facts, corrections and project context learned with either character are available to the other.
+- Keep character-specific personality, biography, regional origin/dossier and voice preferences separate. A correction to Juanita's character does not alter José, and vice versa.
+- Extract eligible text events asynchronously; classify durability, provenance, confidence, confirmation and expiry. Distinguish explicit facts from inference, jokes, hypotheticals and temporary remarks.
+- Deduplicate, connect related memories and resolve contradictions in favor of the user's latest explicit correction. Never silently promote sensitive or ambiguous details.
+- Add focused, source-backed research only when relevant and permitted; retain provenance and freshness. No indiscriminate crawling or untrusted webpage instructions.
+- Model temporary affect as tentative, confidence-labelled, correctable and expiring. Never store inferred mood as permanent memory; no diagnosis, manipulation, pressure or dependency-building.
+- Add inspect/search/correct/delete and pause/resume controls in the existing Memoria tab. Keep transcript archive, curated shared memory and PersonalProfileStore distinct. Preserve the safeguards in `EMOTIONAL_INTELLIGENCE_SPEC.md`.
 
-## C5 — Integration and acceptance
+## C5 — End-to-end integration, quality and phase completion (TOP PRIORITY 3)
 
-- Bind the approved character and cultural dossier to the selected identity at Live session start.
-- Keep memory namespace isolation and the existing SDK-managed audio transport unchanged.
-- Test persona switching, app restart, offline dossier use, no cross-identity memory, prompt construction, storage compatibility and failed research.
-- Run CI on the final commit, then perform physical Samsung testing before declaring the feature ready.
+- Integrate one selected character profile, approved cultural dossier and stable character instruction with the active Live session, while using the one shared encrypted user-memory archive.
+- Audit migration from earlier per-identity namespaces into the shared archive. Preserve all existing v0.11.12 user data and the separate PersonalProfileStore; no silent deletion, duplication or loss.
+- Audit every session entry/reconnect/restart path: exactly one active identity and one shared memory store must be bound before context retrieval. Editing/deleting either character must not delete shared memory.
+- Preserve all six tabs, package ID, permanent signing identity, upgrade path and current Gemini Live audio transport.
+- Complete unit/instrumentation/security tests, then physical Samsung tests (Note10+ Android 12 and S22 Ultra Android 15), including 30+ minute voice sessions, barge-in, reconnect, background lifecycle, shared recall both directions and independent character behavior.
+- Produce a signed upgrade APK only after all gates pass and with explicit user approval. Phase C is not complete based on successful compilation alone.
 
 ## Acceptance standard
 

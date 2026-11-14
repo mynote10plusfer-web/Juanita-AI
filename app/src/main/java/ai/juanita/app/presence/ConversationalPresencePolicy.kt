@@ -23,6 +23,10 @@ data class ConversationalPresenceSettings(
 
 data class ConversationalPresenceContext(
     val appInForeground: Boolean,
+    /** Android foreground service is running with its persistent user-visible notification. */
+    val foregroundServiceActive: Boolean = false,
+    /** User explicitly opted in to continuing this session after leaving the app. */
+    val backgroundContinuationAuthorized: Boolean = false,
     val userExplicitlyStartedSession: Boolean,
     val microphonePermissionGranted: Boolean,
     val activeIdentityAvailable: Boolean,
@@ -66,8 +70,9 @@ sealed interface PresenceDecision {
 
 object ConversationalPresencePolicy {
     /**
-     * Listening is strictly foreground-only and requires an explicit session
-     * start by the user. It never authorizes background microphone capture.
+     * Listening requires an explicit user-started session. Background continuation
+     * is permitted only while Android's user-visible foreground service is active
+     * and the user explicitly opted in to that continuation.
      */
     fun listeningDecision(
         settings: ConversationalPresenceSettings,
@@ -76,7 +81,9 @@ object ConversationalPresencePolicy {
         val normalized = settings.normalized()
         val reason = when {
             !normalized.enabled -> PresenceBlockReason.DISABLED
-            !context.appInForeground -> PresenceBlockReason.APP_NOT_FOREGROUND
+            !context.appInForeground &&
+                !(context.foregroundServiceActive && context.backgroundContinuationAuthorized) ->
+                PresenceBlockReason.APP_NOT_FOREGROUND
             !context.userExplicitlyStartedSession -> PresenceBlockReason.SESSION_NOT_STARTED_BY_USER
             !context.microphonePermissionGranted -> PresenceBlockReason.MICROPHONE_PERMISSION_MISSING
             !context.activeIdentityAvailable -> PresenceBlockReason.IDENTITY_NOT_SELECTED

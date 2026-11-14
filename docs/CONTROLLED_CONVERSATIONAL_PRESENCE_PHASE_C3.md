@@ -11,11 +11,13 @@ The optional mode lets the selected identity (Juanita or José) participate in a
 ### Consent and privacy gates
 
 - Disabled by default. The user must explicitly enable the feature and explicitly start a presence session.
-- Microphone access is permitted only while the app is visibly in the foreground and the user-started session is active.
-- If the app loses foreground, permission is revoked, the user pauses/stops, or another audio call takes control, listening must stop immediately.
+- The user starts the session while the app is visibly in the foreground. Background continuation is a separate, explicit opt-in; it is never implied by enabling presence.
+- In the background, microphone access is permitted only while the Android microphone foreground service is active with its persistent user-visible notification and the user-started session remains authorized.
+- If the app loses foreground without background consent, the foreground service is unavailable, permission is revoked, the user pauses/stops, or another audio call takes control, listening must stop immediately.
 - A clear in-app microphone/listening indicator and one-touch pause/stop control are mandatory.
 - No hidden background capture, no wake-word daemon, no raw audio recording, and no new transcript retention beyond the existing user-controlled archive setting.
-- The selected identity is bound to the session; regional dossier and memory namespace are selected together. The same approved cultural dossier works for masculine José and feminine Juanita. Presentation and voice selection remain separate.
+- Exactly one selected character is bound to a session. Juanita and José are the only two character slots; each slot has one editable regional configuration, not multiple regional copies. Switching is deliberate in Settings and applies only to the next session; never switch because another name is spoken.
+- Both characters use one shared encrypted memory store for user facts, learned knowledge, corrections and conversation history. Their stable personality, presentation, voice selection and cultural configuration remain separate. The same approved regional dossier can be used by either character.
 - No session may start itself after force-stop, reboot, explicit stop, or app backgrounding.
 
 ## Proactive speech policy
@@ -54,7 +56,7 @@ The policy is fail-closed: unknown or missing prerequisites must never authorize
 ## Prototype implemented in C3
 
 - `ConversationalPresencePolicy` contains pure, fail-closed decisions for listening and proactive speech.
-- Default is disabled; listening requires foreground + explicit user-started session + mic permission + selected identity.
+- Default is disabled; listening requires an explicit user-started session, mic permission and selected identity. Background continuation additionally requires both the active user-visible Android foreground service and separate user consent.
 - Proactive speech has independent opt-in, idle threshold, cooldown, hourly cap, quiet-hours and riding-mode gates.
 - Unit tests cover the principal allow/deny cases.
 - Instrumentation regression test confirms the same regional dossier is injected for masculine and feminine identities without changing grammatical presentation.
@@ -63,8 +65,8 @@ The policy is fail-closed: unknown or missing prerequisites must never authorize
 ## Next integration sequence
 
 1. Confirm C2 and C3 CI.
-2. Add a visible presence control to the existing voice screen/settings, wired to the policy (no new bottom tab).
-3. Add foreground/lifecycle enforcement and an explicit session start/stop.
+2. Add visible presence and background-continuation controls to the existing voice screen/settings, wired to the policy (no new bottom tab).
+3. Add foreground-service/lifecycle enforcement, explicit session start/stop and revocation of background consent when the session ends.
 4. Add a single proactive-turn call to the existing Live session only after cost/billing constraints are verified.
 5. Run scenario tests: quiet user, active user, interruption, app background, mic revoked, another call, riding mode, network loss, selected identity switch.
 6. Physical Samsung test with visible mic indicator and immediate stop/pause verification.
@@ -76,3 +78,12 @@ The policy is fail-closed: unknown or missing prerequisites must never authorize
 - No unsolicited speech while riding.
 - No paid API, paid service, subscription, credits, trial, hosted GPU or payment method without explicit authorization.
 - No changes to stable v0.11.12, package ID, signing key or release channel.
+
+
+## Shared-memory / single-active-character correction (2026-11-10)
+
+The product decision is explicit: one shared encrypted memory store is used by both character configurations. A fact, preference, correction or experience learned while talking to Juanita is available when José is selected, and vice versa. This is not a shared personality: each character retains its own name, grammatical presentation, voice preference, cultural origin/dossier, biography and stable character traits.
+
+The local identity archive is limited to two canonical slots, Juanita and José. Each slot can be edited in place to change its region, locality, language context or character traits. Regional variants are never separate saved characters. The active identity preference stores a single UUID; the service resolves only that selected configuration before creating the session. A Settings change affects the next session, not a live session. Wake phrase matching must receive only the currently selected name, and must never switch identity or activate the other name.
+
+The common archive remains encrypted at rest and uses the existing shared store. Deleting or editing a character configuration must never clear or alter common memories. The human user's separate PersonalProfileStore remains separate from this shared conversational memory.

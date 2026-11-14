@@ -2,15 +2,21 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona" ]
   pull_request:
-    branches: [ "main", "feature/digital-character-engine-phase-c1" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence" ]
   workflow_dispatch:
+    inputs:
+      detekt_bootstrap:
+        description: "Generate and commit the initial Detekt baseline (run once)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: android-build-${{ github.ref }}
   # Keep only the newest validation run for a branch/PR.
-  # Phase C1-C3 validate character, cultural dossier approval and controlled-presence policy.
+  # Phase C1-C3 plus shared-memory/single-active-character invariants are validated.
   cancel-in-progress: true
 
 permissions:
@@ -38,8 +44,32 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Run JVM unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
+
       - name: Compile Android instrumentation tests
         run: gradle --no-daemon :app:assembleDebugAndroidTest
+
+      # Run only when explicitly requested from Actions. The baseline is committed
+      # by the separate least-privilege job below; normal PR runs never regenerate it.
+      - name: Generate initial Detekt baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true
+        run: gradle --no-daemon :app:detektBaseline
+
+      - name: Run Detekt Kotlin analysis
+        if: (github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true) || hashFiles('config/detekt/baseline.xml') != ''
+        run: gradle --no-daemon :app:detekt
+
+      - name: Upload Detekt report and optional bootstrap baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: Juanita-AI-detekt-report
+          path: |
+            config/detekt/baseline.xml
+            app/build/reports/detekt/**
+          if-no-files-found: warn
+          retention-days: 7
+
 
       - name: Verify debug APK package identity
         shell: bash
@@ -62,11 +92,15 @@ jobs:
           retention-days: 14
 
   instrumentation:
-    name: Run Android instrumentation tests (API ${{ matrix.api-level }})
+    name: Run Android instrumentation tests (API 31)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
+        # API 31 is the stable CI emulator baseline. API 35 has repeatedly
+        # failed at emulator/process startup in this runner and is validated
+        # on the physical Android 15 Samsung device instead.
         api-level: [31]
     steps:
       - name: Checkout
@@ -92,7 +126,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 300
           # Start ADB before the runner's boot polling; its launcher calls adb directly.
           pre-emulator-launch-script: adb start-server
           # Avoid the runner's failing post-boot animation/ADB settings command.
@@ -105,3 +139,38 @@ jobs:
             echo "ADB state: $(adb get-state)"
             echo "Boot completed: $(adb shell getprop sys.boot_completed)"
             if gradle --no-daemon :app:connectedDebugAndroidTest; then echo "Android instrumentation tests completed successfully."; else result=$?; echo "Instrumentation failed; collecting emulator diagnostics..."; adb devices -l || true; adb logcat -d -b all -t 1200 || true; exit "$result"; fi
+
+  commit-detekt-baseline:
+    name: Commit initial Detekt baseline
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Download generated baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: Juanita-AI-detekt-report
+          path: .
+
+      - name: Commit baseline only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s config/detekt/baseline.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/detekt/baseline.xml
+          if git diff --cached --quiet; then
+            echo "Detekt baseline is already up to date."
+          else
+            git commit -m "build: establish Detekt baseline"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi

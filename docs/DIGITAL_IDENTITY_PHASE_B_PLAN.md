@@ -1,3 +1,5 @@
+> **Decisione architetturale successiva (2026-11-10):** il piano B1-B4 sottostante descrive la prima ipotesi di memoria isolata per identità ed è superato. La decisione approvata dall'utente è una sola memoria cifrata comune a Juanita e José, con personalità/configurazioni separate e una sola identità attiva per sessione. La specifica aggiornata e vincolante è `DIGITAL_IDENTITY_ENGINE_SPEC.md`.
+
 # Digital Identity Engine — Phase B implementation plan
 
 **Branch:** `feature/digital-identity-engine-phase-b`  

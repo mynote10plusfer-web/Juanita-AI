@@ -1,178 +1,126 @@
 # Juanita AI — Digital Identity Engine
 
-**Status:** Phase A implementation committed on PR #35; GitHub Actions run 42876603252 passed both debug build and API 31 instrumentation jobs. Physical-device verification is still pending. Phase B isolation/runtime audit and implementation plan are on `feature/digital-identity-engine-phase-b`.
-**Baseline:** candidate 0.11.12 (`e82f61857c3d50f60cf642136831a119811bd365`).
-**Constraints:** preserve the stable app, package/signing identity and local data; no paid APIs, subscriptions, credits, billing or hosted GPUs.
+**Architecture decision (2026-11-10):** one shared encrypted memory, two distinct character configurations (Juanita and José), one active character per session.
+**Baseline:** stable v0.11.12; feature work remains isolated in draft pull requests.
+**Constraints:** preserve package/signing identity, stable audio path and user data. No paid APIs, subscriptions, credits, billing, hosted GPUs or charges without explicit approval.
 
-## Implementation status — 2026-11-10
+## 1. Product model
 
-Phase A has an initial implementation on this feature branch: domain models, a dedicated Android Keystore AES-GCM identity store, and an in-app local identity manager for create/list/edit/delete. Instrumentation tests cover persistence across store recreation, per-identity update/delete isolation, UUID namespace binding, unreadable-file preservation and ciphertext-at-rest checks. GitHub Actions run 42876603252 completed successfully on 2026-11-10: debug APK build, instrumentation-test compilation and Android API 31 instrumentation execution all passed. Physical Samsung verification remains outstanding. Identity selection is not yet connected to Gemini Live; cultural web research and learning/affect runtime remain later phases.
+Juanita and José are two selectable digital characters, never concurrent assistants. The user deliberately selects one in Settings. Only that selected character is loaded into a Live session. Changing the selection applies to the next session; it never changes an ongoing conversation and speaking the other character's name never switches identities.
 
-## 1. Product vision
+Each character has one editable configuration:
+- Juanita: feminine presentation, her own stable personality, voice preference, biography and approved cultural/region configuration.
+- José: masculine presentation, his own stable personality, voice preference, biography and approved cultural/region configuration.
 
-Support multiple independently created digital identities. Juanita and José are separate identity instances, not two names or voices attached to one shared persona. Each identity owns its biography, personality, cultural origin, languages, values, interests, autobiographical memory, temporary computational affect state, voice profile and optional avatar profile.
+Regional styles are configuration values, not additional characters. For example, changing Juanita from Canarian to Colombian/Paisa edits Juanita's existing profile; it does not create another Juanita. The local store is limited to two canonical slots, one Juanita and one José. It must not become a catalogue of dozens of personas.
 
-The runtime engine may be shared, but identity data and memory namespaces must be isolated. Switching identity must never merge, overwrite or expose another identity's autobiographical memories.
+## 2. Memory model — shared knowledge, separate personalities
 
-The system models personality, memory and affect computationally. It must not claim consciousness, sentience, human feelings or lived experiences. Affective states are temporary computational variables used to guide tone and response selection.
+There is one shared encrypted conversational memory store used by whichever character is selected. Knowledge, user facts, preferences, corrections, learned expressions and conversation history recorded while talking to Juanita must also be available to José, and vice versa. The user must not have to teach the same information twice.
 
-## 2. User experience: create an identity
+The shared store is not a shared personality:
+- Character name, grammatical presentation, stable traits, biography/backstory, cultural origin and approved regional dossier remain attached to that character's configuration.
+- A change to Juanita's character traits must not rewrite José's traits, and vice versa.
+- Memories are historical/user knowledge, not instructions. A newer correction takes precedence over an older record.
+- The human user's separate `PersonalProfileStore` remains distinct from the shared conversational memory.
 
-Add a **Digital Identities** entry inside an existing tab (prefer Settings or the existing identity/profile area); do not add a seventh bottom-navigation tab.
+All runtime paths — automatic memory extraction, continuity snapshots, archive, semantic recall and memory search — must use the same `EncryptedMemoryStore(context)` without a persona UUID namespace. Deleting or editing a character configuration must never clear common memories. The common archive stays encrypted at rest with the existing Android Keystore AES-GCM mechanism.
 
-Creation flow:
-1. Choose a display name and presentation: feminine (Juanita-style) or masculine (José-style). Each identity receives an immutable UUID; names are not unique identifiers.
-2. Choose country and, where meaningful, region/city/community (for example Colombia → Antioquia → Medellín/Paisa; Spain → Canary Islands → Tenerife; Italy → Sicily → Palermo).
-3. Choose main language and additional languages. Language switching remains conversational; do not create one identity per language.
-4. Optionally choose an initial temperament preset or tune traits. Cultural origin must not dictate personality.
-5. Run a cultural research preview. Show source names, links, dates, coverage gaps and confidence. The user approves the cultural dossier before it affects the identity.
-6. Generate an initial biography/personality proposal. The user can edit, accept, regenerate or leave fields blank.
-7. Create and save the identity. A failed search or generation must not create a half-written identity or affect existing identities.
+## 3. Single-active-session invariant
 
-Allow multiple identities of either presentation, including several Juanitas or Josés.
+- `AssistantPreferences.activeDigitalIdentityId` stores zero or one selected character ID.
+- Before session start, the service resolves that exact configuration and constructs its character-specific system instruction.
+- One Live session, one microphone owner, one playback owner and one active character at a time.
+- The selected character ID is immutable for the lifetime of that session.
+- If the selected profile is missing or unreadable, fail closed with an actionable error; do not silently fall back to the other character.
+- A Settings selection change applies only after the current session has ended and a new one is explicitly started.
+- A call-in/wake matcher receives only the selected character's name. It may recognize a direct call at the beginning of an utterance; it must ignore the other character's name and must never switch profiles.
 
-## 3. Cultural research pipeline
+## 4. Character configuration and unified editor
 
-Research publicly documented context relevant to the selected origin: languages and dialects; regional vocabulary and pronunciation; everyday conversational conventions, forms of address, humour and politeness; geography, local history, arts, food, music, festivals and daily life; social norms only with careful qualifiers and explicit acknowledgement of internal diversity.
+The target is an extensible, user-managed collection of saved Juanita profiles and José profiles. The user independently chooses how many to create; no extra profiles are pre-created and there is no hard-coded maximum of three. Exactly one selected profile may be active in a session.
 
-Do not turn nationality into a personality stereotype. Do not encode assumptions about morality, gender roles, religion, politics, sexuality, temperament or relationship preferences as facts. Culture may inform language, references and context; it must not predetermine an individual's character.
+Every profile has its own stable ID and independent configuration: display name, grammatical presentation, primary/additional languages, voice preference, cultural origin, approved regional dossier, biography/backstory, stable personality traits and avatar configuration. Regional variants are templates or settings within a profile, not a reason to create unwanted duplicates.
 
-### Sources and provenance
+**One complete editor is the only source of truth for character settings.** “Aggiungi Juanita” and “Aggiungi José” open the complete guided editor before the new profile is saved. “Modifica” opens the same editor prefilled with all values of that exact profile. The user configures all character attributes during creation and can later change any of them in the same place. Essential character options must not be scattered across unrelated Settings pages.
 
-Use a provider abstraction so search providers can change without changing identity storage. Prefer no-cost public sources: cultural institutions, universities, language academies, public museums, encyclopedic references and openly accessible local publications. Respect terms, robots, attribution and rate limits; do not scrape behind logins or paywalls.
+The unified editor includes:
+- Character family/presentation and editable display name.
+- Primary language, additional languages and preferred language behavior.
+- Available voice choices, with a preview when supported by the existing provider. Persist a stable voice ID; disclose unavailable choices and never silently substitute another voice.
+- Country, region, locality and cultural identity.
+- Optional source-backed cultural dossier selection, review and explicit approval.
+- All supported stable personality traits, with understandable labels and balanced defaults.
+- Biography/backstory and conversational style.
+- Avatar selection or creation metadata bound to this profile.
+- Review/preview, validation, save and cancel.
 
-Every retained research item records source title, canonical URL, publisher, retrieval timestamp, concise excerpt/paraphrase, topic and geographic scope, confidence, and any disagreement or freshness caveat. Prefer primary/institutional sources and cross-check important claims where practical. Distinguish verified facts, source claims and model interpretation. Never fabricate citations or claim a search happened if unavailable.
+The editor must load and persist every field. Editing one property (for example, voice) must not reset other fields. Duplicating a profile copies its initial configuration into a new independent ID; subsequent edits remain isolated. Deleting or archiving a profile never deletes shared memory, conversation archive or PersonalProfileStore. Profile cards summarize the main configured traits and reopen the same editor.
 
-### Free-only operation
+Character settings may have shortcuts elsewhere, but no duplicate independent settings store. Shared-memory controls remain global and do not belong to an individual character.
 
-The default must not require a paid API, subscription, usage credit, billing-enabled cloud project, payment method or hosted GPU. Online research is best-effort and bounded by provider availability and fair-use limits. Cache approved dossiers locally so ordinary conversations do not repeat searches.
+Stable character traits include warmth, humour, curiosity, seriousness, expressiveness, formality, empathy, directness, sociability, spontaneity, patience, optimism, assertiveness, playfulness and discretion. Traits translate into observable conversational choices rather than being maximized simultaneously.
 
-If no reliable free provider is available, offer manual source import or a clearly labelled offline starter dossier; never silently switch to a paid provider. A free tier that requires billing activation or can incur charges is not considered free for this project. Check current pricing, quota, terms and data handling before enabling any provider.
+Cultural origin informs relevant language and context only. It must not determine personality, values, beliefs, gender roles or relationship preferences. A cultural dossier requires explicit approval and sources; the same dossier may be assigned to different profiles without changing grammatical presentation.
 
-Research queries contain only public geography/culture. Never send private memories or transcripts to a search provider.
+Biography/backstory is user-authored character configuration, not a claim of real lived experience. Temporary affective state is computational, bounded and transparent; the app must never claim biological consciousness or human feelings.
 
-### Refresh
+## 5. Cultural research and provenance
 
-Refreshing a cultural dossier creates a proposed revision with a diff and source list. The user approves changes before they affect the identity. A refresh must never overwrite personal experiences, stable values or user-edited biography.
+Prefer no-cost public sources such as language academies, universities, cultural institutions, public museums and openly accessible local publications. Research only public geography/culture; never send private memories or transcripts to search providers. Respect source terms, attribution and rate limits.
 
-## 4. Identity data model
+Each dossier records source title, URL, publisher, retrieval time, topic, confidence and concise summary. Distinguish source-backed facts from interpretation and note regional variation. The user reviews and explicitly approves a dossier before it enters the character instruction. Approved dossiers are cached locally for offline use. Refreshes create proposed revisions; they never overwrite personal biography or personality.
 
-Create a new identity domain; do not repurpose `PersonalProfileStore`, which belongs to the human app user.
+If a reliable free source is unavailable, use an honest offline/manual fallback. A free tier requiring billing activation or exposing the user to charges is not considered free for this project.
 
-Suggested model:
-- `identityId`: immutable UUID; `displayName`, `presentationGender`, timestamps and `schemaVersion`.
-- `origin`: country, region, locality, cultural community and optional diaspora context.
-- `languages`: repertoire and preferred response language, independent of origin.
-- `culturalDossier`: versioned research summary, sources, retrieval date, confidence and user approval state.
-- `personality`: stable trait values, interaction style, humour, warmth, curiosity, formality and boundaries.
-- `valuesAndInterests`: individually chosen or explicitly approved values, interests and preferences.
-- `autobiography`: constructed backstory clearly labelled as character backstory, plus identity-specific experiences actually recorded during use.
-- `affectState`: temporary computational state with timestamp, expiry and evidence; never a permanent personality fact by default.
-- `memoryNamespace`: identity-scoped reference to episodic and curated memory.
-- `voiceProfile` and optional `avatarProfile`: references to supported voice/avatar settings.
+## 6. Conversational presence (C3)
 
-Use schema versions and migrations. Encrypt identity metadata, dossiers and autobiographical memories at rest using Android Keystore-backed AES-GCM, atomic writes and fail-closed recovery. Do not log decrypted content.
+Presence and proactive speech are separate permissions. Listening is disabled by default and may only be enabled through explicit user action while the app is visibly foregrounded, with a selected character and microphone permission. Background/hidden capture and wake-word daemons are out of scope.
 
-## 5. Memory isolation and shared context
+Unsolicited speech requires a second opt-in and stricter gates: idle period, cooldown, hourly cap, quiet hours, no user/assistant speech, network and no riding mode. While riding, no proactive initiatives are allowed; the selected character responds only when directly addressed.
 
-Each identity has its own episodic archive references, curated autobiographical memories, confirmed preferences, learned expressions, corrections and relationship context. The human user's own profile remains a separate namespace.
+The existing Gemini Live SDK-managed audio path is protected. Do not add a second microphone reader, competing Live receive collector, parallel TTS or speaker-listening loop. A proactive turn can only be integrated through a serialized method on the existing active session, after free-tier/cost constraints are verified. Never open another Live session just to speak.
 
-An identity receives only the minimum human-user context required for a conversation through an explicit context assembly policy. Juanita cannot access José's memories and vice versa.
+## 7. Security and data controls
 
-When switching identity, close the previous session cleanly; load only the selected identity's instructions and memory; do not carry over the previous identity's working context; tag archived conversations with identity UUID; and scope conversation search to the selected identity unless the user explicitly requests cross-identity search.
+- Identity configuration and common conversational memory remain encrypted at rest using Android Keystore-backed AES-GCM.
+- No decrypted content in logs.
+- Character deletion removes only that character configuration; it does not delete the common memory, human profile or the other character.
+- Memory inspection/edit/delete and archive controls apply to the common store, regardless of which character is active.
+- Raw microphone audio is never stored.
+- No private data is sent to cultural research/search providers.
 
-Identity deletion is explicit and confirmed. Explain which identity data, memories, avatar references and conversation records will be deleted. Never delete shared user profile data or another identity's data.
+## 8. Delivery and acceptance
 
-## 6. Personality, biography and learning
+### Phase A — encrypted character configuration
+- Two canonical character slots, Juanita and José.
+- Each slot can be created, edited and deleted; no duplicate regional variants.
+- Encrypted local storage and fail-closed recovery.
 
-Keep four layers separate:
-1. Cultural context: externally researched facts and regional language guidance.
-2. Stable personality: user-approved traits and values that change rarely.
-3. Autobiography: character backstory and identity-specific experiences, distinguishing authored backstory from experiences actually recorded in app conversations.
-4. Temporary affect: current computational conversational state, which decays and is not automatically stored as a lasting feeling.
+### Phase B — shared memory and selected character runtime
+- Both characters use the same encrypted memory store.
+- Each session binds to exactly one selected character instruction.
+- Character switching never changes an active session.
+- Tests prove memory written through one character is visible through the other, while their personality and cultural settings remain independent.
 
-Learning loop: detect a candidate correction/preference/experience; classify provenance (user statement, explicit correction, approved research or model inference); estimate relevance and confidence; propose an update only when durable and appropriate; request confirmation for changes to stable identity, values, biography or sensitive information; store approved updates with timestamp/source; allow inspection, correction, export and deletion.
+### Phase C — cultural dossier and controlled presence
+- Source-backed Paisa/Canarian dossier review and explicit approval.
+- Fail-closed foreground presence policy and selected-name-only matcher.
+- No audio integration until the existing SDK exposes a safe serialized turn path and cost constraints are verified.
 
-An identity may adapt phrasing and conversational strategy, but must not silently rewrite core values, invent memories, claim human life experiences, or modify its application code/model weights. Reflection may propose changes; it cannot bypass approval controls.
+### Phase D — learning and computational affect
+- Shared knowledge learning with provenance, confidence and user correction.
+- Character-specific stable personality and temporary computational affect.
+- No silent rewrite of stable traits or sensitive memories.
 
-## 7. Computational affect
+### Phase E — optional avatar
+- Avatar remains separate from the protected audio path.
+- No paid API, service, subscription, credit, trial or hosted GPU without explicit approval.
 
-Use a small, transparent, bounded state model rather than claiming subjective emotion. Candidate dimensions include calmness, curiosity, enthusiasm, concern, frustration and warmth/affiliation. These are computational interaction signals, not diagnoses or proof of consciousness.
+## 9. Regression and release gates
 
-Update from conversational context and explicit statements, never nationality stereotypes. Attach confidence and evidence category (explicit statement, conversational cue, inference, unknown). Decay temporary states over time and at session boundaries where appropriate. Accept user corrections. Never use affect to manipulate, guilt, isolate or increase dependence. Do not store sensitive or inferred emotional episodes as permanent biography by default. When uncertain, respond to content without announcing an emotion.
-
-Existing `EMOTIONAL_INTELLIGENCE_SPEC.md` remains the behavioral safety baseline and must be reconciled with this model before runtime implementation.
-
-## 8. Conversation runtime integration
-
-The current Gemini Live SDK-managed audio path is protected. Integrate at the instruction/context assembly boundary:
-- Resolve selected identity before starting a Live session.
-- Compose instructions from approved cultural dossier, stable personality, biography summary and selected language.
-- Add only bounded, relevant memories from that identity's namespace.
-- Keep microphone, playback, interruption, foreground service, reconnect and camera paths unchanged.
-- Use the selected available Gemini voice, but do not promise a native regional accent unless the actual voice has been verified.
-- Keep technical, medical, legal and safety-critical communication clear even when regional style is selected.
-
-No second microphone recorder, alternate audio transport, background emotion monitor or unsolicited camera analysis is introduced here.
-
-## 9. Security, privacy and trust
-
-- Public cultural research is separate from private autobiographical and conversation data.
-- Do not send private memories or transcripts to web search.
-- Ask separately before optional camera-derived context or new external processing.
-- Show which identity is active and provide controls to inspect/edit biography, personality, sources and memories.
-- Keep existing identities useful offline after creation; network loss must not damage them.
-- Never represent simulated affect as human feeling or a cultural dossier as a definitive personality.
-
-## 10. Delivery plan and acceptance gates
-
-### Phase A — foundation (first implementation)
-- Add identity domain models and a dedicated encrypted `DigitalIdentityStore`.
-- Support create, list, select, edit and delete for multiple independent identities.
-- Add schema migration and tests for encryption, isolation, atomic writes and deletion.
-- No online research and no Gemini Live changes yet.
-
-**Acceptance:** create Juanita and José, restart the app, verify both persist, edit one, delete one, and prove the other identity and human user profile remain unchanged.
-
-### Phase B — identity-aware conversation
-- Resolve selected identity at session start.
-- Compose separate system instructions and memory namespaces.
-- Preserve all existing audio lifecycle behavior.
-- Add tests proving no cross-identity memory leakage.
-
-**Acceptance:** two identities have different names, presentation, traits and separate remembered facts across restarts and sessions.
-
-### Phase C — cultural research and dossier approval
-- Add free-only provider adapters and bounded research.
-- Present citations, provenance, uncertainty and preview.
-- Approve/cache dossier per identity; support offline reuse and user-approved refresh.
-
-**Acceptance:** create Paisa and Canarian dossiers, inspect sources, disconnect the network and verify both profiles remain usable. If no free provider is available, show an honest fallback without charges.
-
-### Phase D — biography, learning and computational affect
-- Add editable biography/backstory and distinguish authored backstory from recorded experiences.
-- Add controlled learning proposals and user confirmation.
-- Add bounded temporary affect with expiry, correction and privacy controls.
-
-**Acceptance:** corrections update only the selected identity; inferred temporary affect is not silently stored; no false claim of consciousness or human feelings.
-
-### Phase E — voice and optional avatar alignment
-- Bind selected identity to an available gender-consistent voice and its own avatar profile.
-- Evaluate regional voice quality honestly; prompt instructions alone do not guarantee native accent.
-- Avatar remains a separate gated project and must not compromise voice-call stability.
-
-## 11. Regression and release gates
-
-- Baseline 0.11.12 remains installable and unchanged until the user approves a tested release.
-- Keep package `ai.juanita.app`, signing certificate, local data compatibility and existing tabs.
-- No PR merge, release, signing-key/package change or destructive migration without explicit user approval.
-- CI must compile and run tests on the final commit; physical validation is required on supported Samsung devices.
-- Test identity switching during/after a call, process death, restart, offline use, failed encryption reads, failed research, empty dossier, duplicate display names and concurrent saves.
-- Do not describe the system as conscious or sentient. Describe it as an evolving digital identity with memory, personality and computational affect.
-
-## 12. Existing specifications to reconcile
-
-- `EMOTIONAL_INTELLIGENCE_SPEC.md`: contextual empathy, uncertainty, non-manipulation and temporary emotion handling.
-- `MEMORY_RECALL_AND_AUTOBIOGRAPHY.md`: current human-user memory architecture; this project adds identity-scoped namespaces, not a replacement for the user's profile.
-- `AVATAR_VIDEO_CALL_ARCHITECTURE.md`: avatar/audio constraints; avatar generation/animation remains separate.
-- `PRODUCT_ROADMAP.md`: update priorities when the first implementation phase is approved.
+- Stable v0.11.12 remains unchanged until a tested change is explicitly approved.
+- Preserve package `ai.juanita.app`, signing certificate, existing tabs and local data.
+- CI must pass unit and API 31 instrumentation tests on the final commit.
+- Physical Samsung verification remains required.
+- Never merge a PR, publish a release or replace the installed APK without explicit approval.

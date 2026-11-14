@@ -1,0 +1,31 @@
+config:
+  validation: true
+  warningsAsErrors: true
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 80
+  LargeClass:
+    active: true
+    threshold: 600
+  LongParameterList:
+    active: true
+    functionThreshold: 8
+    constructorThreshold: 10
+    ignoreDefaultParameters: true
+
+exceptions:
+  SwallowedException:
+    active: true
+  TooGenericExceptionCaught:
+    active: true
+    allowedExceptionNameRegex: '_|ignored|expected'
+
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true
+  UnsafeCast:
+    active: true
+  UnreachableCode:
+    active: true

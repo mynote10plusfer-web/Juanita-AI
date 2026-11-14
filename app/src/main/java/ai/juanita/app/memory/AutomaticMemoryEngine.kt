@@ -16,6 +16,7 @@ import org.json.JSONArray
  */
 class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     private val mutex = Mutex()
+    private val memoryCurator = MemoryCurator()
 
     /**
      * Persist a recognized user turn quickly. This method deliberately does not acquire
@@ -82,7 +83,10 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
                 have: "text" (string), "category" (one of preference, interest, project,
                 routine, goal, language, communication, important_event, experience,
                 person, relationship, milestone, general), "confidence" (number 0..1),
-                and "sensitive" (boolean).
+                and "sensitive" (boolean), "explicitlyRequested" (boolean, true only when
+                the user literally asked the assistant to remember/save that specific fact),
+                "recurrence" (integer 1..5), "usefulness" (number 0..1), and
+                "futureRelevance" (number 0..1).
 
                 Save only information explicitly stated by the user. Ignore greetings,
                 small talk, one-off questions, temporary moods, jokes, hypotheticals,
@@ -107,22 +111,41 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
             if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return 0
 
             val candidates = JSONArray(raw.substring(start, end + 1))
-            var savedCount = 0
-            for (index in 0 until minOf(candidates.length(), MAX_CANDIDATES)) {
-                if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return 0
-                val candidate = candidates.optJSONObject(index) ?: continue
-                val memoryText = candidate.optString("text").trim()
-                val category = candidate.optString("category", "general")
-                val confidence = candidate.optDouble("confidence", 0.0).toFloat()
-                val sensitive = candidate.optBoolean("sensitive", true)
-
-                if (memoryText.length !in MIN_MEMORY_CHARS..MAX_MEMORY_CHARS) continue
-                if (confidence < MIN_CONFIDENCE || sensitive || looksSensitive(memoryText)) continue
-                if (category !in ALLOWED_CATEGORIES) continue
-
-                if (store.addAutomaticMemory(memoryText, category, confidence.coerceIn(0f, 1f), batchVersion) != null) {
-                    savedCount++
+            val curated = buildList {
+                for (index in 0 until minOf(candidates.length(), MAX_CANDIDATES)) {
+                    val candidate = candidates.optJSONObject(index) ?: continue
+                    val memoryText = candidate.optString("text").trim()
+                    val category = candidate.optString("category", "general")
+                    val confidence = candidate.optDouble("confidence", 0.0).toFloat().coerceIn(0f, 1f)
+                    val sensitive = candidate.optBoolean("sensitive", true)
+                    if (memoryText.length !in MIN_MEMORY_CHARS..MAX_MEMORY_CHARS) continue
+                    if (confidence < MIN_CONFIDENCE || sensitive || looksSensitive(memoryText)) continue
+                    if (category !in ALLOWED_CATEGORIES) continue
+                    add(MemoryCandidate(
+                        text = memoryText,
+                        category = category,
+                        source = "automatic",
+                        confidence = confidence,
+                        recurrence = candidate.optInt("recurrence", 1).coerceIn(1, 5),
+                        usefulness = candidate.optDouble("usefulness", confidence.toDouble()).toFloat().coerceIn(0f, 1f),
+                        futureRelevance = candidate.optDouble("futureRelevance", confidence.toDouble()).toFloat().coerceIn(0f, 1f),
+                        lastSeenAtMillis = System.currentTimeMillis(),
+                        sensitive = false,
+                        explicitlyRequested = candidate.optBoolean("explicitlyRequested", false)
+                    ))
                 }
+            }
+            var savedCount = 0
+            memoryCurator.rank(curated).take(MAX_CANDIDATES).forEach { ranked ->
+                if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) return 0
+                if (store.addAutomaticMemory(
+                        ranked.candidate.text,
+                        ranked.candidate.category,
+                        ranked.candidate.confidence,
+                        batchVersion,
+                        confirmedByUser = !ranked.requiresUserConfirmation
+                    ) != null
+                ) savedCount++
             }
 
             // Clear only after a valid model response has been processed. If the

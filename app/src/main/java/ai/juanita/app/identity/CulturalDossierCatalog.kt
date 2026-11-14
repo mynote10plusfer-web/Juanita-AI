@@ -29,7 +29,8 @@ object CulturalDossierCatalog {
             sources = listOf(
                 CulturalSource(
                     title = "El voseo como orgullo paisa: el uso pronominal en el español hablado en Medellín",
-                    url = "https://www.revistapuntogenero.uchile.cl/index.php/BDF/article/view/73296",
+                    geographicScope = "Medellín, Antioquia, Colombia",
+                    url = "https://www.revistaei.uchile.cl/index.php/BDF/article/view/73296",
                     publisher = "Boletín de Filología, Universidad de Chile",
                     topic = "voseo-medellin",
                     confidence = 0.95f,
@@ -37,6 +38,7 @@ object CulturalDossierCatalog {
                 ),
                 CulturalSource(
                     title = "El parcero del español",
+                    geographicScope = "Antioquia, Colombia",
                     url = "https://www.udea.edu.co/wps/portal/udea/web/inicio/udea-noticias/udea-noticia/contenido/asnoticias/cultura/parcero-del-espanol/",
                     publisher = "Universidad de Antioquia",
                     topic = "parlache-lexicon",
@@ -45,6 +47,7 @@ object CulturalDossierCatalog {
                 ),
                 CulturalSource(
                     title = "El parlache: resultados de una investigación lexicográfica",
+                    geographicScope = "Medellín e area metropolitana, Antioquia, Colombia",
                     url = "https://revistas.unal.edu.co/index.php/formayfuncion/article/view/17977",
                     publisher = "Universidad Nacional de Colombia",
                     topic = "parlache-sociolect",
@@ -76,6 +79,7 @@ object CulturalDossierCatalog {
             sources = listOf(
                 CulturalSource(
                     title = "¿El español que se habla en Canarias es un dialecto o un habla?",
+                    geographicScope = "Isole Canarie, Spagna",
                     url = "https://www.academiacanarialengua.org/consultas/2024/02/dialecto-habla-canaria/",
                     publisher = "Academia Canaria de la Lengua",
                     topic = "canarian-phonology-grammar",
@@ -84,6 +88,7 @@ object CulturalDossierCatalog {
                 ),
                 CulturalSource(
                     title = "¿Por qué no todas las islas canarias hablan de la misma manera?",
+                    geographicScope = "Arcipelago delle Canarie, Spagna",
                     url = "https://www.academiacanarialengua.org/consultas/2023/03/particularidades-insulares/",
                     publisher = "Academia Canaria de la Lengua",
                     topic = "island-variation",
@@ -92,6 +97,7 @@ object CulturalDossierCatalog {
                 ),
                 CulturalSource(
                     title = "Características — Diccionario básico de canarismos",
+                    geographicScope = "Isole Canarie; distribuzione lessicale specifica per voce, Spagna",
                     url = "https://www.academiacanarialengua.org/diccionario/caracteristicas/",
                     publisher = "Academia Canaria de la Lengua",
                     topic = "tenerife-lexical-geography",

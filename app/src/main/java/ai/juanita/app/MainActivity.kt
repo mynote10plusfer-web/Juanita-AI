@@ -3,17 +3,19 @@ package ai.juanita.app
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.os.IBinder
 import android.os.Bundle
 import android.view.WindowManager
-import android.speech.RecognizerIntent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -81,8 +84,10 @@ import ai.juanita.app.identity.toSystemInstruction
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class VoiceLanguage(val label: String, val tag: String) {
     val locale: Locale get() = Locale.forLanguageTag(tag)
@@ -150,6 +155,19 @@ private val voiceLanguages = listOf(
 class MainActivity : ComponentActivity() {
     private lateinit var preferences: AssistantPreferences
     private var keepScreenOnForCall = false
+    private var screenOffReceiverRegistered = false
+
+    // Keep every Juanita UI window (including the full-screen Compose avatar Dialog)
+    // behind Samsung/Android keyguard as soon as the physical display turns off.
+    // The foreground voice service is independent and continues only under its
+    // existing explicit background-consent policy.
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                moveTaskToBack(true)
+            }
+        }
+    }
 
     override fun onResume() {
         super.onResume()
@@ -162,6 +180,24 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        // Background continuation is a per-session opt-in. The service decides whether
+        // to keep Live running or perform a confirmed microphone shutdown.
+        runCatching {
+            startService(Intent(this, JuanitaVoiceService::class.java)
+                .setAction(JuanitaVoiceService.ACTION_ACTIVITY_BACKGROUND))
+        }
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (screenOffReceiverRegistered) {
+            runCatching { unregisterReceiver(screenOffReceiver) }
+            screenOffReceiverRegistered = false
+        }
+        super.onDestroy()
+    }
+
     fun setCallScreenKeepAwake(enabled: Boolean) {
         keepScreenOnForCall = enabled
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -170,13 +206,27 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(
+            this,
+            screenOffReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        screenOffReceiverRegistered = true
         preferences = AssistantPreferences(applicationContext)
-        val memoryStore = EncryptedMemoryStore(applicationContext)
+        val memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
         val avatarStore = AvatarProfileStore(applicationContext)
         val digitalIdentityStore = DigitalIdentityStore(applicationContext)
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
+        val initialMemoriesResult = runCatching { memoryStore.listMemories() }
+        val initialReportsResult = runCatching { memoryStore.listImprovementReports() }
+        val memoryLoadErrors = listOfNotNull(
+            initialMemoriesResult.exceptionOrNull()?.let { "Memorie personali: ${it.localizedMessage ?: it.javaClass.simpleName}" },
+            initialReportsResult.exceptionOrNull()?.let { "Rapporti: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+        ).joinToString(" · ")
+        val initialMemoryLoadError = memoryLoadErrors.takeIf { it.isNotBlank() }
         val initialActiveDigitalIdentityId = preferences.activeDigitalIdentityId
-            ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId } }
+            ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId && !it.archived } }
             .also { validId ->
                 if (preferences.activeDigitalIdentityId != validId) preferences.activeDigitalIdentityId = validId
             }
@@ -198,13 +248,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             JuanitaApp(
                 initialLanguageTag = preferences.languageTag,
-                initialOnboardingCompleted = preferences.hasCompletedOnboarding,
-                onCompleteOnboarding = { entries ->
-                    entries.filter { it.isNotBlank() }.forEach { entry ->
-                        memoryStore.addMemory(entry, category = "profile", source = "onboarding", confidence = 1f, confirmedByUser = true)
-                    }
-                    preferences.hasCompletedOnboarding = true
-                },
+                initialOnboardingCompleted = preferences.hasCompletedOnboarding && initialDigitalIdentities.any { !it.archived },
                 initialDialectId = preferences.dialectId,
                 initialName = preferences.assistantName,
                 initialAssistantGender = preferences.assistantGender,
@@ -214,33 +258,36 @@ class MainActivity : ComponentActivity() {
                 initialDigitalIdentities = initialDigitalIdentities,
                 initialActiveDigitalIdentityId = initialActiveDigitalIdentityId,
                 onActiveDigitalIdentityChanged = { preferences.activeDigitalIdentityId = it },
+                onCompleteInitialSetup = { preferences.hasCompletedOnboarding = true },
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
-                initialMemories = memoryStore.listMemories(),
+                initialMemories = initialMemoriesResult.getOrDefault(emptyList()),
+                initialMemoryLoadError = initialMemoryLoadError,
                 // The archive is loaded asynchronously only when its tab is opened; do not scan/decrypt it during Activity composition.
                 initialArchivedConversations = emptyList(),
-                initialImprovementReports = memoryStore.listImprovementReports(),
+                initialImprovementReports = initialReportsResult.getOrDefault(emptyList()),
                 onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
                     memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
                 },
-                onRefreshImprovementReports = { memoryStore.listImprovementReports() },
+                onRefreshImprovementReports = { runCatching { memoryStore.listImprovementReports() }.getOrDefault(emptyList()) },
                 onDeleteImprovementReports = { memoryStore.deleteImprovementReports(it) },
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
-                onRefreshMemories = { memoryStore.listMemories() },
+                onRefreshMemories = { runCatching { memoryStore.listMemories() }.getOrDefault(emptyList()) },
                 onSaveMemory = { memoryStore.addMemory(it) },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onDeleteMemories = { memoryStore.deleteMemories(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
+                 onConfirmMemory = { id -> memoryStore.confirmMemory(id) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
                 onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
-                onListConversationTurns = { memoryStore.listConversationTurns(it) },
+                onListConversationTurns = { sessionId, pageIndex, pageSize -> memoryStore.listConversationTurnsPage(sessionId, pageIndex, pageSize) },
                 onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
-                onRefreshArchive = { memoryStore.listArchivedConversations() },
+                onRefreshArchive = { runCatching { memoryStore.listArchivedConversations() }.getOrDefault(emptyList()) },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
                 onSaveAvatarProfile = { avatarStore.save(it) },
@@ -276,7 +323,6 @@ class MainActivity : ComponentActivity() {
 private fun JuanitaApp(
     initialLanguageTag: String,
     initialOnboardingCompleted: Boolean,
-    onCompleteOnboarding: (List<String>) -> Unit,
     initialDialectId: String,
     initialName: String,
     initialAssistantGender: String,
@@ -286,9 +332,11 @@ private fun JuanitaApp(
     initialDigitalIdentities: List<DigitalIdentity>,
     initialActiveDigitalIdentityId: String?,
     onActiveDigitalIdentityChanged: (String?) -> Unit,
+    onCompleteInitialSetup: (String) -> Unit,
     initialArchiveEnabled: Boolean,
     initialAutoMemoryEnabled: Boolean,
     initialMemories: List<MemoryItem>,
+    initialMemoryLoadError: String?,
     initialArchivedConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     initialImprovementReports: List<ImprovementReport>,
     onSaveImprovementReport: (String, String, String, String, String, String, String) -> ImprovementReport,
@@ -304,10 +352,11 @@ private fun JuanitaApp(
     onDeleteMemory: (String) -> Unit,
     onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
-    onClearMemories: () -> Unit,
+    onConfirmMemory: (String) -> Boolean,
+     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
-    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
@@ -329,6 +378,7 @@ private fun JuanitaApp(
     val initialLanguage = voiceLanguages.firstOrNull { it.tag == initialLanguageTag } ?: voiceLanguages.first()
     var selectedLanguage by remember { mutableStateOf(initialLanguage) }
     var digitalIdentities by remember { mutableStateOf(initialDigitalIdentities) }
+    var identityRefreshSignal by remember { mutableStateOf(0) }
     var activeDigitalIdentityId by remember { mutableStateOf(initialActiveDigitalIdentityId) }
     val activeDigitalIdentity = digitalIdentities.firstOrNull { it.id == activeDigitalIdentityId }
     var selectedLiveVoice by remember {
@@ -351,7 +401,6 @@ private fun JuanitaApp(
     }
     var dialectMenuExpanded by remember { mutableStateOf(false) }
     var languageMenuExpanded by remember { mutableStateOf(false) }
-    var transcript by remember { mutableStateOf("Qui apparirà il testo riconosciuto.") }
     var status by remember { mutableStateOf("Impostazioni salvate sul dispositivo") }
     var assistantName by remember { mutableStateOf(initialName) }
     var assistantGender by remember { mutableStateOf(if (initialAssistantGender == "MASCHILE") "MASCHILE" else "FEMMINILE") }
@@ -386,10 +435,19 @@ private fun JuanitaApp(
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var memoryDraft by remember { mutableStateOf("") }
     var memories by remember { mutableStateOf(initialMemories) }
+    var memoryLoadError by remember { mutableStateOf(initialMemoryLoadError) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
     val context = LocalContext.current
+    val profileStore = remember(context) { DigitalIdentityStore(context.applicationContext) }
+    val profileScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedSection by remember { mutableStateOf("HOME") }
+    val presencePreferences = remember(context) {
+        context.getSharedPreferences("juanita_presence_preferences", android.content.Context.MODE_PRIVATE)
+    }
+    var backgroundContinuationAuthorized by remember {
+        mutableStateOf(presencePreferences.getBoolean("background_continuation_authorized", false))
+    }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -421,10 +479,15 @@ private fun JuanitaApp(
         }
     }
     val liveState by JuanitaVoiceService.state.collectAsState()
+    val voiceSessionLabelVisible = listOf("in ascolto", "connessione a gemini live", "anteprima", "rinnovando", "chiusura", "non confermata")
+        .any { liveState.contains(it, ignoreCase = true) }
+    var liveSessionIdentityName by remember { mutableStateOf(activeDigitalIdentity?.displayName ?: assistantName) }
     val visionState by JuanitaVoiceService.visionState.collectAsState()
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
+    var showExitConfirmation by remember { mutableStateOf(false) }
+    var exitInProgress by remember { mutableStateOf(false) }
     val hostActivity = context as? Activity
     DisposableEffect(hostActivity, callScreenVisible) {
         val window = hostActivity?.window
@@ -439,6 +502,24 @@ private fun JuanitaApp(
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
+
+    fun performSafeExit() {
+        if (exitInProgress) return
+        exitInProgress = true
+        uiScope.launch {
+            val stopped = JuanitaVoiceService.stopAndAwait(context)
+            exitInProgress = false
+            if (stopped) {
+                showExitConfirmation = false
+                callScreenVisible = false
+                hostActivity?.finishAndRemoveTask()
+            } else {
+                showExitConfirmation = false
+                liveStartError = "Non posso confermare la chiusura completa del microfono e della sessione. Juanita resta aperta: riprova Termina e non avviare un'altra conversazione."
+            }
+        }
+    }
+
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
@@ -498,7 +579,14 @@ private fun JuanitaApp(
                             append("La posizione GPS non è disponibile in questa sessione. Non fingere di conoscere la posizione attuale dell'utente; chiedi la località solo se serve.")
                         }
                     }
-                    JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id, identityId = activeDigitalIdentity?.id)
+                    liveSessionIdentityName = activeDigitalIdentity?.displayName ?: assistantName
+                    JuanitaVoiceService.start(
+                        context,
+                        instruction,
+                        activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
+                        identityId = activeDigitalIdentity?.id,
+                        backgroundContinuationAuthorized = backgroundContinuationAuthorized
+                    )
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
                 }
@@ -506,37 +594,81 @@ private fun JuanitaApp(
         } else liveStartError = "Permesso microfono negato"
     }
 
+    val persistSelectedVoice: (LiveVoice) -> Unit = { voice ->
+        val selectedIdentity = activeDigitalIdentity
+        if (selectedIdentity == null) {
+            selectedLiveVoice = voice
+            onLiveVoiceChanged(voice.id)
+            liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
+        } else {
+            profileScope.launch {
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        profileStore.update(selectedIdentity.copy(voiceName = voice.id))
+                    }
+                }.onSuccess { updated ->
+                    digitalIdentities = digitalIdentities.map { if (it.id == updated.id) updated else it }
+                    identityRefreshSignal += 1
+                    liveStartError = "Voce ${voice.label} salvata nel profilo ${updated.displayName}. Sarà usata dalla prossima conversazione."
+                }.onFailure { error ->
+                    liveStartError = "Non sono riuscita a salvare la voce: ${error.localizedMessage ?: "errore"}"
+                }
+            }
+        }
+        liveVoiceMenuExpanded = false
+    }
+
+    var pendingVoicePreview by remember { mutableStateOf<DigitalIdentity?>(null) }
+
+    fun startIdentityVoicePreview(identity: DigitalIdentity) {
+        val busyStates = listOf("in ascolto", "connessione a gemini live", "anteprima", "rinnovando", "chiusura", "non confermata")
+        if (busyStates.any { liveState.contains(it, ignoreCase = true) }) {
+            liveStartError = "Prima termina la conversazione o attendi la chiusura completa; poi potrai provare questa voce."
+            return
+        }
+        val sample = when {
+            identity.preferredLanguageTag.startsWith("es", ignoreCase = true) ->
+                "Hola, soy ${identity.displayName}. Esta es una breve prueba de mi voz. ¿Qué tal? Me alegra saludarte."
+            identity.preferredLanguageTag.startsWith("it", ignoreCase = true) ->
+                "Ciao, sono ${identity.displayName}. Questa è una breve prova della mia voce. È un piacere conoscerti."
+            else -> "Hello, I'm ${identity.displayName}. This is a short sample of my voice. It's lovely to meet you."
+        }
+        val instruction = identity.toSystemInstruction() +
+            "\nANTEPRIMA VOCALE: pronuncia soltanto il breve testo iniziale fornito. Usa la voce Gemini selezionata e le indicazioni linguistiche di questo profilo. Non avviare una conversazione, non chiedere informazioni e poi resta in silenzio."
+        liveSessionIdentityName = identity.displayName
+        JuanitaVoiceService.start(
+            context = context,
+            instruction = instruction,
+            voiceName = identity.voiceName,
+            initialPrompt = sample,
+            previewDurationMillis = 12_000L
+        )
+        liveStartError = "Anteprima di ${identity.displayName} avviata con la voce ${identity.voiceName}; si chiuderà automaticamente."
+    }
+
     val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
-                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, ${if (assistantGender == "MASCHILE") "pronto" else "pronta"} ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
-            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
-        } else liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
+        val identity = pendingVoicePreview
+        pendingVoicePreview = null
+        if (granted && identity != null) {
+            startIdentityVoicePreview(identity)
+        } else if (!granted) {
+            liveStartError = "Per ascoltare la voce Gemini è necessario autorizzare il microfono."
+        }
     }
-    val startVoicePreview = {
-        if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED) {
-            val instruction = (activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)) +
-                "\nQuesta è soltanto una breve prova della voce. Pronuncia il campione in modo naturale e poi resta in attesa."
-            JuanitaVoiceService.start(context, instruction, selectedLiveVoice.id,
-                "Questa è una breve anteprima della mia voce. Ciao, sono $assistantName. Sono qui, pronto/a ad accompagnarti con calma e con il sorriso.",
-                previewDurationMillis = 15_000L, identityId = activeDigitalIdentity?.id)
-            liveStartError = "Anteprima della voce ${selectedLiveVoice.label} avviata. Si chiuderà automaticamente."
-        } else voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-    }
-    val speechLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            val spoken = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-            if (!spoken.isNullOrBlank()) {
-                transcript = spoken
-                status = "Voce riconosciuta. Il dialogo AI non è ancora collegato."
-            } else status = "Nessun testo riconosciuto"
-        } else status = "Riconoscimento vocale annullato o non disponibile"
+    val previewIdentityVoice: (DigitalIdentity) -> Unit = { identity ->
+        val busyStates = listOf("in ascolto", "connessione a gemini live", "anteprima", "rinnovando", "chiusura", "non confermata")
+        if (busyStates.any { liveState.contains(it, ignoreCase = true) }) {
+            liveStartError = "Prima termina la conversazione o attendi la chiusura completa; poi potrai provare questa voce."
+        } else {
+            pendingVoicePreview = identity
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                pendingVoicePreview = null
+                startIdentityVoicePreview(identity)
+            } else {
+                voicePreviewPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
     }
 
     MaterialTheme(
@@ -561,6 +693,29 @@ private fun JuanitaApp(
                 modifier = Modifier.weight(1f).verticalScroll(mainScrollState).padding(horizontal = 22.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                if (showFirstMeeting) {
+                    Text("CONFIGURA IL TUO PERSONAGGIO", color = gold, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Prima di iniziare, crea Juanita o José: scegli la voce, ascoltane un campione, scrivi la biografia e definisci il carattere. Potrai modificare tutto in seguito.", color = Color(0xFFB9BBC1), fontSize = 13.sp)
+                    DigitalIdentitySection(
+                        panel = panel,
+                        gold = gold,
+                        activeIdentityId = activeDigitalIdentityId,
+                        refreshSignal = identityRefreshSignal,
+                        firstRunMode = true,
+                        onFirstIdentityCreated = { id ->
+                            activeDigitalIdentityId = id
+                            onActiveDigitalIdentityChanged(id)
+                            onCompleteInitialSetup(id)
+                            showFirstMeeting = false
+                        },
+                        onActiveIdentityChanged = { id ->
+                            activeDigitalIdentityId = id
+                            onActiveDigitalIdentityChanged(id)
+                        },
+                        onIdentitiesChanged = { digitalIdentities = it },
+                        onPreviewVoice = previewIdentityVoice
+                    )
+                } else {
                 if (selectedSection == "HOME") {
                     JuanitaAvatarCard()
                 }
@@ -669,113 +824,112 @@ private fun JuanitaApp(
                     panel = panel,
                     gold = gold,
                     activeIdentityId = activeDigitalIdentityId,
+                    refreshSignal = identityRefreshSignal,
                     onActiveIdentityChanged = { id ->
+                        val previousId = activeDigitalIdentityId
+                        val voiceMayBeRunning = listOf(
+                            "in ascolto", "connessione", "rinnovando", "anteprima",
+                            "chiusura sessione", "chiusura audio non confermata"
+                        ).any { liveState.contains(it, ignoreCase = true) }
+                        if (id != previousId && voiceMayBeRunning) {
+                            // A Live session keeps the persona/system prompt it was created with.
+                            // Stop it immediately when the selected identity changes; the next
+                            // explicit Parla action will start a fresh session with the new profile.
+                            JuanitaVoiceService.stop(context)
+                            liveStartError = "Personaggio cambiato: chiusura della conversazione precedente in corso. Premi Parla per usare il nuovo profilo."
+                        }
                         activeDigitalIdentityId = id
                         onActiveDigitalIdentityChanged(id)
                     },
-                    onIdentitiesChanged = { digitalIdentities = it }
+                    onIdentitiesChanged = { digitalIdentities = it },
+                    onPreviewVoice = previewIdentityVoice
                 )
 
-                SettingsCard(panel, gold, "CARATTERE E PERSONALITÀ") {
-                    Text("Regola ogni tratto da 0 a 100%. Le preferenze vengono salvate automaticamente.",
-                        color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    TraitSlider("Ironia", persona.irony) { persona = persona.copy(irony = it); onPersonaChanged(persona) }
-                    TraitSlider("Dolcezza", persona.sweetness) { persona = persona.copy(sweetness = it); onPersonaChanged(persona) }
-                    TraitSlider("Sensualità", persona.sensuality) { persona = persona.copy(sensuality = it); onPersonaChanged(persona) }
-                    TraitSlider("Serietà", persona.seriousness) { persona = persona.copy(seriousness = it); onPersonaChanged(persona) }
-                    TraitSlider("Simpatia", persona.friendliness) { persona = persona.copy(friendliness = it); onPersonaChanged(persona) }
-                    TraitSlider("Intelligenza e curiosità", persona.curiosity) { persona = persona.copy(curiosity = it); onPersonaChanged(persona) }
-                    TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
-                    TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
-                    TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
-                    Text("Questi parametri vengono inclusi nelle istruzioni inviate a Gemini Live e influenzano il carattere di $assistantName.",
-                        color = gold, fontSize = 11.sp)
+                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "CARATTERE E PERSONALITÀ · STANDARD" else "CARATTERE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
+                    if (activeDigitalIdentity == null) {
+                        Text("Questi cursori configurano l'assistente standard. Ogni personaggio salvato ha percentuali indipendenti nel proprio editor.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                        TraitSlider("Ironia", persona.irony) { persona = persona.copy(irony = it); onPersonaChanged(persona) }
+                        TraitSlider("Dolcezza", persona.sweetness) { persona = persona.copy(sweetness = it); onPersonaChanged(persona) }
+                        TraitSlider("Sensualità", persona.sensuality) { persona = persona.copy(sensuality = it); onPersonaChanged(persona) }
+                        TraitSlider("Serietà", persona.seriousness) { persona = persona.copy(seriousness = it); onPersonaChanged(persona) }
+                        TraitSlider("Simpatia", persona.friendliness) { persona = persona.copy(friendliness = it); onPersonaChanged(persona) }
+                        TraitSlider("Intelligenza e curiosità", persona.curiosity) { persona = persona.copy(curiosity = it); onPersonaChanged(persona) }
+                        TraitSlider("Espressività", persona.expressiveness) { persona = persona.copy(expressiveness = it); onPersonaChanged(persona) }
+                        TraitSlider("Formalità", persona.formality) { persona = persona.copy(formality = it); onPersonaChanged(persona) }
+                        TraitSlider("Empatia", persona.empathy) { persona = persona.copy(empathy = it); onPersonaChanged(persona) }
+                    } else {
+                        Text("Le percentuali di questo personaggio si modificano aprendo il suo profilo e premendo Modifica. Il salvataggio è indipendente per ogni Juanita e José.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
+                    }
                 }
 
-                SettingsCard(panel, gold, "LINGUA DELLA VOCE") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(selectedLanguage.label, color = Color.White, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { languageMenuExpanded = true }) { Text("Cambia", color = gold) }
-                        DropdownMenu(expanded = languageMenuExpanded, onDismissRequest = { languageMenuExpanded = false }) {
-                            voiceLanguages.forEach { language ->
-                                DropdownMenuItem(text = { Text(language.label) }, onClick = {
-                                    selectedLanguage = language
-                                    onLanguageSelected(language.tag)
-                                    languageMenuExpanded = false
-                                    status = "Lingua ${language.label} salvata"
-                                })
+                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "LINGUA DELLA VOCE · STANDARD" else "LINGUA DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
+                    if (activeDigitalIdentity == null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(selectedLanguage.label, color = Color.White, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { languageMenuExpanded = true }) { Text("Cambia", color = gold) }
+                            DropdownMenu(expanded = languageMenuExpanded, onDismissRequest = { languageMenuExpanded = false }) {
+                                voiceLanguages.forEach { language ->
+                                    DropdownMenuItem(text = { Text(language.label) }, onClick = {
+                                        selectedLanguage = language
+                                        onLanguageSelected(language.tag)
+                                        languageMenuExpanded = false
+                                        status = "Lingua ${language.label} salvata"
+                                    })
+                                }
                             }
                         }
-                    }
-                    Text("La lingua selezionata è separata dal carattere e dal dialetto.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                }
-
-                SettingsCard(panel, gold, "ACCENTO E VARIANTE REGIONALE") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(selectedDialect.label, color = Color.White, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { dialectMenuExpanded = true }) { Text("Scegli", color = gold) }
-                        DropdownMenu(expanded = dialectMenuExpanded, onDismissRequest = { dialectMenuExpanded = false }) {
-                            dialects.forEach { dialect ->
-                                DropdownMenuItem(text = { Text(dialect.label) }, onClick = {
-                                    selectedDialect = dialect
-                                    val language = voiceLanguages.firstOrNull { it.tag == dialect.languageTag } ?: selectedLanguage
-                                    selectedLanguage = language
-                                    onLanguageSelected(language.tag)
-                                    onDialectSelected(dialect.id, dialect.languageTag)
-                                    dialectMenuExpanded = false
-                                    status = "Profilo ${dialect.label} selezionato"
-                                })
-                            }
-                        }
-                    }
-                    Text(selectedDialect.note, color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                    Text("Esempio: ${selectedDialect.sample}", color = Color.White, fontSize = 14.sp)
-                    Text(
-                        "La voce configurata di Juanita viene usata nelle conversazioni Live. L'anteprima vocale autonoma non è ancora disponibile; nessuna voce TTS di sistema verrà riprodotta.",
-                        color = Color(0xFF9A9DA4),
-                        fontSize = 12.sp
-                    )
-                }
-
-                SettingsCard(panel, gold, "PROVA MICROFONO") {
-                    Text(transcript, color = Color.White, fontSize = 16.sp)
-                    Button(onClick = {
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, selectedLanguage.tag)
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, selectedLanguage.tag)
-                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Parla con ${assistantName.ifBlank { "Juanita" }}")
-                            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-                        }
-                        try {
-                            speechLauncher.launch(intent)
-                            status = "Ascolto tramite il servizio vocale Android…"
-                        } catch (_: Exception) {
-                            status = "Nessun servizio di riconoscimento vocale disponibile"
-                        }
-                    }, modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)) {
-                        Icon(Icons.Default.Mic, contentDescription = null)
-                        Text("  Parla")
+                    } else {
+                        Text("Lingua principale: ${activeDigitalIdentity?.preferredLanguageTag.orEmpty()}. Altre lingue: ${activeDigitalIdentity?.languages?.joinToString(", ")?.ifBlank { "non specificate" } ?: "non specificate"}. Per modificarle, usa Modifica nel profilo.", color = Color(0xFFB9BBC1), fontSize = 12.sp)
                     }
                 }
 
-                SettingsCard(panel, gold, "VOCE DI $assistantName · GEMINI LIVE") {
+                if (activeDigitalIdentity == null) {
+                    SettingsCard(panel, gold, "ACCENTO E VARIANTE REGIONALE") {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(selectedDialect.label, color = Color.White, modifier = Modifier.weight(1f))
+                                            TextButton(onClick = { dialectMenuExpanded = true }) { Text("Scegli", color = gold) }
+                                            DropdownMenu(expanded = dialectMenuExpanded, onDismissRequest = { dialectMenuExpanded = false }) {
+                                                dialects.forEach { dialect ->
+                                                    DropdownMenuItem(text = { Text(dialect.label) }, onClick = {
+                                                        selectedDialect = dialect
+                                                        val language = voiceLanguages.firstOrNull { it.tag == dialect.languageTag } ?: selectedLanguage
+                                                        selectedLanguage = language
+                                                        onLanguageSelected(language.tag)
+                                                        onDialectSelected(dialect.id, dialect.languageTag)
+                                                        dialectMenuExpanded = false
+                                                        status = "Profilo ${dialect.label} selezionato"
+                                                    })
+                                                }
+                                            }
+                                        }
+                                        Text(selectedDialect.note, color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                                        Text("Esempio: ${selectedDialect.sample}", color = Color.White, fontSize = 14.sp)
+                                        Text(
+                                            "La voce configurata di Juanita viene usata nelle conversazioni Live. L'anteprima vocale autonoma non è ancora disponibile; nessuna voce TTS di sistema verrà riprodotta.",
+                                            color = Color(0xFF9A9DA4),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                    
+
+                }
+
+                SettingsCard(panel, gold, if (activeDigitalIdentity == null) "VOCE DI $assistantName · GEMINI LIVE" else "VOCE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                            Text(selectedLiveVoice.quality, color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                            Text(activeDigitalIdentity?.voiceName ?: selectedLiveVoice.label, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(liveVoices.firstOrNull { it.id == (activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id) }?.quality ?: "Voce Gemini Live", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                         }
                         TextButton(onClick = { liveVoiceMenuExpanded = true }) { Text("Cambia voce", color = gold) }
                         DropdownMenu(expanded = liveVoiceMenuExpanded, onDismissRequest = { liveVoiceMenuExpanded = false }) {
                             Text(
-                                "VOCI FEMMINILI",
+                                if (activeDigitalIdentity == null) "VOCI FEMMINILI" else "VOCI DISPONIBILI PER ${activeDigitalIdentity.displayName}",
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                                 color = gold,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
                             )
-                            liveVoices.filter { it.gender == "FEMMINILE" }.forEach { voice ->
+                            liveVoices.filter { voice -> if (activeDigitalIdentity == null) voice.gender == "FEMMINILE" else voice.id in ai.juanita.app.identity.DigitalIdentityVoiceCatalog.forPresentation(activeDigitalIdentity.presentation) }.forEach { voice ->
                                 DropdownMenuItem(
                                     text = {
                                         Column {
@@ -783,45 +937,32 @@ private fun JuanitaApp(
                                             Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
                                         }
                                     },
-                                    onClick = {
-                                        selectedLiveVoice = voice
-                                        onLiveVoiceChanged(voice.id)
-                                        liveVoiceMenuExpanded = false
-                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
-                                    }
+                                    onClick = { persistSelectedVoice(voice) }
                                 )
                             }
-                            Text(
-                                "VOCI MASCHILI",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                color = gold,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Column {
-                                            Text(voice.label)
-                                            Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
-                                        }
-                                    },
-                                    onClick = {
-                                        selectedLiveVoice = voice
-                                        onLiveVoiceChanged(voice.id)
-                                        liveVoiceMenuExpanded = false
-                                        liveStartError = "Voce ${voice.label} salvata. Sarà usata alla prossima connessione."
-                                    }
+                            if (activeDigitalIdentity == null) {
+                                Text(
+                                    "VOCI MASCHILI",
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                    color = gold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
                                 )
+                                liveVoices.filter { it.gender == "MASCHILE" }.forEach { voice ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(voice.label)
+                                                Text(voice.quality, fontSize = 11.sp, color = Color(0xFF777B83))
+                                            }
+                                        },
+                                        onClick = { persistSelectedVoice(voice) }
+                                    )
+                                }
                             }
                         }
                     }
-                    Button(onClick = { startVoicePreview() }, modifier = Modifier.fillMaxWidth(),
-                        enabled = !liveState.contains("in ascolto", ignoreCase = true) &&
-                            !liveState.contains("connessione", ignoreCase = true),
-                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                    ) { Text("Ascolta un campione della voce") }
-                    Text("Riproduce un breve campione con la voce Gemini selezionata, senza TTS Android. La prova usa il microfono per avviare la sessione e si chiude automaticamente.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    if (activeDigitalIdentity != null) Text("Questa voce appartiene a ${activeDigitalIdentity.displayName}. Puoi cambiarla qui oppure nell’editor del personaggio; il salvataggio aggiorna soltanto questo profilo.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text(liveStartError ?: liveState, color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text("La scelta viene salvata sul telefono. Per applicarla alle conversazioni, termina e riavvia la sessione vocale.", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                 }
@@ -831,7 +972,39 @@ private fun JuanitaApp(
                 if (selectedSection == "HOME") {
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                    Text(
+                        if (voiceSessionLabelVisible) "PERSONAGGIO DELLA SESSIONE: $liveSessionIdentityName"
+                        else "PROSSIMO PERSONAGGIO: ${activeDigitalIdentity?.displayName ?: assistantName}",
+                        color = gold,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
+                    SettingsCard(panel, gold, "CONTINUAZIONE IN BACKGROUND") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Consenti a Juanita di continuare con lo schermo spento", color = Color.White, fontSize = 13.sp)
+                                Text(
+                                    "Disattivato per impostazione predefinita. Se lo abiliti, la sessione avviata da te può continuare tramite il servizio Android e la notifica permanente. Senza consenso, quando lasci l'app il microfono viene chiuso.",
+                                    color = Color(0xFF9A9DA4), fontSize = 11.sp
+                                )
+                            }
+                            Switch(
+                                checked = backgroundContinuationAuthorized,
+                                onCheckedChange = { enabled ->
+                                    backgroundContinuationAuthorized = enabled
+                                    presencePreferences.edit()
+                                        .putBoolean("background_continuation_authorized", enabled)
+                                        .apply()
+                                    context.startService(
+                                        Intent(context, JuanitaVoiceService::class.java)
+                                            .setAction(JuanitaVoiceService.ACTION_UPDATE_BACKGROUND_CONSENT)
+                                            .putExtra(JuanitaVoiceService.EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, enabled)
+                                    )
+                                }
+                            )
+                        }
+                    }
                     Text(locationStatus, color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text("La posizione viene letta automaticamente con il tuo permesso quando apri Juanita e aggiornata all’avvio della conversazione. Nessun tracciamento in background.", color = Color(0xFF777D87), fontSize = 11.sp)
                     Button(
@@ -863,8 +1036,12 @@ private fun JuanitaApp(
                     )
                     Text("La conversazione continua con schermo spento tramite un servizio Android visibile nella notifica. Il microfono si attiva solo dopo il tuo consenso e quando premi Avvia. Audio in streaming verso Gemini; non viene archiviato nell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    Button(
+                        onClick = { showExitConfirmation = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                    ) { Text("Esci e chiudi completamente") }
                 }
-
                 }
 
                 if (selectedSection == "AVATAR" && !callScreenVisible) {
@@ -878,6 +1055,15 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "MEMORY") {
+                if (memoryLoadError != null) {
+                    SettingsCard(panel, gold, "ARCHIVIO CIFRATO NON DISPONIBILE") {
+                        Text(
+                            "Non sono riuscita a leggere alcuni dati cifrati. Non ho cancellato né sostituito i file. Non disinstallare l'app e non cancellare i dati: serve prima una procedura di recupero.",
+                            color = Color(0xFFFFCC80), fontSize = 12.sp
+                        )
+                        Text(memoryLoadError.orEmpty(), color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                    }
+                }
                 MemoryPrivacySection(
                     panel = panel,
                     gold = gold,
@@ -898,7 +1084,8 @@ private fun JuanitaApp(
                     onDeleteMemory = onDeleteMemory,
                     onDeleteMemories = onDeleteMemories,
                     onUpdateMemory = onUpdateMemory,
-                    onClearMemories = onClearMemories,
+                    onConfirmMemory = onConfirmMemory,
+                     onClearMemories = onClearMemories,
                     onDeleteConversation = onDeleteConversation,
                     onDeleteArchiveRange = onDeleteArchiveRange,
                     onListConversationTurns = onListConversationTurns,
@@ -944,18 +1131,17 @@ private fun JuanitaApp(
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
                 }
 
-                if (callScreenVisible) {
+                if (!showFirstMeeting && callScreenVisible) {
                     val activeAvatarName = initialAvatarProfiles
                         .firstOrNull { it.id == initialActiveAvatarProfileId }
                         ?.displayName ?: assistantName
                     AvatarCallScreen(
-                        avatarName = activeAvatarName,
+                        avatarName = if (voiceSessionLabelVisible) liveSessionIdentityName else activeDigitalIdentity?.displayName ?: activeAvatarName,
                         portraitPath = "${context.filesDir.absolutePath}/juanita_portrait.jpg",
                         connectionStatus = liveState,
                         voiceConnected = liveState.contains("in ascolto", ignoreCase = true),
                         onVideoFrame = { frame -> cameraServiceBinder?.sendVideoFrame(frame) },
                         onDismiss = {
-                            // Leaving the call UI also ends audio: never leave a hidden hot mic.
                             JuanitaVoiceService.stop(context)
                             callScreenVisible = false
                         },
@@ -965,30 +1151,39 @@ private fun JuanitaApp(
                         }
                     )
                 }
+                }
               }
-              if (showFirstMeeting) {
-                  FirstMeetingOnboarding(
-                      initialGender = assistantGender,
-                      onComplete = { selectedGender ->
-                          applyAssistantIdentity(selectedGender)
-                          onCompleteOnboarding(emptyList())
-                          memories = onRefreshMemories()
-                          showFirstMeeting = false
-                      },
-                      onSkip = {
-                          onCompleteOnboarding(emptyList())
-                          showFirstMeeting = false
-                      }
-                  )
-              }
-              if (showPermissionOnboarding) {
+              if (!showFirstMeeting && showPermissionOnboarding) {
                   PermissionOnboarding {
                       context.getSharedPreferences("juanita_permission_state", android.content.Context.MODE_PRIVATE)
                           .edit().putBoolean("onboarding_completed", true).apply()
                       showPermissionOnboarding = false
                   }
               }
-              NavigationBar(containerColor = panel, contentColor = gold) {
+              if (!showFirstMeeting && showExitConfirmation) {
+                  AlertDialog(
+                      onDismissRequest = { if (!exitInProgress) showExitConfirmation = false },
+                      title = { Text(if (exitInProgress) "Chiusura in corso…" else "Uscire da Juanita AI?") },
+                      text = {
+                          Text(
+                              if (exitInProgress) "Sto attendendo la conferma del servizio vocale. Non chiuderò la schermata finché il microfono non risulterà disattivato."
+                              else "La conversazione vocale verrà interrotta e il servizio dovrà confermare la chiusura. Le sveglie programmate e i dati salvati resteranno intatti."
+                          )
+                      },
+                      confirmButton = {
+                          TextButton(onClick = { performSafeExit() }, enabled = !exitInProgress) {
+                              Text(if (exitInProgress) "Attendi…" else "Esci e chiudi", color = Color(0xFFFF8A80))
+                          }
+                      },
+                      dismissButton = {
+                          TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
+                      },
+                      containerColor = panel,
+                      titleContentColor = Color.White,
+                      textContentColor = Color(0xFFB9BBC1)
+                  )
+              }
+              if (!showFirstMeeting) NavigationBar(containerColor = panel, contentColor = gold) {
                   listOf("HOME" to "Home", "AVATAR" to "Avatar", "ALARM" to "Sveglia", "SETTINGS" to "Settaggi", "MEMORY" to "Memoria", "MORE" to "Altro").forEach { (key, label) ->
                       NavigationBarItem(
                           selected = selectedSection == key,

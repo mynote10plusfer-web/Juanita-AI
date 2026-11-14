@@ -18,9 +18,9 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Dedicated encrypted storage for independent digital identities.
- * It is intentionally separate from the human user's PersonalProfileStore.
- * Each identity has its own file and UUID-bound memory namespace.
+ * Encrypted storage for a user-managed collection of Juanita and José profiles.
+ * The collection has no product-imposed profile-count limit. Only one non-archived
+ * profile can be selected for a session; every profile uses the same shared memory.
  */
 class DigitalIdentityStore(context: Context) {
     private val appContext = context.applicationContext
@@ -69,6 +69,28 @@ class DigitalIdentityStore(context: Context) {
         }.sortedBy { it.createdAtMillis }
     }
 
+    /** Create an independent copy with a new stable ID; shared memory is never copied. */
+    @Synchronized
+    fun duplicate(identityId: String, newDisplayName: String): DigitalIdentity {
+        val source = get(identityId) ?: throw IllegalArgumentException("Il profilo da duplicare non esiste.")
+        require(newDisplayName.isNotBlank()) { "Il nuovo nome del profilo è obbligatorio." }
+        val now = System.currentTimeMillis()
+        return create(source.copy(
+            id = UUID.randomUUID().toString(),
+            displayName = newDisplayName.trim().take(80),
+            archived = false,
+            createdAtMillis = now,
+            updatedAtMillis = now
+        ))
+    }
+
+    /** Archive/restore a profile without touching shared memory or PersonalProfileStore. */
+    @Synchronized
+    fun setArchived(identityId: String, archived: Boolean): DigitalIdentity {
+        val current = get(identityId) ?: throw IllegalArgumentException("Il profilo selezionato non esiste.")
+        return update(current.copy(archived = archived))
+    }
+
     @Synchronized
     fun delete(identityId: String): Boolean {
         val file = fileFor(identityId)
@@ -82,15 +104,22 @@ class DigitalIdentityStore(context: Context) {
         require(identity.displayName.isNotBlank()) { "Il nome dell'identità è obbligatorio." }
         require(identity.origin.countryName.isNotBlank()) { "Il paese di origine è obbligatorio." }
         require(identity.preferredLanguageTag.isNotBlank()) { "La lingua preferita è obbligatoria." }
-        require(identity.memoryNamespace == identity.id) { "Lo spazio di memoria deve appartenere all'ID dell'identità." }
+        require(DigitalIdentityVoiceCatalog.forPresentation(identity.presentation).contains(identity.voiceName)) { "La voce selezionata non è compatibile con il tipo di personaggio." }
+        require(identity.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE || identity.memoryNamespace == identity.id) { "Spazio di memoria non riconosciuto." }
         require(identity.schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata." }
         val traits = identity.personality
         return identity.copy(
-            displayName = identity.displayName.trim(),
+            displayName = identity.displayName.trim().take(80),
+            memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             preferredLanguageTag = identity.preferredLanguageTag.trim(),
+            voiceName = identity.voiceName,
             languages = identity.languages.map { it.trim() }.filter { it.isNotEmpty() }.distinct(),
             biography = identity.biography.trim(),
             personality = traits.copy(
+                irony = traits.irony.coerceIn(0f, 1f),
+                sweetness = traits.sweetness.coerceIn(0f, 1f),
+                sensuality = traits.sensuality.coerceIn(0f, 1f),
+                friendliness = traits.friendliness.coerceIn(0f, 1f),
                 warmth = traits.warmth.coerceIn(0f, 1f),
                 humour = traits.humour.coerceIn(0f, 1f),
                 curiosity = traits.curiosity.coerceIn(0f, 1f),
@@ -109,6 +138,9 @@ class DigitalIdentityStore(context: Context) {
             )
         )
     }
+
+    private fun canonicalName(presentation: IdentityPresentation): String =
+        if (presentation == IdentityPresentation.MASCULINE) "José" else "Juanita"
 
     private fun fileFor(identityId: String): File {
         UUID.fromString(identityId)
@@ -167,8 +199,13 @@ class DigitalIdentityStore(context: Context) {
             put("community", identity.origin.community)
         })
         put("preferredLanguageTag", identity.preferredLanguageTag)
+        put("voiceName", identity.voiceName)
         put("languages", JSONArray(identity.languages))
         put("personality", JSONObject().apply {
+            put("irony", identity.personality.irony.toDouble())
+            put("sweetness", identity.personality.sweetness.toDouble())
+            put("sensuality", identity.personality.sensuality.toDouble())
+            put("friendliness", identity.personality.friendliness.toDouble())
             put("warmth", identity.personality.warmth.toDouble())
             put("humour", identity.personality.humour.toDouble())
             put("curiosity", identity.personality.curiosity.toDouble())
@@ -190,6 +227,7 @@ class DigitalIdentityStore(context: Context) {
         put("memoryNamespace", identity.memoryNamespace)
         put("createdAtMillis", identity.createdAtMillis)
         put("updatedAtMillis", identity.updatedAtMillis)
+        put("archived", identity.archived)
     }
 
     private fun dossierToJson(dossier: CulturalDossier): JSONObject = JSONObject().apply {
@@ -205,6 +243,7 @@ class DigitalIdentityStore(context: Context) {
                 put("topic", source.topic)
                 put("confidence", source.confidence.toDouble())
                 put("summary", source.summary)
+                put("geographicScope", source.geographicScope)
             }) }
         })
     }
@@ -230,8 +269,14 @@ class DigitalIdentityStore(context: Context) {
                 community = origin.optString("community")
             ),
             preferredLanguageTag = json.getString("preferredLanguageTag"),
+            voiceName = json.optString("voiceName").takeIf { it.isNotBlank() && DigitalIdentityVoiceCatalog.forPresentation(IdentityPresentation.valueOf(json.getString("presentation"))).contains(it) }
+                ?: DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.valueOf(json.getString("presentation"))),
             languages = languages,
             personality = IdentityPersonality(
+                irony = personality.optDouble("irony", 0.5).toFloat(),
+                sweetness = personality.optDouble("sweetness", 0.7).toFloat(),
+                sensuality = personality.optDouble("sensuality", 0.5).toFloat(),
+                friendliness = personality.optDouble("friendliness", 0.7).toFloat(),
                 warmth = personality.optDouble("warmth", 0.7).toFloat(),
                 humour = personality.optDouble("humour", 0.6).toFloat(),
                 curiosity = personality.optDouble("curiosity", 0.8).toFloat(),
@@ -250,9 +295,11 @@ class DigitalIdentityStore(context: Context) {
             ),
             biography = json.optString("biography"),
             culturalDossier = dossierJson?.let(::dossierFromJson),
-            memoryNamespace = json.optString("memoryNamespace", json.getString("id")),
+            // Older C2 profiles used an identity UUID here. Normalize them to the shared namespace.
+            memoryNamespace = SHARED_IDENTITY_MEMORY_NAMESPACE,
             createdAtMillis = json.optLong("createdAtMillis", 0L),
             updatedAtMillis = json.optLong("updatedAtMillis", 0L),
+            archived = json.optBoolean("archived", false),
             schemaVersion = SCHEMA_VERSION
         )
     }
@@ -268,7 +315,8 @@ class DigitalIdentityStore(context: Context) {
                 retrievedAtMillis = item.optLong("retrievedAtMillis", 0L),
                 topic = item.optString("topic", "general"),
                 confidence = item.optDouble("confidence", 0.5).toFloat().coerceIn(0f, 1f),
-                summary = item.optString("summary")
+                summary = item.optString("summary"),
+                geographicScope = item.optString("geographicScope")
             )
         }
         val approved = json.opt("approvedAtMillis")

@@ -40,7 +40,7 @@ class DigitalIdentityStoreTest {
     @Test
     fun identitiesPersistIndependentlyAcrossStoreRecreation() {
         val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
-        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Canarias", "Tenerife", "Canario")
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Andalucía", "Sevilla", "Andaluz")
 
         store.create(juanita)
         store.create(jose)
@@ -49,8 +49,8 @@ class DigitalIdentityStoreTest {
         assertEquals(2, reloaded.size)
         assertEquals("Paisa", reloaded[juanita.id]?.origin?.community)
         assertEquals(IdentityPresentation.MASCULINE, reloaded[jose.id]?.presentation)
-        assertEquals(juanita.id, reloaded[juanita.id]?.memoryNamespace)
-        assertEquals(jose.id, reloaded[jose.id]?.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, reloaded[juanita.id]?.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, reloaded[jose.id]?.memoryNamespace)
     }
 
     @Test
@@ -83,12 +83,67 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
-    fun identityNamespaceCannotBeAssignedToAnotherIdentity() {
-        val identity = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
-        val invalid = identity.copy(memoryNamespace = UUID.randomUUID().toString())
+    fun regionalOriginAndCharacterTraitsRemainSeparateWhileMemoryNamespaceIsShared() {
+        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+            .copy(personality = IdentityPersonality(warmth = 0.95f, humour = 0.8f))
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Andalucía", "Sevilla", "Andaluz")
+            .copy(personality = IdentityPersonality(warmth = 0.35f, humour = 0.2f))
+        store.create(juanita)
+        store.create(jose)
 
-        assertThrows(IllegalArgumentException::class.java) { store.create(invalid) }
-        assertFalse(testDirectory.walkTopDown().any { it.isFile && it.name.endsWith(".identity.enc") })
+        store.update(juanita.copy(
+            origin = CulturalOrigin("ES", "España", "Canarias", "Tenerife", "Canario"),
+            personality = juanita.personality.copy(warmth = 0.99f)
+        ))
+
+        val updatedJuanita = store.get(juanita.id)!!
+        val unchangedJose = store.get(jose.id)!!
+        assertEquals("Canarias", updatedJuanita.origin.region)
+        assertEquals(0.99f, updatedJuanita.personality.warmth, 0.001f)
+        assertEquals("Andalucía", unchangedJose.origin.region)
+        assertEquals(0.35f, unchangedJose.personality.warmth, 0.001f)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, updatedJuanita.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, unchangedJose.memoryNamespace)
+    }
+
+    @Test
+    fun userCanCreateIndependentCollectionsOfAnySizeForBothCharacterFamilies() {
+        val juanitas = (1..5).map { index ->
+            identity("Juanita $index", IdentityPresentation.FEMININE, "CO", "Colombia", "Region $index")
+        }
+        val jose = (1..4).map { index ->
+            identity("José $index", IdentityPresentation.MASCULINE, "ES", "España", "Region $index")
+        }
+
+        (juanitas + jose).forEach(store::create)
+
+        val saved = store.list()
+        assertEquals(9, saved.size)
+        assertEquals(5, saved.count { it.presentation == IdentityPresentation.FEMININE })
+        assertEquals(4, saved.count { it.presentation == IdentityPresentation.MASCULINE })
+        assertEquals(juanitas.map { it.displayName }.toSet(), saved.filter { it.presentation == IdentityPresentation.FEMININE }.map { it.displayName }.toSet())
+        assertTrue(saved.all { it.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE })
+    }
+
+    @Test
+    fun duplicateGetsIndependentIdAndArchiveRestoreNeverDeletesSharedProfileData() {
+        val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(biography = "Biografia originale")
+        store.create(original)
+
+        val duplicate = store.duplicate(original.id, "Juanita Canaria")
+        assertTrue(duplicate.id != original.id)
+        assertEquals("Juanita Canaria", duplicate.displayName)
+        assertEquals("Biografia originale", duplicate.biography)
+
+        store.setArchived(original.id, true)
+        assertTrue(store.get(original.id)!!.archived)
+        assertFalse(store.get(duplicate.id)!!.archived)
+
+        store.setArchived(original.id, false)
+        assertFalse(store.get(original.id)!!.archived)
+        assertEquals(2, store.list().size)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, store.get(original.id)!!.memoryNamespace)
     }
 
     @Test
@@ -106,7 +161,10 @@ class DigitalIdentityStoreTest {
     @Test
     fun expandedCharacterTraitsPersistAcrossStoreRecreation() {
         val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia").copy(
+            voiceName = "Sulafat",
+            biography = "Una biografia di prova persistente.",
             personality = IdentityPersonality(
+                irony = 0.93f, sweetness = 0.84f, sensuality = 0.72f, friendliness = 0.88f,
                 warmth = 0.91f, humour = 0.82f, curiosity = 0.73f, expressiveness = 0.64f,
                 formality = 0.15f, empathy = 0.88f, seriousness = 0.42f, directness = 0.77f,
                 sociability = 0.69f, spontaneity = 0.83f, patience = 0.92f, optimism = 0.71f,
@@ -115,6 +173,12 @@ class DigitalIdentityStoreTest {
         )
         store.create(original)
         val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
+        assertEquals("Sulafat", restored.voiceName)
+        assertEquals("Una biografia di prova persistente.", restored.biography)
+        assertEquals(0.93f, restored.personality.irony, 0.001f)
+        assertEquals(0.84f, restored.personality.sweetness, 0.001f)
+        assertEquals(0.72f, restored.personality.sensuality, 0.001f)
+        assertEquals(0.88f, restored.personality.friendliness, 0.001f)
         assertEquals(0.77f, restored.personality.directness, 0.001f)
         assertEquals(0.69f, restored.personality.sociability, 0.001f)
         assertEquals(0.83f, restored.personality.spontaneity, 0.001f)
@@ -123,6 +187,19 @@ class DigitalIdentityStoreTest {
         assertEquals(0.58f, restored.personality.assertiveness, 0.001f)
         assertEquals(0.86f, restored.personality.playfulness, 0.001f)
         assertEquals(0.79f, restored.personality.discretion, 0.001f)
+    }
+
+    @Test
+    fun changingVoiceFromSettingsPersistsOnlyForTheSelectedCharacter() {
+        val juanita = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val anotherJuanita = identity("Juanita Canaria", IdentityPresentation.FEMININE, "ES", "España")
+        store.create(juanita)
+        store.create(anotherJuanita)
+
+        store.update(juanita.copy(voiceName = "Sulafat"))
+        val reopened = DigitalIdentityStore(isolatedContext())
+        assertEquals("Sulafat", reopened.get(juanita.id)?.voiceName)
+        assertEquals("Kore", reopened.get(anotherJuanita.id)?.voiceName)
     }
 
     @Test
@@ -142,9 +219,17 @@ class DigitalIdentityStoreTest {
             .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f))
         val instruction = profile.toSystemInstruction()
         assertTrue(instruction.contains("directness 90"))
+        assertTrue(instruction.contains("irony 50"))
+        assertTrue(instruction.contains("sweetness 70"))
+        assertTrue(instruction.contains("sensuality 50"))
         assertTrue(instruction.contains("patience 80"))
+        assertTrue(instruction.contains("expressiveness 70"))
+        assertTrue(instruction.contains("formality 30"))
+        assertTrue(instruction.contains("empathy 80"))
         assertTrue(instruction.contains("playfulness 20"))
         assertTrue(instruction.contains("does not determine personality"))
+        assertTrue(instruction.contains("same encrypted knowledge"))
+        assertTrue(instruction.contains("does not merge character personalities"))
         assertTrue(instruction.contains("without aggression"))
         assertTrue(instruction.contains("never turn warmth or empathy into flattery"))
     }
@@ -161,6 +246,7 @@ class DigitalIdentityStoreTest {
                 assertTrue(source.publisher.isNotBlank())
                 assertTrue(source.url.startsWith("https://"))
                 assertTrue(source.confidence in 0f..1f)
+                assertTrue("Every source must declare its geographic scope", source.geographicScope.isNotBlank())
             }
             assertNull(dossier.approvedAtMillis)
         }
@@ -180,6 +266,10 @@ class DigitalIdentityStoreTest {
         val restored = DigitalIdentityStore(isolatedContext()).get(base.id)!!
         assertEquals(456L, restored.culturalDossier?.approvedAtMillis)
         assertEquals(3, restored.culturalDossier?.sources?.size)
+        assertEquals(
+            CulturalDossierCatalog.dossiers.first().sources.map { it.geographicScope },
+            restored.culturalDossier?.sources?.map { it.geographicScope }
+        )
         assertTrue(restored.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
 
         store.update(restored.copy(culturalDossier = null))
@@ -202,6 +292,12 @@ class DigitalIdentityStoreTest {
         assertTrue(masculineInstruction.contains("Vos, tú e usted"))
         assertTrue(feminineInstruction.contains("feminine grammatical self-reference"))
         assertTrue(masculineInstruction.contains("masculine grammatical self-reference"))
+        assertTrue(feminineInstruction.contains("distinctly feminine woman character"))
+        assertTrue(feminineInstruction.contains("feminine identity in self-reference, language, conversational presence"))
+        assertTrue(masculineInstruction.contains("distinctly masculine man character"))
+        assertTrue(masculineInstruction.contains("masculine identity in self-reference, language, conversational presence"))
+        assertTrue(feminineInstruction.contains("never as a caricature"))
+        assertTrue(masculineInstruction.contains("never as a caricature"))
         assertEquals(feminine.culturalDossier, masculine.culturalDossier)
         assertEquals(feminine.origin, masculine.origin)
     }
