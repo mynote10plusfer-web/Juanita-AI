@@ -94,6 +94,7 @@ internal fun MemoryPrivacySection(
     var archiveRangeStart by remember { mutableStateOf("") }
     var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var memoryPage by remember { mutableStateOf(0) }
     val ioScope = rememberCoroutineScope()
     // Refresh once when the Memory tab is opened, never on every streaming status update.
     LaunchedEffect(Unit) {
@@ -108,6 +109,10 @@ internal fun MemoryPrivacySection(
         90 -> "90 giorni"
         else -> "Mai (cancellazione manuale)"
     }
+    val memoryPageSize = 25
+    val memoryPageCount = ((memories.size + memoryPageSize - 1) / memoryPageSize).coerceAtLeast(1)
+    val safeMemoryPage = memoryPage.coerceIn(0, memoryPageCount - 1)
+    val visibleMemories = memories.drop(safeMemoryPage * memoryPageSize).take(memoryPageSize)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -136,7 +141,7 @@ internal fun MemoryPrivacySection(
                 color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${memories.size}/100 ricordi · ${memories.sumOf { it.text.length }}/32.000 caratteri", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                Text("${memories.size} ricordi · ${memories.sumOf { it.text.length }} caratteri · archivio locale senza soglia applicativa", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
                 TextButton(onClick = { ioScope.launch { memories = withContext(Dispatchers.IO) { onRefreshMemories() } } }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
             }
             OutlinedTextField(
@@ -167,7 +172,16 @@ internal fun MemoryPrivacySection(
                         Text("Elimina selezionati (${selectedMemoryIds.size})", color = Color(0xFFE6A0A0), fontSize = 12.sp)
                     }
                 }
-                memories.forEach { item ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Pagina ${safeMemoryPage + 1} di ${memoryPageCount}", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { memoryPage = (safeMemoryPage - 1).coerceAtLeast(0) }, enabled = safeMemoryPage > 0) {
+                        Text("Precedente", color = gold, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { memoryPage = (safeMemoryPage + 1).coerceAtMost(memoryPageCount - 1) }, enabled = safeMemoryPage < memoryPageCount - 1) {
+                        Text("Successiva", color = gold, fontSize = 11.sp)
+                    }
+                }
+                visibleMemories.forEach { item ->
                     Row(verticalAlignment = Alignment.Top) {
                         Checkbox(checked = item.id in selectedMemoryIds, onCheckedChange = { checked -> selectedMemoryIds = if (checked) selectedMemoryIds + item.id else selectedMemoryIds - item.id })
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
