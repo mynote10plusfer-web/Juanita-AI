@@ -74,7 +74,7 @@ internal fun MemoryPrivacySection(
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
-    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
@@ -325,13 +325,15 @@ private fun ConversationArchiveCalendar(
     onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionChanged: (Int) -> Unit,
     onRefresh: () -> List<EncryptedMemoryStore.ArchivedConversation>, onDeleteConversation: (String) -> Unit,
     onDeleteDay: (LocalDate) -> Unit,
-    onListTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onListTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit
 ) {
     var month by remember { mutableStateOf(YearMonth.now()) }
     var day by remember { mutableStateOf(LocalDate.now()) }
     var opened by remember { mutableStateOf<EncryptedMemoryStore.ArchivedConversation?>(null) }
     var turns by remember { mutableStateOf(emptyList<EncryptedMemoryStore.ArchivedTurn>()) }
+    var turnsPageInfo by remember { mutableStateOf<EncryptedMemoryStore.ArchivedTurnPage?>(null) }
+    var turnsLoading by remember { mutableStateOf(false) }
     var fromText by remember { mutableStateOf("") }
     var toText by remember { mutableStateOf("") }
     var confirmDay by remember { mutableStateOf(false) }
@@ -436,7 +438,18 @@ private fun ConversationArchiveCalendar(
                                 opened = session
                                 fromText = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
                                 toText = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
-                                ioScope.launch { turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) } }
+                                turns = emptyList()
+                                turnsPageInfo = null
+                                turnsLoading = true
+                                ioScope.launch {
+                                    runCatching {
+                                        withContext(Dispatchers.IO) { onListTurns(session.sessionId, 0, 50) }
+                                    }.onSuccess { page ->
+                                        turns = page.turns
+                                        turnsPageInfo = page
+                                    }
+                                    turnsLoading = false
+                                }
                             }) { Text("Apri", color = gold) }
                             TextButton(onClick = { onDeleteConversation(session.sessionId) }) { Text("Elimina", color = Color(0xFFE6A0A0)) }
                         }
@@ -488,6 +501,23 @@ private fun ConversationArchiveCalendar(
                             Divider(color = Color(0xFF3B4049))
                         }
                     }
+                    if (turnsLoading) {
+                        Text("Caricamento messaggi…", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                    } else if (turnsPageInfo?.hasMore == true) {
+                        TextButton(onClick = {
+                            val nextPage = (turnsPageInfo?.pageIndex ?: 0) + 1
+                            turnsLoading = true
+                            ioScope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) { onListTurns(session.sessionId, nextPage, 50) }
+                                }.onSuccess { page ->
+                                    turns = turns + page.turns
+                                    turnsPageInfo = page
+                                }
+                                turnsLoading = false
+                            }
+                        }) { Text("Carica altri messaggi (" + ((turnsPageInfo?.totalCount ?: 0) - turns.size) + " rimanenti)", color = gold, fontSize = 10.sp) }
+                    }
                 }
             },
             confirmButton = { TextButton(enabled = from != null && until != null && until > from, onClick = {
@@ -496,7 +526,9 @@ private fun ConversationArchiveCalendar(
                         withContext(Dispatchers.IO) {
                             onDeleteTimeRange(session.sessionId, from, until + 60_000L)
                         }
-                        turns = withContext(Dispatchers.IO) { onListTurns(session.sessionId) }
+                        val refreshedPage = withContext(Dispatchers.IO) { onListTurns(session.sessionId, 0, 50) }
+                        turns = refreshedPage.turns
+                        turnsPageInfo = refreshedPage
                         conversations = withContext(Dispatchers.IO) { onRefresh() }
                         if (turns.isEmpty()) opened = null
                     }
