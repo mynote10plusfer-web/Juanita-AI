@@ -243,4 +243,48 @@ class ConversationArchiveFidelityTest {
         }
     }
 
+
+    @Test
+    fun readsEncryptedTranscriptInChronologicalPagesWithoutLosingOrRepeatingTurns() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "paged-journal-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val expected = (0 until 47).map { index ->
+            "Pagina archivio turno $index — contenuto áβč"
+        }
+        try {
+            expected.forEachIndexed { index, value ->
+                store.appendConversationTurn(
+                    sessionId,
+                    if (index % 2 == 0) "USER" else "ASSISTANT",
+                    value,
+                    1_800_000_000_000L + index
+                )
+            }
+
+            val first = EncryptedMemoryStore(context).listConversationTurnsPage(sessionId, 0, 10)
+            assertEquals(47, first.totalCount)
+            assertEquals(10, first.turns.size)
+            assertTrue(first.hasMore)
+            assertEquals(expected.take(10), first.turns.map { it.text })
+
+            val collected = mutableListOf<String>()
+            for (pageIndex in 0..4) {
+                val page = EncryptedMemoryStore(context).listConversationTurnsPage(sessionId, pageIndex, 10)
+                assertEquals(47, page.totalCount)
+                collected += page.turns.map { it.text }
+                assertEquals(pageIndex < 4, page.hasMore)
+            }
+            assertEquals("Every archived turn must appear exactly once across pages", expected, collected)
+
+            val beyondEnd = EncryptedMemoryStore(context).listConversationTurnsPage(sessionId, 99, 10)
+            assertTrue(beyondEnd.turns.isEmpty())
+            assertEquals(47, beyondEnd.totalCount)
+            assertTrue(!beyondEnd.hasMore)
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
+
 }
