@@ -945,6 +945,11 @@ private fun JuanitaApp(
                                     presencePreferences.edit()
                                         .putBoolean("background_continuation_authorized", enabled)
                                         .apply()
+                                    context.startService(
+                                        Intent(context, JuanitaVoiceService::class.java)
+                                            .setAction(JuanitaVoiceService.ACTION_UPDATE_BACKGROUND_CONSENT)
+                                            .putExtra(JuanitaVoiceService.EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, enabled)
+                                    )
                                 }
                             )
                         }

@@ -137,6 +137,16 @@ class JuanitaVoiceService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_UPDATE_BACKGROUND_CONSENT -> {
+                backgroundContinuationAuthorized =
+                    intent.getBooleanExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, false) && activeAlarmId == null
+                if (!backgroundContinuationAuthorized) {
+                    updateNotification("Continuazione in background non autorizzata")
+                } else if (startRequested) {
+                    updateNotification("Conversazione · continuazione in background autorizzata")
+                }
+                return START_NOT_STICKY
+            }
             ACTION_ACTIVITY_BACKGROUND -> {
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
                     stopSelf(startId)
@@ -946,6 +956,7 @@ class JuanitaVoiceService : Service() {
         const val ACTION_STOP = "ai.juanita.app.action.STOP_VOICE"
         const val ACTION_STOP_ALARM = "ai.juanita.app.action.STOP_ALARM_VOICE"
         const val ACTION_ACTIVITY_BACKGROUND = "ai.juanita.app.action.ACTIVITY_BACKGROUND"
+        const val ACTION_UPDATE_BACKGROUND_CONSENT = "ai.juanita.app.action.UPDATE_BACKGROUND_CONSENT"
         const val EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED = "extra_background_continuation_authorized"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
