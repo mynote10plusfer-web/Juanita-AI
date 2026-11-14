@@ -996,11 +996,6 @@ private fun JuanitaApp(
                 SettingsCard(panel, gold, "USCITA SICURA") {
                     Text("Quando esci, Juanita attende la conferma dello spegnimento del microfono e della sessione vocale. Le sveglie e la memoria restano intatte.",
                         color = Color(0xFFB9BBC1), fontSize = 12.sp)
-                    Button(
-                        onClick = { showExitConfirmation = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-                    ) { Text("Esci e chiudi completamente") }
                 }
 
                 }
