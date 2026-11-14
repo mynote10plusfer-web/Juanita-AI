@@ -972,6 +972,11 @@ class JuanitaVoiceService : Service() {
         if (lifecycleState != VoiceLifecycleState.IDLE && lifecycleState != VoiceLifecycleState.ERROR) {
             Log.e("JuanitaVoiceService", "Service destroyed before orderly voice shutdown completed: $lifecycleState")
         }
+        // Explicit app exit waits for the started service to finish cleanup and actually
+        // reach onDestroy, not merely for AudioRecord/Gemini to acknowledge microphone stop.
+        if (lifecycleState == VoiceLifecycleState.IDLE) {
+            _serviceStoppedConfirmed.value = true
+        }
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
         activeAlarmId = null
@@ -1016,21 +1021,27 @@ class JuanitaVoiceService : Service() {
 
         // True only after the service has confirmed microphone and Live-session teardown.
         private val _shutdownConfirmed = MutableStateFlow(true)
+        // Separate from microphone shutdown: true only after successful service destruction.
+        private val _serviceStoppedConfirmed = MutableStateFlow(true)
 
         /**
-         * Requests an orderly stop and waits for the service's explicit teardown
-         * acknowledgement. The caller must not destroy its Activity before this returns true.
+         * Requests an orderly stop and waits for both confirmed audio teardown and the
+         * service's onDestroy callback. The Activity must remain until this returns true.
          */
-        suspend fun stopAndAwait(context: Context, timeoutMillis: Long = 20_000L): Boolean {
+        suspend fun stopAndAwait(context: Context, timeoutMillis: Long = 35_000L): Boolean {
             require(timeoutMillis > 0L)
             _shutdownConfirmed.value = false
+            _serviceStoppedConfirmed.value = false
             return try {
                 context.applicationContext.startService(
                     Intent(context, JuanitaVoiceService::class.java).setAction(ACTION_STOP)
                 )
-                withTimeoutOrNull(timeoutMillis) { _shutdownConfirmed.first { it } } == true
+                withTimeoutOrNull(timeoutMillis) {
+                    _shutdownConfirmed.first { it }
+                    _serviceStoppedConfirmed.first { it }
+                } == true
             } catch (error: Exception) {
-                Log.e("JuanitaVoiceService", "Unable to request confirmed voice shutdown", error)
+                Log.e("JuanitaVoiceService", "Unable to confirm complete app voice-service shutdown", error)
                 false
             }
         }
