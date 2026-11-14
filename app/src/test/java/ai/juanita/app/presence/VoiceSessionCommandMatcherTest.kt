@@ -34,6 +34,22 @@ class VoiceSessionCommandMatcherTest {
     }
 
     @Test
+    fun recognizesCommandsWithoutRepeatingTheCharacterName() {
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("fermati", "Juanita")
+        )
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
+            VoiceSessionCommandMatcher.match("chiudi l'app", "Juanita")
+        )
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
+            VoiceSessionCommandMatcher.match("chiudi applicazione per favore", "José")
+        )
+    }
+
+    @Test
     fun ignoresIncidentalMentionsAndCommandsAddressedToAnotherIdentity() {
         assertNull(VoiceSessionCommandMatcher.match("Per favore fermati Juanita", "Juanita"))
         assertNull(VoiceSessionCommandMatcher.match("Juanita, fermati", "José"))
