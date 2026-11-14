@@ -71,6 +71,20 @@ class ConversationalPresencePolicyTest {
     }
 
     @Test
+    fun backgroundContinuationFailsClosedWhenMicrophonePermissionIsRevoked() {
+        val backgroundContext = safeContext.copy(
+            appInForeground = false,
+            foregroundServiceActive = true,
+            backgroundContinuationAuthorized = true,
+            microphonePermissionGranted = false
+        )
+        assertEquals(
+            PresenceDecision.BlockListening(PresenceBlockReason.MICROPHONE_PERMISSION_MISSING),
+            ConversationalPresencePolicy.listeningDecision(enabled, backgroundContext)
+        )
+    }
+
+    @Test
     fun listeningRequiresExplicitSessionAndMicrophonePermission() {
         assertEquals(
             PresenceDecision.BlockListening(PresenceBlockReason.SESSION_NOT_STARTED_BY_USER),
