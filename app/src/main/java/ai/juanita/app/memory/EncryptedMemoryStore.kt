@@ -1115,7 +1115,14 @@ class EncryptedMemoryStore(context: Context) {
     /** Clears every archived turn and semantic memory record (legacy all-data operation). */
     @Synchronized
     fun clearAll() {
-        preferences.edit().remove(KEY_ENCRYPTED_DATA).apply()
+        check(preferences.edit().remove(KEY_ENCRYPTED_DATA).commit()) {
+            "Unable to clear encrypted memory metadata"
+        }
+        val memoryFiles = memoryDirectory().listFiles()
+            ?: throw IllegalStateException("Unable to inspect encrypted memory directory")
+        memoryFiles.forEach { file ->
+            check(file.deleteRecursively()) { "Unable to clear encrypted memory file: ${file.name}" }
+        }
         sessionArchiveSessionIds().forEach(::deleteSessionArchive)
     }
 
