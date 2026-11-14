@@ -633,18 +633,19 @@ class EncryptedMemoryStore(context: Context) {
             if (record.optString("kind") != "turn" || record.optString("sessionId") != sessionId) true
             else record.optLong("createdAt") < startInclusive || record.optLong("createdAt") >= endExclusive
         }
-        val file = sessionArchiveFile(sessionId)
-        if (file.exists()) {
-            val remaining = readSessionArchive(file).filter {
-                it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive
-            }
-            if (remaining.isEmpty()) file.delete() else writeSessionArchive(file, remaining)
+        val archived = readSessionArchive(sessionArchiveFile(sessionId), sessionId)
+        val remaining = archived.filter {
+            it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive
+        }
+        if (remaining.size != archived.size) {
+            if (remaining.isEmpty()) deleteSessionArchive(sessionId)
+            else writeSessionArchive(sessionArchiveFile(sessionId), remaining)
         }
     }
 
     fun deleteConversation(sessionId: String) {
         filterRecords { record -> record.optString("kind") != "turn" || record.optString("sessionId") != sessionId }
-        sessionArchiveFile(sessionId).delete()
+        deleteSessionArchive(sessionId)
     }
 
     /**
@@ -804,34 +805,30 @@ class EncryptedMemoryStore(context: Context) {
                 timestamp < startInclusive || timestamp >= endExclusive
             }
         }
-        sessionArchiveFiles().forEach { file ->
-            // A decryption/read failure is not an empty archive. Preserve the original
-            // bytes so a transient Keystore problem or damaged file cannot erase history.
+        sessionArchiveSessionIds().forEach { sessionId ->
             val archivedTurns = try {
-                readSessionArchive(file)
+                readSessionArchive(sessionArchiveFile(sessionId), sessionId)
             } catch (error: Exception) {
-                Log.w(TAG, "Skipping archive range deletion because a session could not be read: ${file.name}", error)
+                Log.w(TAG, "Skipping archive range deletion because a session could not be read: $sessionId", error)
                 return@forEach
             }
             val retainedTurns = archivedTurns.filter {
                 it.timestampMillis < startInclusive || it.timestampMillis >= endExclusive
             }
             if (retainedTurns.isEmpty()) {
-                if (!file.delete() && file.exists()) {
-                    Log.w(TAG, "Unable to delete empty conversation archive: ${file.name}")
-                }
+                runCatching { deleteSessionArchive(sessionId) }
+                    .onFailure { Log.w(TAG, "Unable to delete conversation archive: $sessionId", it) }
             } else {
-                runCatching { writeSessionArchive(file, retainedTurns) }
-                    .onFailure { Log.w(TAG, "Unable to update conversation archive: ${file.name}", it) }
+                runCatching { writeSessionArchive(sessionArchiveFile(sessionId), retainedTurns) }
+                    .onFailure { Log.w(TAG, "Unable to update conversation archive: $sessionId", it) }
             }
-        }
-    }
+        }    }
 
     /** Clears conversation transcripts only; saved personal memories are preserved. */
     @Synchronized
     fun clearConversationArchive() {
         filterRecords { it.optString("kind") != "turn" }
-        sessionArchiveFiles().forEach { it.delete() }
+        sessionArchiveSessionIds().forEach(::deleteSessionArchive)
     }
 
     /** Clears saved personal memories only; archived conversation turns are preserved. */
@@ -891,27 +888,25 @@ class EncryptedMemoryStore(context: Context) {
         val cutoff = now - days * MILLIS_PER_DAY
         filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
         var purgeCompleted = true
-        sessionArchiveFiles().forEach { file ->
-            // Never interpret a decryption failure as an empty archive: doing so would
-            // delete the only copy of that conversation. Leave it byte-for-byte intact.
+        sessionArchiveSessionIds().forEach { sessionId ->
             val archivedTurns = try {
-                readSessionArchive(file)
+                readSessionArchive(sessionArchiveFile(sessionId), sessionId)
             } catch (error: Exception) {
                 purgeCompleted = false
-                Log.w(TAG, "Skipping retention purge because a session archive could not be read: ${file.name}", error)
+                Log.w(TAG, "Skipping retention purge because an archive could not be read: $sessionId", error)
                 return@forEach
             }
             val retainedTurns = archivedTurns.filter { it.timestampMillis >= cutoff }
             if (retainedTurns.isEmpty()) {
-                if (!file.delete() && file.exists()) {
+                runCatching { deleteSessionArchive(sessionId) }.onFailure {
                     purgeCompleted = false
-                    Log.w(TAG, "Unable to delete expired conversation archive: ${file.name}")
+                    Log.w(TAG, "Unable to delete expired archive: $sessionId", it)
                 }
-            } else {
-                runCatching { writeSessionArchive(file, retainedTurns) }
+            } else if (retainedTurns.size != archivedTurns.size) {
+                runCatching { writeSessionArchive(sessionArchiveFile(sessionId), retainedTurns) }
                     .onFailure {
                         purgeCompleted = false
-                        Log.w(TAG, "Unable to rewrite retained conversation archive: ${file.name}", it)
+                        Log.w(TAG, "Unable to compact retained archive: $sessionId", it)
                     }
             }
         }
@@ -933,14 +928,11 @@ class EncryptedMemoryStore(context: Context) {
                 record.optString("id"), record.optString("role"), record.optString("text"), record.optLong("createdAt")
             )
         }
-        sessionArchiveFiles().forEach { file ->
-            val sessionId = file.nameWithoutExtension
-            // Never turn a decryption/read failure into an empty conversation: that would
-            // make retrieval silently claim that historical information does not exist.
+        sessionArchiveSessionIds().forEach { sessionId ->
             val turns = try {
-                readSessionArchive(file)
+                readSessionArchive(sessionArchiveFile(sessionId), sessionId)
             } catch (failure: Exception) {
-                Log.w(TAG, "Unable to read encrypted conversation archive during recall: ${file.name}", failure)
+                Log.w(TAG, "Unable to read encrypted conversation archive during recall: $sessionId", failure)
                 throw IllegalStateException(
                     "Historical conversation retrieval is incomplete because an encrypted archive could not be read.",
                     failure
@@ -951,33 +943,94 @@ class EncryptedMemoryStore(context: Context) {
         return result
     }
 
-    private fun sessionArchiveDirectory(): File = File(appContext.filesDir, "conversation_archive").apply { mkdirs() }
-    private fun sessionArchiveFile(sessionId: String): File = File(sessionArchiveDirectory(), "$sessionId.enc")
-    private fun sessionArchiveFiles(): List<File> =
-        sessionArchiveDirectory().listFiles { file -> file.isFile && file.name.endsWith(".enc") }?.toList().orEmpty()
+    private fun sessionArchiveDirectory(): File =
+        File(appContext.filesDir, "conversation_archive").apply { mkdirs() }
 
-    private fun appendEncryptedSessionTurn(turn: ArchivedTurn, sessionId: String) {
-        val file = sessionArchiveFile(sessionId)
-        val turns = readSessionArchive(file).toMutableList()
-        turns += turn
-        writeSessionArchive(file, turns)
+    private fun sessionArchiveFile(sessionId: String): File =
+        File(sessionArchiveDirectory(), "$sessionId.enc")
+
+    private fun sessionJournalDirectory(sessionId: String): File =
+        File(sessionArchiveDirectory(), "$sessionId.journal")
+
+    private fun sessionArchiveSessionIds(): Set<String> =
+        sessionArchiveDirectory().listFiles()?.mapNotNull { file ->
+            when {
+                file.isFile && file.name.endsWith(".enc") -> file.name.removeSuffix(".enc")
+                file.isDirectory && file.name.endsWith(".journal") -> file.name.removeSuffix(".journal")
+                else -> null
+            }
+        }?.toSet().orEmpty()
+
+    private fun deleteSessionArchive(sessionId: String) {
+        val packed = sessionArchiveFile(sessionId)
+        if (packed.exists()) check(packed.delete()) { "Unable to delete encrypted archive $sessionId" }
+        val journal = sessionJournalDirectory(sessionId)
+        if (journal.exists()) check(journal.deleteRecursively()) { "Unable to delete encrypted journal $sessionId" }
     }
 
-    private fun readSessionArchive(file: File): List<ArchivedTurn> {
-        if (!file.exists()) return emptyList()
-        val packed = file.readBytes()
-        require(packed.size > GCM_IV_LENGTH) { "Encrypted conversation archive is invalid" }
-        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
-        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+    /** O(1) append: one independently authenticated AES-GCM frame per transcript turn. */
+    private fun appendEncryptedSessionTurn(turn: ArchivedTurn, sessionId: String) {
+        val directory = sessionJournalDirectory(sessionId)
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw IllegalStateException("Unable to create encrypted conversation journal")
+        }
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-        val array = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
-        return buildList {
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val packed = cipher.iv + cipher.doFinal(archivedTurnToJson(turn).toString().toByteArray(Charsets.UTF_8))
+        val destination = File(directory, "\${turn.timestampMillis.toString().padStart(16, '0')}_\${turn.id}.enc")
+        val temporary = File(directory, destination.name + ".tmp")
+        FileOutputStream(temporary).use { output -> output.write(packed); output.fd.sync() }
+        try {
+            Files.move(temporary.toPath(), destination.toPath(), StandardCopyOption.ATOMIC_MOVE)
+        } catch (_: Exception) {
+            Files.move(temporary.toPath(), destination.toPath())
+        }
+    }
+
+    private fun archivedTurnToJson(turn: ArchivedTurn): JSONObject = JSONObject().apply {
+        put("id", turn.id)
+        put("role", turn.role)
+        put("text", turn.text)
+        put("createdAt", turn.timestampMillis)
+        put("personaId", turn.personaId ?: "")
+    }
+
+    private fun jsonToArchivedTurn(item: JSONObject): ArchivedTurn = ArchivedTurn(
+        item.optString("id"), item.optString("role"), item.optString("text"),
+        item.optLong("createdAt"), item.optString("personaId").takeIf { it.isNotBlank() }
+    )
+
+    /** Reads old packed files plus new frames; IDs deduplicate an interrupted compaction. */
+    private fun readSessionArchive(file: File, sessionId: String = file.nameWithoutExtension): List<ArchivedTurn> {
+        val turns = mutableListOf<ArchivedTurn>()
+        if (file.exists()) {
+            val packed = file.readBytes()
+            require(packed.size > GCM_IV_LENGTH) { "Encrypted conversation archive is invalid" }
+            val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+            val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val array = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
             for (index in 0 until array.length()) {
                 val item = array.optJSONObject(index) ?: continue
-                add(ArchivedTurn(item.optString("id"), item.optString("role"), item.optString("text"), item.optLong("createdAt"), item.optString("personaId").takeIf { it.isNotBlank() }))
+                turns += jsonToArchivedTurn(item)
             }
         }
+        val journal = sessionJournalDirectory(sessionId)
+        if (journal.exists()) {
+            val frames = journal.listFiles { frame -> frame.isFile && frame.name.endsWith(".enc") }
+                ?: throw IllegalStateException("Unable to list encrypted transcript frames")
+            frames.sortedBy { it.name }.forEach { frame ->
+                val packed = frame.readBytes()
+                require(packed.size > GCM_IV_LENGTH) { "Encrypted transcript frame is invalid: \${frame.name}" }
+                val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+                val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+                turns += jsonToArchivedTurn(JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8)))
+            }
+        }
+        return turns.distinctBy { it.id }.sortedBy { it.timestampMillis }
     }
 
     private fun writeSessionArchive(file: File, turns: List<ArchivedTurn>) {
@@ -1002,6 +1055,11 @@ class EncryptedMemoryStore(context: Context) {
         } catch (_: Exception) {
             Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
+        // Packed replacement is durable before journal removal; IDs make interruption safe.
+        val journal = sessionJournalDirectory(file.nameWithoutExtension)
+        if (journal.exists()) check(journal.deleteRecursively()) {
+            "Unable to retire compacted transcript journal"
+        }
     }
 
     private fun filterRecords(keep: (JSONObject) -> Boolean) {
@@ -1018,7 +1076,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun clearAll() {
         preferences.edit().remove(KEY_ENCRYPTED_DATA).apply()
-        sessionArchiveFiles().forEach { it.delete() }
+        sessionArchiveSessionIds().forEach(::deleteSessionArchive)
     }
 
     private fun readRecords(): JSONArray {

@@ -64,6 +64,27 @@ class ConversationArchiveFidelityTest {
         }
     }
     @Test
+    fun appendsTranscriptAsIndependentEncryptedFramesAcrossStoreInstances() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "journal-${UUID.randomUUID()}"
+        val store = EncryptedMemoryStore(context)
+        val expected = (0 until 160).map { index -> "Turno $index — contenuto unicode áβč ".repeat(8) }
+        try {
+            expected.forEachIndexed { index, value ->
+                store.appendConversationTurn(sessionId, if (index % 2 == 0) "USER" else "ASSISTANT", value, 1_800_000_000_000L + index)
+            }
+            val journal = File(context.filesDir, "conversation_archive/$sessionId.journal")
+            assertTrue("New turns must use an append-only encrypted journal", journal.isDirectory)
+            assertEquals(expected.size, journal.listFiles { file -> file.isFile && file.name.endsWith(".enc") }?.size)
+            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
+            assertEquals(expected, restored.map { it.text })
+            assertEquals(expected.size, restored.size)
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
+    @Test
     fun carriesForwardLatestInterruptedSnapshotToNewSession() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val olderSession = "interrupted-old-" + UUID.randomUUID()
