@@ -31,7 +31,9 @@ data class MemoryItem(
     /** Null is shared user knowledge; a non-null ID belongs to one character only. */
     val personaId: String? = null,
     /** Shared subject index; legacy records default to a derived topic at read time. */
-    val topic: String = "general"
+    val topic: String = "general",
+    /** ID of the newer user-corrected record; superseded records remain encrypted for history. */
+    val supersededBy: String? = null
 )
 
 /**
@@ -403,6 +405,7 @@ class EncryptedMemoryStore(context: Context) {
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") == "memory" &&
+                record.optString("supersededBy").isBlank() &&
                 record.optString("category") == category &&
                 normalizeMemoryText(record.optString("text")) == normalized
             ) {
@@ -548,7 +551,11 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     @Synchronized
-    fun listMemories(): List<MemoryItem> = buildList {
+    fun listMemories(): List<MemoryItem> = listAllMemories().filter { it.supersededBy == null }
+
+    /** Includes superseded versions for audit/history; ordinary recall uses only active facts. */
+    @Synchronized
+    fun listAllMemories(): List<MemoryItem> = buildList {
         val records = readRecords()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
@@ -875,23 +882,35 @@ class EncryptedMemoryStore(context: Context) {
     fun updateMemory(id: String, newText: String): Boolean {
         require(newText.isNotBlank()) { "Memory text cannot be blank" }
         val records = readRecords()
-        var updated = false
+        var corrected = false
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") == "memory" && record.optString("id") == id) {
-                record.put("text", newText.trim())
-                record.put("topic", MemoryTopicClassifier.classify(newText))
-                // Editing a memory is an explicit user correction: preserve its original
-                // creation time while recording the correction's provenance and confidence.
-                record.put("source", "user_corrected")
-                record.put("confidence", 1.0)
-                record.put("confirmed", true)
-                record.put("updatedAt", System.currentTimeMillis())
-                updated = true
-                break
-            }
+            if (record.optString("kind") != "memory" || record.optString("id") != id) continue
+            // Never edit a superseded version: the latest active correction is authoritative.
+            if (record.optString("supersededBy").isNotBlank()) return false
+            if (normalizeMemoryText(record.optString("text")) == normalizeMemoryText(newText)) return true
+
+            val replacement = MemoryItem(
+                id = UUID.randomUUID().toString(),
+                text = newText.trim(),
+                category = record.optString("category", "general"),
+                source = "user_corrected",
+                createdAtMillis = System.currentTimeMillis(),
+                confidence = 1.0f,
+                confirmedByUser = true,
+                sensitive = record.optBoolean("sensitive", false),
+                personaId = record.optString("personaId").takeIf { it.isNotBlank() },
+                topic = MemoryTopicClassifier.classify(newText)
+            )
+            // Preserve the original encrypted record and its provenance. Recall sees only
+            // the replacement, while listAllMemories() retains the correction history.
+            record.put("supersededBy", replacement.id)
+            record.put("supersededAt", System.currentTimeMillis())
+            records.put(memoryToJson(replacement))
+            corrected = true
+            break
         }
-        if (updated) {
+        if (corrected) {
             val kept = JSONArray()
             for (index in 0 until records.length()) {
                 val record = records.optJSONObject(index) ?: continue
@@ -902,7 +921,7 @@ class EncryptedMemoryStore(context: Context) {
                 "Unable to invalidate pending memory after editing"
             }
         }
-        return updated
+        return corrected
     }
 
     @Synchronized
@@ -1344,6 +1363,7 @@ class EncryptedMemoryStore(context: Context) {
         put("sensitive", item.sensitive)
         put("topic", item.topic)
         put("personaId", item.personaId ?: "")
+        put("supersededBy", item.supersededBy ?: "")
     }
 
     private fun jsonToMemory(json: JSONObject) = MemoryItem(
@@ -1357,7 +1377,8 @@ class EncryptedMemoryStore(context: Context) {
         sensitive = json.optBoolean("sensitive", false),
         topic = json.optString("topic").takeIf { it.isNotBlank() }
             ?: MemoryTopicClassifier.classify(json.optString("text")),
-        personaId = json.optString("personaId").takeIf { it.isNotBlank() }
+        personaId = json.optString("personaId").takeIf { it.isNotBlank() },
+        supersededBy = json.optString("supersededBy").takeIf { it.isNotBlank() }
     )
 
     companion object {
