@@ -30,7 +30,7 @@ object CulturalDossierCatalog {
                 CulturalSource(
                     title = "El voseo como orgullo paisa: el uso pronominal en el español hablado en Medellín",
                     geographicScope = "Medellín, Antioquia, Colombia",
-                    url = "https://www.revistapuntogenero.uchile.cl/index.php/BDF/article/view/73296",
+                    url = "https://www.revistaei.uchile.cl/index.php/BDF/article/view/73296",
                     publisher = "Boletín de Filología, Universidad de Chile",
                     topic = "voseo-medellin",
                     confidence = 0.95f,
