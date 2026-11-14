@@ -1832,3 +1832,47 @@ This entry supersedes the earlier status labels above where they conflict with t
 - Release gate: CI instrumentation suite must pass on API 31; then install and test on the user's Samsung Android 12 and Android 15 devices. A debug APK is for testing only; stable v0.11.12 remains untouched. Do not claim C2–C5 complete or publish a final release until these gates pass.
 
 Current development head at the time of this entry: `9d7e53eebf7b6ba263053695574289db4219dc32`. PR #40 remains draft/open/unmerged.
+
+## 2026-11-14 — User-approved roadmap addition: phone controls and app assistant
+
+**DECISION: APPROVED BY THE USER. PLANNED; NOT IMPLEMENTED.** Add a dedicated product phase for controlled interaction with Android settings and other apps. This phase must not delay the current reliability work or C3/C4/C5 completion and acceptance.
+
+The feature belongs inside the existing six-tab structure:
+- **Altro:** entry point for “Controllo telefono e applicazioni” and supported app actions.
+- **Settaggi:** clear, granular permission status, explanations, enable/disable controls and revocation guidance.
+- Do not add a seventh tab.
+
+Scope — four capability areas:
+
+1. **Android settings and device controls**
+   - Open relevant system settings screens and launch installed apps through supported Android intents.
+   - Where Android permits it and the user grants the required access, adjust screen brightness and media/ringer volume through the appropriate platform APIs.
+   - Distinguish changing a setting directly from merely opening its settings page. Report success only after the platform confirms the change; otherwise explain the limitation and offer the settings screen.
+
+2. **Compose messages and email**
+   - Let the user dictate or request a message/email, identify the intended recipient and destination app, prepare a draft and hand it to the chosen app using supported intents or share/compose flows.
+   - Show the recipient and complete content and require explicit user confirmation before sending, posting or performing any externally visible action.
+   - Never claim a message was sent merely because a compose screen opened.
+
+3. **Read incoming app notifications, including WhatsApp previews**
+   - Investigate a user-enabled Android NotificationListenerService as the least-privilege supported route for reading notifications that Android actually exposes.
+   - Explain that this does not grant unrestricted access to WhatsApp chat history and that notification previews may be unavailable or redacted by device/app privacy settings.
+   - Notification access is highly sensitive: off by default, separately and explicitly granted by the user, visible and revocable in Settaggi, with no hidden collection or retention of message contents.
+   - This capability remains gated by a separate Android distribution / Play Protect / policy review and explicit approval before implementation or enabling. This preserves the existing decision to keep notification reading deferred after the earlier Play Protect block.
+
+4. **Advanced interaction with other apps**
+   - Prefer documented Android intents, app links, share sheets and official APIs.
+   - Treat AccessibilityService as a last-resort, separately reviewed opt-in capability only for a narrowly defined use case; never request blanket accessibility access or simulate taps across arbitrary apps by default.
+   - Do not bypass app security, authentication, privacy controls or Android permission boundaries.
+
+Cross-cutting safeguards and acceptance criteria:
+- All capabilities are disabled until the user explicitly enables the relevant permission/capability. Ask only for the minimum permission needed for the requested action.
+- Sensitive or externally visible actions (send, post, delete, purchase, call, share private content) require a clear confirmation immediately before execution.
+- Provide an always-visible indication when notification access or any advanced app-interaction permission is enabled, plus a simple way to revoke it.
+- Keep processing local where feasible; encrypt any user-approved retained data; do not archive raw notifications or message bodies by default.
+- No paid APIs, subscriptions, cloud services, hosted GPU or billing without fresh explicit approval. Do not introduce an always-on microphone or wake-word listener; voice commands are handled only within an explicitly active, user-started session.
+- Test permission denial/revocation, Android-version differences, screen-off/background behavior, privacy redaction, failure paths and accurate action-result reporting on the supported Samsung devices.
+- Do not mark this phase complete until implementation, regression tests, distribution/policy review where applicable, and physical-device acceptance all pass.
+
+**Execution order:** complete and obtain acceptance for reliability/device safety, C3, C4 and C5 first; then complete the Personal Organizer and Agenda; then implement this **Phone and App Assistant** phase; keep Avatar as the final product phase. This addition does not change the current priority or authorize work that would destabilize the current APK candidate.
+
