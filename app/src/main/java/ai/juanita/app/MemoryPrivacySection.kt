@@ -70,6 +70,7 @@ internal fun MemoryPrivacySection(
     onDeleteMemory: (String) -> Unit,
     onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
+    onConfirmMemory: (String) -> Boolean,
     onClearMemories: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
@@ -172,7 +173,17 @@ internal fun MemoryPrivacySection(
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(item.text, color = Color.White, fontSize = 13.sp)
                             Text("${item.category} · ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAtMillis))}", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                            if (!item.confirmedByUser) {
+                                Text("SUGGERITO · IN ATTESA DELLA TUA CONFERMA · NON ANCORA USATO NELLE RISPOSTE", color = Color(0xFFE4BD69), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!item.confirmedByUser) {
+                                    TextButton(onClick = {
+                                        if (onConfirmMemory(item.id)) {
+                                            memories = memories.map { if (it.id == item.id) it.copy(confirmedByUser = true, source = "user_confirmed") else it }
+                                        }
+                                    }) { Text("Conferma", color = gold, fontSize = 12.sp) }
+                                }
                                 TextButton(onClick = { editingMemory = item; editText = item.text }) { Text("Modifica", color = gold, fontSize = 12.sp) }
                                 TextButton(onClick = { confirmAction = "memory:${item.id}" }) { Text("Elimina", color = gold, fontSize = 12.sp) }
                             }

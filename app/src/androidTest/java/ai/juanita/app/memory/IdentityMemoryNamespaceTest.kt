@@ -95,6 +95,30 @@ class IdentityMemoryNamespaceTest {
 
     @Test
     fun sharedKnowledgeIsVisibleToEveryCharacterWhileConversationHistoryIsIdentityScoped() {
+    @Test
+    fun automaticallySuggestedMemoriesRequireApprovalBeforeTheyEnterAssistantContext() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val pending = store.addAutomaticMemory(
+                "Preferisce risposte concise e naturali",
+                "communication",
+                0.96f,
+                confirmedByUser = false
+            ) ?: throw AssertionError("Expected pending memory")
+            assertFalse(pending.confirmedByUser)
+            assertFalse(store.buildAssistantContext().contains(pending.text))
+            assertTrue(store.confirmMemory(pending.id))
+            val restored = EncryptedMemoryStore(isolatedContext()).listMemories().single { it.id == pending.id }
+            assertTrue(restored.confirmedByUser)
+            assertTrue(store.buildAssistantContext().contains(pending.text))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+
         val context = isolatedContext()
         val juanitaMemory = EncryptedMemoryStore(context)
         val joseMemory = EncryptedMemoryStore(context)

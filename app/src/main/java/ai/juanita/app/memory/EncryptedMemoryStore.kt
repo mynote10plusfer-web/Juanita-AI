@@ -390,7 +390,13 @@ class EncryptedMemoryStore(context: Context) {
 
     /** Saves an automatically curated, non-sensitive memory; duplicate facts are not added twice. */
     @Synchronized
-    fun addAutomaticMemory(text: String, category: String, confidence: Float, expectedClearVersion: Long = memoryClearVersion): MemoryItem? {
+    fun addAutomaticMemory(
+        text: String,
+        category: String,
+        confidence: Float,
+        expectedClearVersion: Long = memoryClearVersion,
+        confirmedByUser: Boolean = false
+    ): MemoryItem? {
         if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion || text.isBlank()) return null
         val normalized = normalizeMemoryText(text)
         val records = readRecords()
@@ -401,6 +407,10 @@ class EncryptedMemoryStore(context: Context) {
                 normalizeMemoryText(record.optString("text")) == normalized
             ) {
                 record.put("confidence", maxOf(record.optDouble("confidence", 0.0), confidence.toDouble()))
+                if (confirmedByUser) {
+                    record.put("confirmed", true)
+                    record.put("source", "user_confirmed")
+                }
                 record.put("lastSeenAt", System.currentTimeMillis())
                 writeRecords(records, synchronous = true)
                 return runCatching { jsonToMemory(record) }.getOrNull()
@@ -413,7 +423,7 @@ class EncryptedMemoryStore(context: Context) {
             source = "automatic",
             createdAtMillis = System.currentTimeMillis(),
             confidence = confidence.coerceIn(0f, 1f),
-            confirmedByUser = false,
+            confirmedByUser = confirmedByUser,
             sensitive = false,
             topic = MemoryTopicClassifier.classify(text)
         )
@@ -550,7 +560,7 @@ class EncryptedMemoryStore(context: Context) {
     /** Shared user knowledge plus memories belonging only to the selected character. */
     @Synchronized
     fun listMemoriesForPersona(personaId: String): List<MemoryItem> =
-        listMemories().filter { it.personaId == null || it.personaId == personaId }
+        listMemories().filter { it.confirmedByUser && (it.personaId == null || it.personaId == personaId) }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
@@ -656,7 +666,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000, personaId: String? = null): String {
         // Read-only context assembly: do not rewrite the complete encrypted store at session start.
-        val durableMemories = (if (personaId == null) listMemories().filter { it.personaId == null } else listMemoriesForPersona(personaId)).take(60)
+        val durableMemories = (if (personaId == null) listMemories().filter { it.personaId == null && it.confirmedByUser } else listMemoriesForPersona(personaId)).take(60)
         val memoryLines = durableMemories
             .take(40)
             .map { item ->
@@ -748,7 +758,7 @@ class EncryptedMemoryStore(context: Context) {
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
         val routedTopic = MemoryTopicClassifier.classify(query)
-        val relevantMemories = (if (personaId == null) listMemories().filter { it.personaId == null } else listMemoriesForPersona(personaId)).mapNotNull { memory ->
+        val relevantMemories = (if (personaId == null) listMemories().filter { it.personaId == null && it.confirmedByUser } else listMemoriesForPersona(personaId)).mapNotNull { memory ->
             val body = normalizeSearchText(memory.text)
             val hits = terms.count { term -> body.contains(term) }
             val topicMatch = memory.topic == routedTopic
@@ -840,6 +850,25 @@ class EncryptedMemoryStore(context: Context) {
         check(preferences.edit().putLong(KEY_MEMORY_CLEAR_VERSION, memoryClearVersion + 1L).commit()) {
             "Unable to invalidate pending memory after clearing"
         }
+    }
+
+    /** User explicitly approves an automatically suggested memory for future recall. */
+    @Synchronized
+    fun confirmMemory(id: String): Boolean {
+        val records = readRecords()
+        var confirmed = false
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "memory" && record.optString("id") == id) {
+                record.put("confirmed", true)
+                record.put("source", "user_confirmed")
+                record.put("updatedAt", System.currentTimeMillis())
+                confirmed = true
+                break
+            }
+        }
+        if (confirmed) writeRecords(records, synchronous = true)
+        return confirmed
     }
 
     @Synchronized
