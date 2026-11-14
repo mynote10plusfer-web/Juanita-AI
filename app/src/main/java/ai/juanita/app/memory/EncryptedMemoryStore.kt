@@ -530,7 +530,7 @@ class EncryptedMemoryStore(context: Context) {
         require(!sensitive || confirmedByUser) { "Sensitive memories require explicit confirmation" }
         val item = MemoryItem(
             id = UUID.randomUUID().toString(),
-            text = text.trim().take(MAX_MEMORY_TEXT_LENGTH),
+            text = text.trim(),
             category = category.take(80),
             source = source.take(160),
             createdAtMillis = System.currentTimeMillis(),
@@ -879,7 +879,7 @@ class EncryptedMemoryStore(context: Context) {
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") == "memory" && record.optString("id") == id) {
-                record.put("text", newText.trim().take(MAX_MEMORY_TEXT_LENGTH))
+                record.put("text", newText.trim())
                 record.put("topic", MemoryTopicClassifier.classify(newText))
                 // Editing a memory is an explicit user correction: preserve its original
                 // creation time while recording the correction's provenance and confidence.
@@ -1140,8 +1140,18 @@ class EncryptedMemoryStore(context: Context) {
             for (index in 0 until legacyAndMetadata.length()) legacyAndMetadata.optJSONObject(index)?.let(records::put)
         }
         // Long-term memories are independently encrypted files, not one growing SharedPreferences value.
-        readMemoryFiles().forEach(records::put)
-        return records
+        // During the one-time legacy migration the same ID may temporarily exist in both places;
+        // prefer the per-record file so a crash between file commit and preference cleanup cannot duplicate it.
+        val memoriesById = linkedMapOf<String, JSONObject>()
+        val nonMemoryRecords = JSONArray()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "memory") memoriesById[record.optString("id")] = record
+            else nonMemoryRecords.put(record)
+        }
+        readMemoryFiles().forEach { record -> memoriesById[record.optString("id")] = record }
+        memoriesById.values.forEach(nonMemoryRecords::put)
+        return nonMemoryRecords
     }
 
     /**
