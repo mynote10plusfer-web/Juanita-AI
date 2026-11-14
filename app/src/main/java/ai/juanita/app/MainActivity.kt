@@ -1011,11 +1011,6 @@ private fun JuanitaApp(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
                     ) { Text("Esci e chiudi completamente") }
                 }
-                SettingsCard(panel, gold, "USCITA SICURA") {
-                    Text("Quando esci, Juanita attende la conferma dello spegnimento del microfono e della sessione vocale. Le sveglie e la memoria restano intatte.",
-                        color = Color(0xFFB9BBC1), fontSize = 12.sp)
-                }
-
                 }
 
                 if (selectedSection == "AVATAR" && !callScreenVisible) {
@@ -1100,15 +1095,6 @@ private fun JuanitaApp(
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
                     Text("Gemini Live è integrato per le prove vocali. La memoria automatica è attiva quando abilitata nelle impostazioni; la wake word e le voci regionali native sono ancora in sviluppo.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
-                }
-                SettingsCard(panel, gold, "USCITA SICURA") {
-                    Text("Esci da Juanita AI e chiudi anche la conversazione vocale in background. Le sveglie già programmate e la memoria resteranno sul telefono.",
-                        color = Color(0xFFB9BBC1), fontSize = 12.sp)
-                    Button(
-                        onClick = { showExitConfirmation = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-                    ) { Text("Esci e chiudi completamente") }
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                     color = Color(0xFF686C74), fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterHorizontally))
