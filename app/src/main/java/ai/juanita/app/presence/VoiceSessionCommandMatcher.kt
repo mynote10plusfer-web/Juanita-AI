@@ -4,9 +4,9 @@ import java.text.Normalizer
 import java.util.Locale
 
 /**
- * Recognizes only explicit commands addressed to the currently active character.
- * It consumes the existing Gemini Live user transcript; it never opens another
- * microphone or speech-recognition service.
+ * Recognizes explicit session commands in the existing Gemini Live user transcript.
+ * The active character's name may be spoken first, but is not required. It never
+ * opens another microphone or speech-recognition service.
  */
 object VoiceSessionCommandMatcher {
     enum class Command { STOP_SESSION, CLOSE_APPLICATION }
@@ -39,7 +39,7 @@ object VoiceSessionCommandMatcher {
         }
 
         return when (command) {
-            "chiudi l applicazione", "chiudi applicazione", "chiudi l app", "chiudi l app",
+            "chiudi l applicazione", "chiudi applicazione", "chiudi l app",
             "chiudi app", "esci e chiudi", "chiudi e esci",
             "close application", "close the application", "close app", "exit and close" ->
                 Command.CLOSE_APPLICATION
