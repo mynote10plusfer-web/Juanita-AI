@@ -597,7 +597,7 @@ private fun JuanitaApp(
                     val instruction = buildString {
                         append(activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
                         if (activeDigitalIdentity != null) {
-                            append("\\n\\n")
+                            append("\n\n")
                             append(persona.regionalDialectInstruction(selectedDialect.label))
                         }
                         val sessionNow = ZonedDateTime.now()
