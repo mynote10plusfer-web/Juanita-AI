@@ -410,7 +410,7 @@ private fun JuanitaApp(
             "¡Qué día más bueno! ¿Nos damos una vueltita por la isla?",
             "Profilo sperimentale: spagnolo canario colloquiale, ritmo rilassato e lessico delle isole; timbro nativo non garantito."),
         RegionalDialect("paisa", "Colombiano paisa", "es-CO",
-            "¡Qué más pues! ¿Cómo vamos? Nos damos una vueltica, ¿o qué?",
+            "¿Qué más pues, mi amor? ¿Cómo te fue hoy? Ven, cuéntame, que quiero escucharte.",
             "Profilo sperimentale: spagnolo paisa di Antioquia/Medellín, espressioni locali e tono cordiale; timbro nativo non garantito.")
     )
     var selectedDialect by remember {
