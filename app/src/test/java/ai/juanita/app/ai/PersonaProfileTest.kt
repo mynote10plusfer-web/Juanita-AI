@@ -28,7 +28,7 @@ class PersonaProfileTest {
     fun nonPaisaDialectsDoNotReceivePaisaInstructions() {
         val instruction = PersonaProfile().regionalDialectInstruction("Español canario")
 
-        assertFalse(instruction.contains("three-way system: tú, vos and usted"))
-        assertTrue(instruction.contains("selected language naturally"))
+        assertFalse(instruction.contains("living three-way system: tú, vos and usted"))
+        assertTrue(instruction.contains("Use the selected language naturally and consistently"))
     }
 }
