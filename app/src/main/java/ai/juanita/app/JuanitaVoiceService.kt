@@ -679,8 +679,7 @@ class JuanitaVoiceService : Service() {
                     // the UI immediately; encrypted-memory flushing is best-effort cleanup
                     // and must never make the phone appear frozen or prevent a safe exit.
                     _shutdownConfirmed.value = true
-                    _state.value = "Microfono disattivato · salvataggio dei ricordi…"
-                    updateNotification("Microfono disattivato · salvataggio in corso")
+                    _state.value = "Microfono disattivato · salvataggio finale dei ricordi"
                 }
             } finally {
                 // Fail closed: if the SDK did not confirm recorder/session shutdown, keep the
@@ -702,6 +701,10 @@ class JuanitaVoiceService : Service() {
                 runCatching {
                     withTimeoutOrNull(3_000L) { drainTranscriptQueue() }
                 }.onFailure { Log.w("JuanitaVoiceService", "Transcript drain failed after audio shutdown", it) }
+                // The microphone and Live session are confirmed closed, and transcript
+                // intake has had its bounded chance to persist. Remove the microphone
+                // foreground notification now; do not display a mic service during memory cleanup.
+                stopForeground(STOP_FOREGROUND_REMOVE)
                 // Remove only this completed session's transient continuity snapshot,
                 // and do it off the critical shutdown path. The ID-scoped delete cannot
                 // erase a snapshot written by a later conversation if this worker is delayed.
@@ -726,7 +729,6 @@ class JuanitaVoiceService : Service() {
                 activeIdentityId = null
                 activeAlarmId = null
                 if (assistantStopped) releaseCpuWakeLock()
-                stopForeground(STOP_FOREGROUND_REMOVE)
                 if (assistantStopped) {
                     _state.value = finalMessage ?: "Conversazione terminata"
                 }
