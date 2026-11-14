@@ -16,6 +16,14 @@ object CulturalDossierCatalog {
                 - Vos, tú e usted coesistono nell'area. La scelta dipende da relazione, situazione, stile individuale e registro: non sostituire automaticamente ogni "tú" con "vos".
                 - Usa forme voseanti corrette solo quando il contesto conversazionale le rende naturali; se non sei sicura, mantieni uno spagnolo colombiano naturale e non caricaturale.
                 - "Parcero/parce" e il parlache hanno storia e diffusione sociale specifiche: non sono intercalari obbligatori né rappresentano tutta la parlata di Medellín.
+                - In conversazioni intime di coppia, il tuteo può risultare più affettuoso e raffinato del voseo; non è una regola universale e dipende da età, ambiente, relazione e preferenza personale.
+                - Per il voseo, usa forme coerenti come "vos sos", "vos tenés", "vos querés", "vos podés", "vení", "decime" e "contame". Per il tuteo usa invece "tú eres", "tú tienes", "tú quieres", "ven", "dime" e "cuéntame"; evita di mescolare le coniugazioni senza una ragione pragmatica.
+                - In un rapporto affettuoso possono comparire vocativi come "mi amor", "mi vida", "corazón", "mi cielo", "mi linda/mi lindo", "bebé", "reina" o "rey". Sono esempi attestati in uno studio sul parlato giovanile di Medellín: non sono obbligatori né rappresentano tutte le generazioni.
+
+                PROSODIA E MELODIA:
+                - La parlata di Medellín ha profili intonativi studiati per frasi dichiarative e interrogative. La ricerca disponibile sulle voci femminili e maschili rileva differenze nei contorni, ma il campione iniziale è molto piccolo: non trasformare i risultati in una formula rigida.
+                - Punta a una cadenza fluida, espressiva e melodica, con variazioni naturali di altezza, accento e ritmo; evita una recitazione cantilenante o un'intonazione ascendente su ogni frase.
+                - La scelta della voce sintetica e la sua capacità di rendere un accento locale vanno valutate all'ascolto: il testo del dossier non garantisce da solo una pronuncia nativa.
 
                 COMPORTAMENTO CONVERSAZIONALE:
                 - Mantieni ritmo e lessico colloquiali solo quando il contesto lo consente; alterna registro informale e neutro con naturalezza.
@@ -53,9 +61,36 @@ object CulturalDossierCatalog {
                     topic = "parlache-sociolect",
                     confidence = 0.9f,
                     summary = "Ricerca lessicografica che inquadra il parlache come socioletto con origini sociali e generazionali."
+                ),
+                CulturalSource(
+                    title = "Pragmática sociocultural del tuteo en el español hablado en Medellín (Colombia): caracteres refinado, cariñoso y afeminado",
+                    geographicScope = "Medellín, Antioquia, Colombia",
+                    url = "https://doi.org/10.3828/BHS.2023.37",
+                    publisher = "Bulletin of Hispanic Studies, 2023",
+                    topic = "tuteo-intimacy-couples",
+                    confidence = 0.95f,
+                    summary = "Studio basato su 849 informanti: il tuteo può risultare più affettuoso del voseo in relazioni molto intime, incluse le coppie."
+                ),
+                CulturalSource(
+                    title = "Fórmulas de tratamiento nominales para la pareja en el habla juvenil medellinense",
+                    geographicScope = "Medellín, Antioquia, Colombia; 60 giovani tra 17 e 25 anni",
+                    url = "https://www.academia.edu/39444017/F%C3%B3rmulas_de_tratamiento_nominales_para_la_pareja_en_el_habla_juvenil_medellinense",
+                    publisher = "Íkala, revista de lenguaje y cultura, vol. 13, n. 20, 2008",
+                    topic = "affectionate-partner-vocatives",
+                    confidence = 0.85f,
+                    summary = "Corpus di formule rivolte al partner; documenta vocativi affettuosi come mi amor, mi vida, corazón e mi cielo. Il campione riguarda giovani e non va generalizzato a tutte le età."
+                ),
+                CulturalSource(
+                    title = "La entonación declarativa e interrogativa en el español colombiano de Medellín: voz femenina vs. masculina",
+                    geographicScope = "Zona urbana di Medellín, Antioquia, Colombia",
+                    url = "https://doi.org/10.4067/S0718-93032015000200005",
+                    publisher = "Boletín de Filología, Universidad de Chile, 2015",
+                    topic = "medellin-prosody-intonation",
+                    confidence = 0.8f,
+                    summary = "Studio AMPER-Col sui contorni intonativi di voci femminili e maschili; gli autori invitano alla cautela perché è uno dei primi studi prosodici colombiani."
                 )
             ),
-            version = 1
+            version = 2
         ),
         CulturalDossier(
             summary = """
