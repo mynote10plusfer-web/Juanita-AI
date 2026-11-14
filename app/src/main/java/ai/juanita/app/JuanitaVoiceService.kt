@@ -171,8 +171,7 @@ class JuanitaVoiceService : Service() {
                         context = ConversationalPresenceContext(
                             appInForeground = false,
                             foregroundServiceActive = startRequested &&
-                                lifecycleState != VoiceLifecycleState.IDLE &&
-                                lifecycleState != VoiceLifecycleState.STOPPING,
+                                lifecycleState == VoiceLifecycleState.ACTIVE,
                             backgroundContinuationAuthorized = backgroundContinuationAuthorized,
                             userExplicitlyStartedSession = true,
                             microphonePermissionGranted =
@@ -180,7 +179,7 @@ class JuanitaVoiceService : Service() {
                                     android.content.pm.PackageManager.PERMISSION_GRANTED,
                             // A non-alarm session can be a selected character or the
                             // standard assistant; its validated instruction is already bound.
-                            activeIdentityAvailable = lifecycleState != VoiceLifecycleState.IDLE
+                            activeIdentityAvailable = lifecycleState == VoiceLifecycleState.ACTIVE
                         )
                     )
                     when (decision) {
