@@ -296,10 +296,20 @@ internal fun MemoryPrivacySection(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (editText.isNotBlank() && onUpdateMemory(item.id, editText)) {
-                        memories = memories.map { if (it.id == item.id) it.copy(text = editText.trim()) else it }
-                    }
+                    val editedText = editText.trim()
+                    val memoryId = item.id
                     editingMemory = null
+                    if (editedText.isNotBlank()) {
+                        ioScope.launch {
+                            val updated = withContext(Dispatchers.IO) {
+                                onUpdateMemory(memoryId, editedText)
+                            }
+                            if (updated) {
+                                memories = withContext(Dispatchers.IO) { onRefreshMemories() }
+                                memoryPage = 0
+                            }
+                        }
+                    }
                 }) { Text("Salva", color = gold) }
             },
             dismissButton = { TextButton(onClick = { editingMemory = null }) { Text("Annulla") } }
