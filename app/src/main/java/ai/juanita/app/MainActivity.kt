@@ -3,6 +3,8 @@ package ai.juanita.app
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.graphics.Bitmap
@@ -13,6 +15,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -152,6 +155,19 @@ private val voiceLanguages = listOf(
 class MainActivity : ComponentActivity() {
     private lateinit var preferences: AssistantPreferences
     private var keepScreenOnForCall = false
+    private var screenOffReceiverRegistered = false
+
+    // Keep every Juanita UI window (including the full-screen Compose avatar Dialog)
+    // behind Samsung/Android keyguard as soon as the physical display turns off.
+    // The foreground voice service is independent and continues only under its
+    // existing explicit background-consent policy.
+    private val screenOffReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                moveTaskToBack(true)
+            }
+        }
+    }
 
     override fun onResume() {
         super.onResume()
@@ -174,6 +190,14 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    override fun onDestroy() {
+        if (screenOffReceiverRegistered) {
+            runCatching { unregisterReceiver(screenOffReceiver) }
+            screenOffReceiverRegistered = false
+        }
+        super.onDestroy()
+    }
+
     fun setCallScreenKeepAwake(enabled: Boolean) {
         keepScreenOnForCall = enabled
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -182,6 +206,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        ContextCompat.registerReceiver(
+            this,
+            screenOffReceiver,
+            IntentFilter(Intent.ACTION_SCREEN_OFF),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        screenOffReceiverRegistered = true
         preferences = AssistantPreferences(applicationContext)
         val memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
         val avatarStore = AvatarProfileStore(applicationContext)
