@@ -187,7 +187,8 @@ fun DigitalIdentitySection(
                     identities = loaded
                     message = null
                     if (firstRunMode) {
-                        val existing = loaded.firstOrNull { !it.archived }
+                        val existing = loaded.firstOrNull { it.id == activeIdentityId && !it.archived }
+                            ?: loaded.firstOrNull { !it.archived }
                         if (existing != null) {
                             onActiveIdentityChanged(existing.id)
                             onFirstIdentityCreated(existing.id)
