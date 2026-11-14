@@ -46,7 +46,9 @@ fun DigitalIdentitySection(
     refreshSignal: Int,
     onActiveIdentityChanged: (String?) -> Unit,
     onIdentitiesChanged: (List<DigitalIdentity>) -> Unit,
-    onPreviewVoice: (DigitalIdentity) -> Unit
+    onPreviewVoice: (DigitalIdentity) -> Unit,
+    firstRunMode: Boolean = false,
+    onFirstIdentityCreated: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val store = remember(context) { DigitalIdentityStore(context.applicationContext) }
@@ -181,13 +183,25 @@ fun DigitalIdentitySection(
         scope.launch {
             loading = true
             runCatching { withContext(Dispatchers.IO) { store.list() } }
-                .onSuccess { identities = it; message = null }
+                .onSuccess { loaded ->
+                    identities = loaded
+                    message = null
+                    if (firstRunMode) {
+                        val existing = loaded.firstOrNull { !it.archived }
+                        if (existing != null) {
+                            onActiveIdentityChanged(existing.id)
+                            onFirstIdentityCreated(existing.id)
+                        } else if (!editorOpen) {
+                            startCreate(IdentityPresentation.FEMININE)
+                        }
+                    }
+                }
                 .onFailure { message = "Archivio non leggibile: ${it.localizedMessage ?: "errore di decifratura"}. I dati originali sono stati preservati." }
             loading = false
         }
     }
 
-    LaunchedEffect(store, refreshSignal) { refresh() }
+    LaunchedEffect(store, refreshSignal, firstRunMode) { refresh() }
     fun duplicateIdentity(identity: DigitalIdentity) {
         scope.launch {
             saving = true
@@ -428,6 +442,10 @@ fun DigitalIdentitySection(
                                         identities = withContext(Dispatchers.IO) { store.list() }
                                         onIdentitiesChanged(identities)
                                         message = if (existing == null) "${saved.displayName} è stato creato e salvato. Ora lo trovi nell’elenco dei personaggi." else "Modifiche di ${saved.displayName} salvate correttamente."
+                                        if (firstRunMode && existing == null) {
+                                            onActiveIdentityChanged(saved.id)
+                                            onFirstIdentityCreated(saved.id)
+                                        }
                                         resetForm()
                                         editorOpen = false
                                     }
@@ -439,8 +457,10 @@ fun DigitalIdentitySection(
                     enabled = !saving && name.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                ) { Text(if (saving) "Salvataggio…" else if (editingId == null) "Crea identità" else "Salva modifiche") }
-                TextButton(onClick = { val wasEditing = editingId != null; resetForm(); editorOpen = false; message = if (wasEditing) "Modifiche annullate." else "Creazione annullata." }) { Text("Annulla e torna ai personaggi", color = gold) }
+                ) { Text(if (saving) "Salvataggio…" else if (firstRunMode) "Salva personaggio e continua" else if (editingId == null) "Crea identità" else "Salva modifiche") }
+                if (!firstRunMode) {
+                    TextButton(onClick = { val wasEditing = editingId != null; resetForm(); editorOpen = false; message = if (wasEditing) "Modifiche annullate." else "Creazione annullata." }) { Text("Annulla e torna ai personaggi", color = gold) }
+                }
             }
         }
         }
