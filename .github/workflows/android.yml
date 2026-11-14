@@ -94,6 +94,7 @@ jobs:
   instrumentation:
     name: Run Android instrumentation tests (API 31)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -125,7 +126,7 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          emulator-boot-timeout: 900
+          emulator-boot-timeout: 300
           # Start ADB before the runner's boot polling; its launcher calls adb directly.
           pre-emulator-launch-script: adb start-server
           # Avoid the runner's failing post-boot animation/ADB settings command.
