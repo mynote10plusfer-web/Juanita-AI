@@ -418,7 +418,7 @@ class EncryptedMemoryStore(context: Context) {
         }
         val item = MemoryItem(
             id = UUID.randomUUID().toString(),
-            text = text.trim().take(MAX_MEMORY_TEXT_LENGTH),
+            text = text.trim(),
             category = category.take(80),
             source = "automatic",
             createdAtMillis = System.currentTimeMillis(),
@@ -1120,14 +1120,21 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     private fun readRecords(): JSONArray {
-        val encoded = preferences.getString(KEY_ENCRYPTED_DATA, null) ?: return JSONArray()
-        val packed = Base64.decode(encoded, Base64.NO_WRAP)
-        require(packed.size > GCM_IV_LENGTH) { "Encrypted memory data is invalid" }
-        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
-        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
-        return JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+        val records = JSONArray()
+        val encoded = preferences.getString(KEY_ENCRYPTED_DATA, null)
+        if (encoded != null) {
+            val packed = Base64.decode(encoded, Base64.NO_WRAP)
+            require(packed.size > GCM_IV_LENGTH) { "Encrypted memory data is invalid" }
+            val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+            val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val legacyAndMetadata = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+            for (index in 0 until legacyAndMetadata.length()) legacyAndMetadata.optJSONObject(index)?.let(records::put)
+        }
+        // Long-term memories are independently encrypted files, not one growing SharedPreferences value.
+        readMemoryFiles().forEach(records::put)
+        return records
     }
 
     /**
@@ -1166,65 +1173,87 @@ class EncryptedMemoryStore(context: Context) {
 
     private fun writeRecords(records: JSONArray, synchronous: Boolean = false) {
         val migratedRecords = migrateLegacyTranscriptRecords(records)
-        val boundedRecords = applyStorageLimits(migratedRecords)
+        persistMemoryFiles(migratedRecords)
+        val nonMemoryRecords = JSONArray().apply {
+            for (index in 0 until migratedRecords.length()) {
+                val record = migratedRecords.optJSONObject(index) ?: continue
+                if (record.optString("kind") != "memory") put(record)
+            }
+        }
+        val boundedRecords = applyStorageLimits(nonMemoryRecords)
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(boundedRecords.toString().toByteArray(Charsets.UTF_8))
-        val editor = preferences.edit().putString(
-            KEY_ENCRYPTED_DATA,
-            Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
-        )
-        if (synchronous) {
-            check(editor.commit()) { "Unable to persist encrypted memory records" }
-        } else {
-            editor.apply()
+        val editor = preferences.edit().putString(KEY_ENCRYPTED_DATA, Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP))
+        if (synchronous) check(editor.commit()) { "Unable to persist encrypted memory records" } else editor.apply()
+    }
+
+    private fun memoryDirectory(): File =
+        File(appContext.filesDir, "encrypted_memories").apply {
+            check(exists() || mkdirs()) { "Unable to create encrypted memory directory" }
+        }
+
+    private fun readMemoryFiles(): List<JSONObject> {
+        val directory = memoryDirectory()
+        val files = directory.listFiles { file -> file.isFile && file.name.endsWith(".mem") }
+            ?: throw IllegalStateException("Unable to list encrypted personal memories")
+        return files.sortedBy { it.name }.map { file ->
+            val packed = file.readBytes()
+            require(packed.size > GCM_IV_LENGTH) { "Encrypted memory file is invalid: ${file.name}" }
+            val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+            val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+            JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8)).also { record ->
+                require(record.optString("kind") == "memory") { "Invalid memory record: ${file.name}" }
+                require(file.name == record.optString("id") + ".mem") { "Memory filename mismatch: ${file.name}" }
+            }
+        }
+    }
+
+    private fun persistMemoryFiles(records: JSONArray) {
+        val directory = memoryDirectory()
+        val desired = linkedMapOf<String, ByteArray>()
+        for (index in 0 until records.length()) {
+            val record = records.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "memory") continue
+            val id = record.optString("id")
+            require(id.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid memory ID" }
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+            desired["$id.mem"] = cipher.iv + cipher.doFinal(record.toString().toByteArray(Charsets.UTF_8))
+        }
+        desired.forEach { (name, packed) ->
+            val target = File(directory, name)
+            val temporary = File(directory, "$name.tmp")
+            FileOutputStream(temporary).use { output -> output.write(packed); output.fd.sync() }
+            try {
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            } catch (_: Exception) {
+                Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+        }
+        val keepNames = desired.keys
+        val existing = directory.listFiles { file -> file.isFile && file.name.endsWith(".mem") }
+            ?: throw IllegalStateException("Unable to verify encrypted memory files")
+        existing.filter { it.name !in keepNames }.forEach { file ->
+            check(file.delete()) { "Unable to delete obsolete encrypted memory ${file.name}" }
         }
     }
 
 
-    /**
-     * Hard storage ceilings: max 100 curated memories / 32 KB of memory text,
-     * and max 300 archived transcript turns. Manual memories are retained ahead
-     * of automatic ones; within each group higher-confidence and newer items win.
-     */
+    /** Memory records are stored independently and are not truncated by count or aggregate size. */
     private fun applyStorageLimits(records: JSONArray): JSONArray {
-        val memories = mutableListOf<JSONObject>()
-        val turns = mutableListOf<JSONObject>()
         val other = mutableListOf<JSONObject>()
         val reports = mutableListOf<JSONObject>()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            when (record.optString("kind")) {
-                "memory" -> memories += record
-                "turn" -> turns += record
-                "improvement_report" -> reports += record
-                else -> other += record
-            }
+            if (record.optString("kind") == "improvement_report") reports += record else other += record
         }
-
-        val keptMemories = mutableListOf<JSONObject>()
-        var memoryChars = 0
-        val rankedMemories = memories.sortedWith(
-            compareByDescending<JSONObject> { it.optString("source") != "automatic" }
-                .thenByDescending { it.optDouble("confidence", 0.0) }
-                .thenByDescending { it.optLong("createdAt") }
-        )
-        for (memory in rankedMemories) {
-            val textLength = memory.optString("text").length
-            if (keptMemories.size >= MAX_MEMORY_ITEMS) continue
-            if (memoryChars + textLength > MAX_MEMORY_CHARS) continue
-            keptMemories += memory
-            memoryChars += textLength
-        }
-
-        val keptTurns = turns.sortedByDescending { it.optLong("createdAt") }
-            .take(MAX_ARCHIVE_RECORDS)
         val keptReports = reports.sortedByDescending { it.optLong("createdAt") }.take(MAX_IMPROVEMENT_REPORTS)
         return JSONArray().apply {
             other.forEach { put(it) }
             keptReports.forEach { put(it) }
-            keptMemories.forEach { put(it) }
-            keptTurns.sortedBy { it.optLong("createdAt") }.forEach { put(it) }
         }
     }
 
@@ -1236,6 +1265,9 @@ class EncryptedMemoryStore(context: Context) {
         // may have been invalidated or lost. Generating a replacement would make the old
         // data permanently unreadable and could overwrite it on the next write. Fail closed.
         val hasEncryptedPreferences = preferences.getString(KEY_ENCRYPTED_DATA, null) != null
+        val hasEncryptedMemoryFiles = memoryDirectory().listFiles()?.any {
+            it.isFile && (it.name.endsWith(".mem") || it.name.endsWith(".mem.tmp")) && it.length() > 0L
+        } == true
         val archiveFiles = sessionArchiveDirectory().listFiles()
             ?: throw IllegalStateException("Impossibile verificare l'archivio cifrato locale.")
         val hasEncryptedSessionArchive = archiveFiles.any { file ->
@@ -1243,7 +1275,7 @@ class EncryptedMemoryStore(context: Context) {
                 (file.isDirectory && file.name.endsWith(".journal") &&
                     file.listFiles()?.any { frame -> frame.isFile && frame.length() > 0L } == true)
         }
-        check(!hasEncryptedPreferences && !hasEncryptedSessionArchive) {
+        check(!hasEncryptedPreferences && !hasEncryptedMemoryFiles && !hasEncryptedSessionArchive) {
             "La chiave di cifratura locale non è disponibile. I dati esistenti sono stati preservati; non verrà generata una nuova chiave."
         }
 
@@ -1262,7 +1294,7 @@ class EncryptedMemoryStore(context: Context) {
     private fun memoryToJson(item: MemoryItem) = JSONObject().apply {
         put("kind", "memory")
         put("id", item.id)
-        put("text", item.text.take(MAX_MEMORY_TEXT_LENGTH))
+        put("text", item.text)
         put("category", item.category)
         put("source", item.source)
         put("createdAt", item.createdAtMillis)
@@ -1327,10 +1359,6 @@ class EncryptedMemoryStore(context: Context) {
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val GCM_IV_LENGTH = 12
         private const val GCM_TAG_BITS = 128
-        private const val MAX_MEMORY_TEXT_LENGTH = 500
-        private const val MAX_MEMORY_ITEMS = 100
-        private const val MAX_MEMORY_CHARS = 32_000
-        private const val MAX_ARCHIVE_RECORDS = 300
         private const val MAX_IMPROVEMENT_REPORTS = 50
         private const val MAX_CONTINUITY_TURNS = 24
         private const val MAX_CONTINUITY_TURN_CHARS = 3_600
