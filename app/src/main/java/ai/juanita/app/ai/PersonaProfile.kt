@@ -17,9 +17,7 @@ data class PersonaProfile(
     val formality: Float = 0.15f,
     val empathy: Float = 0.95f
 ) {
-    fun toSystemInstruction(languageName: String, dialectName: String): String {
-        fun percent(value: Float) = (value.coerceIn(0f, 1f) * 100).toInt()
-        val regionalGuidance = when {
+    fun regionalDialectInstruction(dialectName: String): String = when {
             dialectName.contains("siciliano", ignoreCase = true) -> """
                 Speak in natural, conversational Sicilian from the Palermo area, not standard Italian with a few Sicilian words.
                 Use everyday Sicilian vocabulary, idioms, cadence and sentence structure when confident.
@@ -54,6 +52,10 @@ data class PersonaProfile(
             """.trimIndent()
             else -> "Use the selected language naturally and consistently, without inventing a regional accent."
         }
+
+    fun toSystemInstruction(languageName: String, dialectName: String): String {
+        fun percent(value: Float) = (value.coerceIn(0f, 1f) * 100).toInt()
+        val regionalGuidance = regionalDialectInstruction(dialectName)
         val identityGuidance = if (gender == "MASCHILE") {
             "You are ${name.ifBlank { "José" }}, a male personal voice assistant. In languages with grammatical gender, refer to yourself consistently using masculine forms."
         } else {
