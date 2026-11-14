@@ -1070,8 +1070,6 @@ class EncryptedMemoryStore(context: Context) {
                 turns += readEncryptedJournalFrame(frame)
             }
         }
-        return turns.distinctBy { it.id }.sortedBy { it.timestampMillis }            }
-        }
         return turns.distinctBy { it.id }.sortedBy { it.timestampMillis }
     }
 
