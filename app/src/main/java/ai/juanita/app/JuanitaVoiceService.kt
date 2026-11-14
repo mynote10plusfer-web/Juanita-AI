@@ -26,6 +26,10 @@ import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.profile.PersonalProfile
 import ai.juanita.app.profile.PersonalProfileStore
 import ai.juanita.app.presence.VoiceSessionCommandMatcher
+import ai.juanita.app.presence.ConversationalPresenceContext
+import ai.juanita.app.presence.ConversationalPresencePolicy
+import ai.juanita.app.presence.ConversationalPresenceSettings
+import ai.juanita.app.presence.PresenceDecision
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
@@ -157,11 +161,40 @@ class JuanitaVoiceService : Service() {
             ACTION_ACTIVITY_BACKGROUND -> {
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
                     stopSelf(startId)
-                } else if (activeAlarmId == null && !backgroundContinuationAuthorized) {
-                    _state.value = "App in background · chiusura microfono senza consenso"
-                    requestStop(preserveContinuitySnapshot = true)
                 } else if (activeAlarmId == null) {
-                    updateNotification("Conversazione in background · consenso attivo")
+                    // Apply the same fail-closed presence policy used by the C3 tests
+                    // at the actual audio owner. Background continuation is allowed only
+                    // while this foreground service owns the active user-started session
+                    // and the user has separately authorized continuation.
+                    val decision = ConversationalPresencePolicy.listeningDecision(
+                        settings = ConversationalPresenceSettings(enabled = true),
+                        context = ConversationalPresenceContext(
+                            appInForeground = false,
+                            foregroundServiceActive = startRequested &&
+                                lifecycleState != VoiceLifecycleState.IDLE &&
+                                lifecycleState != VoiceLifecycleState.STOPPING,
+                            backgroundContinuationAuthorized = backgroundContinuationAuthorized,
+                            userExplicitlyStartedSession = true,
+                            microphonePermissionGranted =
+                                checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED,
+                            // A non-alarm session can be a selected character or the
+                            // standard assistant; its validated instruction is already bound.
+                            activeIdentityAvailable = lifecycleState != VoiceLifecycleState.IDLE
+                        )
+                    )
+                    when (decision) {
+                        PresenceDecision.AllowListening ->
+                            updateNotification("Conversazione in background · consenso attivo")
+                        is PresenceDecision.BlockListening -> {
+                            _state.value = "App in background · microfono in chiusura (" + decision.reason.name + ")"
+                            requestStop(preserveContinuitySnapshot = true)
+                        }
+                        else -> {
+                            _state.value = "App in background · presenza non autorizzata"
+                            requestStop(preserveContinuitySnapshot = true)
+                        }
+                    }
                 }
                 return START_NOT_STICKY
             }
