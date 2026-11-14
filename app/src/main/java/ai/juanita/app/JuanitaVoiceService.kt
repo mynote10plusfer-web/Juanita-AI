@@ -72,6 +72,8 @@ class JuanitaVoiceService : Service() {
     private var activeIdentityId: String? = null
     /** Non-null only when this Live session was launched by a specific alarm. */
     private var activeAlarmId: String? = null
+    /** Consent is captured when the user explicitly starts this Live session. */
+    private var backgroundContinuationAuthorized = false
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
     private var wakeLockRenewalJob: Job? = null
@@ -135,6 +137,17 @@ class JuanitaVoiceService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_ACTIVITY_BACKGROUND -> {
+                if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
+                    stopSelf(startId)
+                } else if (activeAlarmId == null && !backgroundContinuationAuthorized) {
+                    _state.value = "App in background · chiusura microfono senza consenso"
+                    requestStop(preserveContinuitySnapshot = true)
+                } else if (activeAlarmId == null) {
+                    updateNotification("Conversazione in background · consenso attivo")
+                }
+                return START_NOT_STICKY
+            }
             ACTION_STOP -> {
                 // An explicit stop/exit always wins over a start queued during teardown.
                 pendingStartIntent = null
@@ -159,6 +172,10 @@ class JuanitaVoiceService : Service() {
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
+                val requestedBackgroundContinuation = intent.getBooleanExtra(
+                    EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED,
+                    false
+                )
                 if (instruction.isBlank()) {
                     _state.value = "Impossibile avviare: istruzioni mancanti"
                     _shutdownConfirmed.value = true
@@ -208,6 +225,7 @@ class JuanitaVoiceService : Service() {
                     lifecycleState = VoiceLifecycleState.STARTING
                     activeIdentityId = identityId
                     activeAlarmId = alarmId
+                    backgroundContinuationAuthorized = requestedBackgroundContinuation && alarmId == null
                     acquireCpuWakeLock()
                     startRequested = true
                     sessionJob = serviceScope.launch {
@@ -927,6 +945,8 @@ class JuanitaVoiceService : Service() {
         const val ACTION_START = "ai.juanita.app.action.START_VOICE"
         const val ACTION_STOP = "ai.juanita.app.action.STOP_VOICE"
         const val ACTION_STOP_ALARM = "ai.juanita.app.action.STOP_ALARM_VOICE"
+        const val ACTION_ACTIVITY_BACKGROUND = "ai.juanita.app.action.ACTIVITY_BACKGROUND"
+        const val EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED = "extra_background_continuation_authorized"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
@@ -969,12 +989,14 @@ class JuanitaVoiceService : Service() {
         val memoryState: StateFlow<String> = _memoryState.asStateFlow()
 
         fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "",
-                  alarmId: String? = null, previewDurationMillis: Long = 0L, identityId: String? = null) {
+                  alarmId: String? = null, previewDurationMillis: Long = 0L, identityId: String? = null,
+                  backgroundContinuationAuthorized: Boolean = false) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_INSTRUCTION, instruction)
                 putExtra(EXTRA_VOICE, voiceName)
                 putExtra(EXTRA_INITIAL_PROMPT, initialPrompt)
+                putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, backgroundContinuationAuthorized)
                 if (alarmId != null) putExtra(EXTRA_ALARM_ID, alarmId)
                 if (previewDurationMillis > 0L) putExtra(EXTRA_PREVIEW_DURATION_MS, previewDurationMillis)
                 if (identityId != null) putExtra(EXTRA_IDENTITY_ID, identityId)

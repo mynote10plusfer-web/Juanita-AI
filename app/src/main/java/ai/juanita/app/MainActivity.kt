@@ -164,6 +164,16 @@ class MainActivity : ComponentActivity() {
         super.onPause()
     }
 
+    override fun onStop() {
+        // Background continuation is a per-session opt-in. The service decides whether
+        // to keep Live running or perform a confirmed microphone shutdown.
+        runCatching {
+            startService(Intent(this, JuanitaVoiceService::class.java)
+                .setAction(JuanitaVoiceService.ACTION_ACTIVITY_BACKGROUND))
+        }
+        super.onStop()
+    }
+
     fun setCallScreenKeepAwake(enabled: Boolean) {
         keepScreenOnForCall = enabled
         if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -404,6 +414,12 @@ private fun JuanitaApp(
     val profileScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
     var selectedSection by remember { mutableStateOf("HOME") }
+    val presencePreferences = remember(context) {
+        context.getSharedPreferences("juanita_presence_preferences", android.content.Context.MODE_PRIVATE)
+    }
+    var backgroundContinuationAuthorized by remember {
+        mutableStateOf(presencePreferences.getBoolean("background_continuation_authorized", false))
+    }
     var deviceDateTime by remember { mutableStateOf(ZonedDateTime.now()) }
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
@@ -536,7 +552,13 @@ private fun JuanitaApp(
                         }
                     }
                     liveSessionIdentityName = activeDigitalIdentity?.displayName ?: assistantName
-                    JuanitaVoiceService.start(context, instruction, activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id, identityId = activeDigitalIdentity?.id)
+                    JuanitaVoiceService.start(
+                        context,
+                        instruction,
+                        activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
+                        identityId = activeDigitalIdentity?.id,
+                        backgroundContinuationAuthorized = backgroundContinuationAuthorized
+                    )
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
                 }
@@ -907,6 +929,26 @@ private fun JuanitaApp(
                         fontWeight = FontWeight.Bold
                     )
                     Text(liveStartError ?: liveState, color = Color.White, fontSize = 14.sp)
+                    SettingsCard(panel, gold, "CONTINUAZIONE IN BACKGROUND") {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Consenti a Juanita di continuare con lo schermo spento", color = Color.White, fontSize = 13.sp)
+                                Text(
+                                    "Disattivato per impostazione predefinita. Se lo abiliti, la sessione avviata da te può continuare tramite il servizio Android e la notifica permanente. Senza consenso, quando lasci l'app il microfono viene chiuso.",
+                                    color = Color(0xFF9A9DA4), fontSize = 11.sp
+                                )
+                            }
+                            Switch(
+                                checked = backgroundContinuationAuthorized,
+                                onCheckedChange = { enabled ->
+                                    backgroundContinuationAuthorized = enabled
+                                    presencePreferences.edit()
+                                        .putBoolean("background_continuation_authorized", enabled)
+                                        .apply()
+                                }
+                            )
+                        }
+                    }
                     Text(locationStatus, color = Color(0xFF9A9DA4), fontSize = 11.sp)
                     Text("La posizione viene letta automaticamente con il tuo permesso quando apri Juanita e aggiornata all’avvio della conversazione. Nessun tracciamento in background.", color = Color(0xFF777D87), fontSize = 11.sp)
                     Button(
