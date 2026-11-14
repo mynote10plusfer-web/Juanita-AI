@@ -61,6 +61,10 @@ class IdentityMemoryNamespaceTest {
     @Test
     fun encryptedAutomaticMemoryQueueSurvivesStoreRecreationAndRemainsBounded() {
         val context = isolatedContext()
+        val preferences = context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE)
+        // Each instrumentation test gets an isolated preference namespace and must not
+        // inherit the explicit-consent toggle left by another test in the same process.
+        preferences.edit().clear().commit()
         val store = EncryptedMemoryStore(context)
         val turns = (1..8).map { "Turno automatico cifrato $it ${UUID.randomUUID()}" }
         try {
@@ -90,6 +94,7 @@ class IdentityMemoryNamespaceTest {
                 recreatedStore.readPendingAutomaticMemoryTurns(clearVersion).isEmpty())
         } finally {
             store.clearAll()
+            preferences.edit().clear().commit()
         }
     }
 
