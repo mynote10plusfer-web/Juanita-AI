@@ -230,7 +230,26 @@ class AlarmRingingActivity : ComponentActivity() {
             )
             closeReceiverRegistered = true
         }
-        // Lock-screen visibility is needed only while the alarm activity is actually visible.
+        applyAlarmWindowOverrides()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (alarmId in JuanitaAlarmRingingService.activeAlarmIds(this)) {
+            applyAlarmWindowOverrides()
+        } else {
+            clearAlarmWindowOverrides()
+        }
+    }
+
+    override fun onPause() {
+        // Release lock-screen / turn-screen-on overrides as soon as Android takes
+        // this activity out of the foreground, so they cannot cover keyguard unlock.
+        clearAlarmWindowOverrides()
+        super.onPause()
+    }
+
+    private fun applyAlarmWindowOverrides() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
