@@ -83,6 +83,10 @@ data class DigitalIdentity(
     val preferredLanguageTag: String,
     /** Stable Gemini Live voice ID selected specifically for this character. */
     val voiceName: String = if (presentation == IdentityPresentation.MASCULINE) "Achird" else "Kore",
+    /** Independent Gemini TTS voice assigned to this character. */
+    val regionalTtsVoiceName: String? = null,
+    /** Stable regional speech target ID. */
+    val regionalTtsTargetId: String? = null,
     val languages: List<String> = emptyList(),
     val personality: IdentityPersonality = IdentityPersonality(),
     val biography: String = "",
