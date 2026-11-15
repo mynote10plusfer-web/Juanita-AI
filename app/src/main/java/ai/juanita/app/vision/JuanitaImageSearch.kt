@@ -43,8 +43,11 @@ object JuanitaImageSearch {
                 cleanQuery,
                 cleanQuery.replace(Regex("\\b20\\d{2}\\b"), "").replace(Regex("\\s+"), " ").trim()
             ).filter { it.length >= 2 }
-            val candidate = searchVariants.firstNotNullOfOrNull { searchCommons(it) }
-                ?: error("Non ho trovato una fotografia pertinente su Wikimedia Commons.")
+            // Keep Commons as the first provider for its rich original-file metadata;
+            // fall back to Openverse when Commons has no usable match.
+            val candidate = searchVariants.firstNotNullOfOrNull { variant ->
+                searchCommons(variant) ?: searchOpenverse(variant)
+            } ?: error("Non ho trovato una fotografia pertinente nelle fonti gratuite disponibili.")
             val bytes = downloadImage(candidate.imageUrl)
             val bitmap = decodeBitmap(bytes) ?: error("La fotografia trovata non è in un formato leggibile.")
             val model = Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(MODEL_NAME)
@@ -66,6 +69,7 @@ object JuanitaImageSearch {
                 title = candidate.title,
                 sourceUrl = candidate.sourceUrl,
                 attribution = candidate.attribution,
+                provider = candidate.provider,
                 bitmap = bitmap,
                 analysis = analysis
             )
@@ -76,7 +80,8 @@ object JuanitaImageSearch {
         val title: String,
         val imageUrl: String,
         val sourceUrl: String,
-        val attribution: String
+        val attribution: String,
+        val provider: String
     )
 
     private fun searchCommons(query: String): Candidate? {
@@ -87,7 +92,7 @@ object JuanitaImageSearch {
             connectTimeout = 10_000
             readTimeout = 12_000
             setRequestProperty("Accept", "application/json")
-            setRequestProperty("User-Agent", "JuanitaAI-Android/0.11 (visual image search)")
+            setRequestProperty("User-Agent", "JuanitaAI-Android/0.12 (visual image search)")
         }
         try {
             val response = connection.inputStream.bufferedReader().use { it.readText() }
@@ -115,7 +120,8 @@ object JuanitaImageSearch {
                     title = page.optString("title").removePrefix("File:").take(180),
                     imageUrl = imageUrl,
                     sourceUrl = sourceUrl,
-                    attribution = attribution
+                    attribution = attribution,
+                    provider = "Wikimedia Commons"
                 )
             }
             return candidates.firstOrNull()
@@ -124,9 +130,53 @@ object JuanitaImageSearch {
         }
     }
 
+    /**
+     * Openverse offers anonymous, rate-limited access to openly licensed images.
+     * We fetch its own thumbnail endpoint rather than arbitrary third-party image URLs.
+     */
+    private fun searchOpenverse(query: String): Candidate? {
+        val encoded = URLEncoder.encode(query, StandardCharsets.UTF_8.name())
+        val endpoint = "https://api.openverse.org/v1/images/?q=$encoded&page_size=5&mature=false"
+        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 10_000
+            readTimeout = 12_000
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "JuanitaAI-Android/0.12 (open image search)")
+        }
+        try {
+            val response = connection.inputStream.bufferedReader().use { it.readText() }
+            val results = JSONObject(response).optJSONArray("results") ?: return null
+            for (index in 0 until results.length()) {
+                val item = results.optJSONObject(index) ?: continue
+                val id = item.optString("id")
+                val sourceUrl = item.optString("foreign_landing_url")
+                if (id.isBlank() || !sourceUrl.startsWith("https://")) continue
+                val creator = item.optString("creator").takeIf { it.isNotBlank() && it != "null" }
+                val license = item.optString("license").takeIf { it.isNotBlank() && it != "null" }
+                val attribution = listOfNotNull(creator, license)
+                    .joinToString(" · ")
+                    .ifBlank { item.optString("attribution").take(240).ifBlank { "Attribuzione e licenza nella pagina originale." } }
+                return Candidate(
+                    title = item.optString("title").ifBlank { "Immagine Openverse" }.take(180),
+                    imageUrl = "https://api.openverse.org/v1/images/$id/thumb/",
+                    sourceUrl = sourceUrl,
+                    attribution = attribution,
+                    provider = "Openverse"
+                )
+            }
+            return null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun downloadImage(imageUrl: String): ByteArray {
         val url = URL(imageUrl)
-        require(url.protocol == "https" && url.host == "upload.wikimedia.org") {
+        require(
+            url.protocol == "https" &&
+                (url.host == "upload.wikimedia.org" || url.host == "api.openverse.org")
+        ) {
             "La fonte dell'immagine non è autorizzata."
         }
         val connection = (url.openConnection() as HttpURLConnection).apply {
