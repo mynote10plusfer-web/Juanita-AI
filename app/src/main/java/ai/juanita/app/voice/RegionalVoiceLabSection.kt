@@ -68,7 +68,7 @@ fun RegionalVoiceLabSection(
     var voiceMenu by remember { mutableStateOf(false) }
     var profileMenu by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
-    var status by remember { mutableStateOf("Prova isolata: non attiva il microfono e non modifica Gemini Live.") }
+    var status by remember { mutableStateOf("Laboratorio TTS cloud in pausa: la conversazione usa la voce nativa Gemini Live.") }
     val selectedProfile = profiles.firstOrNull { it.id == profileId && !it.archived }
     LaunchedEffect(selectedProfile?.id, selectedProfile?.regionalTtsVoiceName, selectedProfile?.regionalTtsTargetId) {
         selectedProfile?.let { saved ->
@@ -101,7 +101,7 @@ fun RegionalVoiceLabSection(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Voce Gemini TTS", color = Color.White, modifier = Modifier.weight(1f))
+                Text("Voce Gemini TTS · in pausa", color = Color.White, modifier = Modifier.weight(1f))
                 TextButton(onClick = { voiceMenu = true }, enabled = !busy) { Text(voice, color = gold) }
                 DropdownMenu(expanded = voiceMenu, onDismissRequest = { voiceMenu = false }) {
                     regionalTestVoices.forEach { option ->
@@ -125,9 +125,14 @@ fun RegionalVoiceLabSection(
                 }
             }
             selectedProfile?.let { saved ->
-                Text("Voce TTS salvata: ${saved.regionalTtsVoiceName ?: "non configurata"} · ${saved.regionalTtsTargetId ?: "nessuna variante"}",
+                Text("Voce TTS salvata (non attiva): ${saved.regionalTtsVoiceName ?: "non configurata"} · ${saved.regionalTtsTargetId ?: "nessuna variante"}",
                     color = Color(0xFF9A9DA4), fontSize = 11.sp)
             } ?: Text("Crea o seleziona prima un personaggio per salvare una voce personale.", color = Color(0xFFFFCC80), fontSize = 11.sp)
+            Text(
+                "Le generazioni TTS cloud sono temporaneamente sospese per evitare il limite giornaliero gratuito. Le conversazioni usano Gemini Live; la variante regionale salvata viene applicata alle istruzioni vocali.",
+                color = Color(0xFFFFCC80),
+                fontSize = 11.sp
+            )
             Button(
                 onClick = {
                     scope.launch {
@@ -161,10 +166,10 @@ fun RegionalVoiceLabSection(
                         }
                     }
                 },
-                enabled = !busy,
+                enabled = false,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (busy) "Generazione / riproduzione…" else "GENERA E ASCOLTA")
+                Text("TEST TTS CLOUD IN PAUSA")
             }
             Button(
                 onClick = {
