@@ -431,8 +431,7 @@ class JuanitaVoiceService : Service() {
                             }
                             // Live input transcription may arrive as several incremental callbacks.
                             // Accumulate the current user utterance before matching spoken stop/exit commands.
-                            val commandTranscriptLock = Any()
-                            var commandTranscript = ""
+                            val commandTranscript = VoiceSessionCommandMatcher.TranscriptAccumulator()
                             val spokenCommandHandled = AtomicBoolean(false)
                             assistant.start(
                                 systemInstruction = sessionInstruction,
@@ -442,10 +441,7 @@ class JuanitaVoiceService : Service() {
                                         !spokenCommandHandled.get()
                                     ) {
                                         val activeName = selectedIdentity?.displayName?.takeIf { it.isNotBlank() } ?: "Juanita"
-                                        val accumulatedCommand = synchronized(commandTranscriptLock) {
-                                            commandTranscript = mergeTranscriptChunks(commandTranscript, text)
-                                            commandTranscript
-                                        }
+                                        val accumulatedCommand = commandTranscript.append(text)
                                         val command = VoiceSessionCommandMatcher.match(accumulatedCommand, activeName)
                                         if (command != null && spokenCommandHandled.compareAndSet(false, true)) {
                                             serviceScope.launch {
@@ -467,7 +463,7 @@ class JuanitaVoiceService : Service() {
                                             }
                                         }
                                     } else if (role.equals("ASSISTANT", ignoreCase = true)) {
-                                        synchronized(commandTranscriptLock) { commandTranscript = "" }
+                                        commandTranscript.clear()
                                     }
                                     if (initialPrompt.isNotBlank() && alarmId != null && role.equals("ASSISTANT", ignoreCase = true)) {
                                         // Keep the local alarm sounding until Gemini's first spoken response transcript.
