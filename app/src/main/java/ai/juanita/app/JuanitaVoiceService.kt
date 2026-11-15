@@ -429,36 +429,45 @@ class JuanitaVoiceService : Service() {
                             check(audioFocusGranted) {
                                 "Audio occupato da un'altra applicazione: microfono non avviato."
                             }
+                            // Live input transcription may arrive as several incremental callbacks.
+                            // Accumulate the current user utterance before matching spoken stop/exit commands.
+                            val commandTranscriptLock = Any()
+                            var commandTranscript = ""
+                            val spokenCommandHandled = AtomicBoolean(false)
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
-                                    if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true)) {
+                                    if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true) &&
+                                        !spokenCommandHandled.get()
+                                    ) {
                                         val activeName = selectedIdentity?.displayName?.takeIf { it.isNotBlank() } ?: "Juanita"
-                                        when (VoiceSessionCommandMatcher.match(text, activeName)) {
-                                            VoiceSessionCommandMatcher.Command.STOP_SESSION -> {
+                                        val accumulatedCommand = synchronized(commandTranscriptLock) {
+                                            commandTranscript = mergeTranscriptChunks(commandTranscript, text)
+                                            commandTranscript
+                                        }
+                                        val command = VoiceSessionCommandMatcher.match(accumulatedCommand, activeName)
+                                        if (command != null && spokenCommandHandled.compareAndSet(false, true)) {
+                                            serviceScope.launch {
+                                                // Service lifecycle fields are main-thread confined.
                                                 pendingStartIntent = null
                                                 pendingStartId = 0
-                                                serviceScope.launch {
+                                                if (command == VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION) {
+                                                    closeApplicationAfterStop = true
+                                                    requestStop(
+                                                        preserveContinuitySnapshot = true,
+                                                        finalMessage = "Comando vocale ricevuto · applicazione chiusa"
+                                                    )
+                                                } else {
                                                     requestStop(
                                                         preserveContinuitySnapshot = true,
                                                         finalMessage = "Comando vocale ricevuto · conversazione terminata"
                                                     )
                                                 }
                                             }
-                                            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION -> {
-                                                pendingStartIntent = null
-                                                pendingStartId = 0
-                                                closeApplicationAfterStop = true
-                                                serviceScope.launch {
-                                                    requestStop(
-                                                        preserveContinuitySnapshot = true,
-                                                        finalMessage = "Comando vocale ricevuto · applicazione chiusa"
-                                                    )
-                                                }
-                                            }
-                                            null -> Unit
                                         }
+                                    } else if (role.equals("ASSISTANT", ignoreCase = true)) {
+                                        synchronized(commandTranscriptLock) { commandTranscript = "" }
                                     }
                                     if (initialPrompt.isNotBlank() && alarmId != null && role.equals("ASSISTANT", ignoreCase = true)) {
                                         // Keep the local alarm sounding until Gemini's first spoken response transcript.
