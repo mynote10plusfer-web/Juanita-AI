@@ -68,6 +68,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.juanita.app.ai.GeminiLiveAssistant
+import ai.juanita.app.diagnostics.VoiceDiagnosticLog
+import androidx.core.content.FileProvider
+import android.widget.Toast
+import java.io.File
 import ai.juanita.app.ai.PersonaProfile
 import ai.juanita.app.avatar.AvatarProfile
 import ai.juanita.app.avatar.AvatarProfileStore
@@ -1168,6 +1172,40 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "MORE") {
+                SettingsCard(panel, gold, "DIAGNOSTICA VOCALE") {
+                    Text(
+                        "Registra gli eventi tecnici della conversazione per individuare blocchi del microfono, ricezione Gemini e sintesi vocale. Non salva le parole pronunciate, l'audio o le istruzioni private.",
+                        color = Color(0xFF9A9DA4), fontSize = 12.sp
+                    )
+                    Button(
+                        onClick = {
+                            runCatching {
+                                val diagnosticText = VoiceDiagnosticLog(context).exportText()
+                                val exportDirectory = File(context.cacheDir, "diagnostics").apply { mkdirs() }
+                                val exportFile = File(exportDirectory, "juanita-voice-diagnostic.txt")
+                                exportFile.writeText(diagnosticText)
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.diagnostics",
+                                    exportFile
+                                )
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "Juanita AI - Log diagnostico vocale")
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Esporta log diagnostico"))
+                            }.onFailure {
+                                Toast.makeText(context, "Esportazione log non riuscita: ${it.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
+                    ) {
+                        Text("Esporta log diagnostico (.txt)")
+                    }
+                }
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
 
                 ImprovementLabSection(
