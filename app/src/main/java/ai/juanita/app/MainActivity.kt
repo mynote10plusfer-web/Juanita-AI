@@ -626,7 +626,10 @@ private fun JuanitaApp(
                         instruction,
                         activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
                         identityId = activeDigitalIdentity?.id,
-                        backgroundContinuationAuthorized = backgroundContinuationAuthorized
+                        backgroundContinuationAuthorized = backgroundContinuationAuthorized,
+                        ttsVoiceName = activeDigitalIdentity?.regionalTtsVoiceName,
+                        ttsTargetId = activeDigitalIdentity?.regionalTtsTargetId,
+                        ttsLanguageCode = activeDigitalIdentity?.preferredLanguageTag
                     )
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
