@@ -12,6 +12,19 @@
 - Next diagnostic gate: confirm that the SDK audio conversation remains active after the receiver handoff; record state transitions and the first input-transcription event without logging private transcript text. If the SDK audio state drops, investigate the SDK microphone lifecycle and the TTS receiver handoff rather than increasing reconnect retries.
 - Do not resume new feature implementation until the voice path can complete repeated user/assistant turns, interruption/barge-in, and a sustained session on the Note10+ without microphone loss. Then continue in the approved order: C3 presence integration, C4 shared learning/character engine, C5 scalable encrypted archive, Personal Organizer/Agenda, and Avatar last.
 
+## 2026-11-15 — Diagnostic log audit and TTS output instrumentation
+
+**STATUS: LOG ANALYZED; ADDITIONAL NON-TRANSCRIPT DIAGNOSTICS COMMITTED; EXACT-HEAD CI PENDING. ROOT CAUSE NOT YET CONFIRMED.**
+
+- The supplied 16:15–16:17 log shows the Zephyr and Leda sessions at 16:16 were explicitly marked `preview=true`; their timed microphone/service teardown is the expected 12-second voice-preview lifecycle, not proof of a failed normal conversation.
+- The actual regional conversation begins at 16:17:22 with `preview=false`, `regionalTts=true`, voice Leda and target `paisa-medellin`. The direct receiver obtains multiple LiveServerContent messages and output-transcription chunks. `tts.synthesis.result spoken=true` means the TTS playback coroutine completed; it does not prove that sound was audible from the handset speaker.
+- No `transcription.input` or USER transcript callback appears in the supplied regional session. This is the key missing evidence: the log does not establish that the user's spoken answer reached Gemini. The microphone capture, server-side VAD/input path and transcription delivery must be distinguished.
+- A second `START_VOICE` arrives at 16:17:51 while the service is already `ACTIVE`. Current service code treats a repeated request for the same active identity as idempotent; verify that this path is not triggered repeatedly by UI state or a duplicate action.
+- Firebase's current LiveSession reference states that `stopReceiving()` stops server-message reception and that `receive()` can resume it; it is not documented as equivalent to `stopAudioConversation()`. Do not infer microphone shutdown from that call alone.
+- Added privacy-safe diagnostics on this branch: LiveServerContent metadata now records input/output transcription character counts, PCM part/byte counts and turn flags; TTS records generated WAV/PCM sizes, AudioTrack initialization/write/playback-head progress and the routed output device. No transcript text, audio, prompts or profile values are logged.
+- Exact-head CI for diagnostic instrumentation: run `43735475954`, commit `d7725473447c47049ff98925e08dc05cf9c0368f`; build and API 31 instrumentation are pending at the time of this entry.
+- Next gate: inspect the new diagnostics and verify audible speaker output plus repeated USER→ASSISTANT turns on the physical Note10+ before changing the audio transport or resuming unrelated feature work.
+
 ## 2026-11-13 — C2/C5 regression coverage and CI emulator baseline
 
 **STATUS: REGRESSION TESTS ADDED; EXACT-HEAD CI RUNNING. C3/C4/C5 IMPLEMENTATION IS NOT DECLARED COMPLETE.**
