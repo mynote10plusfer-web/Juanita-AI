@@ -86,6 +86,7 @@ import ai.juanita.app.identity.DigitalIdentitySection
 import ai.juanita.app.identity.DigitalIdentity
 import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.identity.RegionalTtsVoiceCatalog
+import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import ai.juanita.app.identity.toSystemInstruction
 import ai.juanita.app.voice.RegionalVoiceLabSection
 import java.util.Locale
@@ -614,6 +615,12 @@ private fun JuanitaApp(
                                 append("\n\n")
                                 append(persona.regionalDialectInstruction(selectedDialect.label))
                             }
+                            activeDigitalIdentity?.regionalTtsTargetId?.let { targetId ->
+                                RegionalTtsTargetCatalog.byId(targetId)?.let { target ->
+                                    append("\n\nSELECTED REGIONAL SPEECH DELIVERY — this is the user's explicit voice-region preference. Apply it to pronunciation, rhythm and idiomatic spoken language. It takes precedence over conflicting generic regional delivery hints, but never changes the character's identity, personality or biography.\n")
+                                    append(target.delivery)
+                                }
+                            }
                         }
                         val sessionNow = ZonedDateTime.now()
                         append("\n\nOROLOGIO LOCALE DEL DISPOSITIVO — riferimento temporale attuale: ${sessionNow.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; fuso orario: ${sessionNow.zone.id}. Usa questo riferimento per distinguere passato, presente e futuro. Non inventare orari. Se l’utente chiede l’ora o la data attuale, usa lo strumento getCurrentDateTime per aggiornare il valore prima di rispondere.")
@@ -631,13 +638,7 @@ private fun JuanitaApp(
                         instruction,
                         activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
                         identityId = activeDigitalIdentity?.id,
-                        backgroundContinuationAuthorized = backgroundContinuationAuthorized,
-                        ttsVoiceName = activeDigitalIdentity?.let { identity ->
-                            identity.regionalTtsVoiceName?.takeIf { it in RegionalTtsVoiceCatalog.all }
-                                ?: RegionalTtsVoiceCatalog.defaultVoice
-                        },
-                        ttsTargetId = activeDigitalIdentity?.regionalTtsTargetId,
-                        ttsLanguageCode = activeDigitalIdentity?.preferredLanguageTag
+                        backgroundContinuationAuthorized = backgroundContinuationAuthorized
                     )
                 } catch (error: Exception) {
                     liveStartError = "Avvio non riuscito: ${error.localizedMessage ?: "controlla i permessi"}"
@@ -685,23 +686,19 @@ private fun JuanitaApp(
                 "Ciao, sono ${identity.displayName}. Questa è una breve prova della mia voce. È un piacere conoscerti."
             else -> "Hello, I'm ${identity.displayName}. This is a short sample of my voice. It's lovely to meet you."
         }
+        val regionalDelivery = RegionalTtsTargetCatalog.byId(identity.regionalTtsTargetId)?.delivery
         val instruction = identity.toSystemInstruction() +
-            "\nANTEPRIMA VOCALE: pronuncia soltanto il breve testo iniziale fornito. Usa la voce Gemini selezionata e le indicazioni linguistiche di questo profilo. Non avviare una conversazione, non chiedere informazioni e poi resta in silenzio."
+            (regionalDelivery?.let { "\n\nREGIONAL SPEECH DELIVERY PREFERENCE:\n$it" } ?: "") +
+            "\nANTEPRIMA VOCALE: pronuncia soltanto il breve testo iniziale fornito. Usa la voce Gemini Live selezionata e le indicazioni linguistiche di questo profilo. Non avviare una conversazione, non chiedere informazioni e poi resta in silenzio."
         liveSessionIdentityName = identity.displayName
-        val previewTtsVoice = identity.regionalTtsVoiceName
-            ?.takeIf { it in RegionalTtsVoiceCatalog.all }
-            ?: RegionalTtsVoiceCatalog.defaultVoice
         JuanitaVoiceService.start(
             context = context,
             instruction = instruction,
             voiceName = identity.voiceName,
             initialPrompt = sample,
             previewDurationMillis = 25_000L,
-            ttsVoiceName = previewTtsVoice,
-            ttsTargetId = identity.regionalTtsTargetId,
-            ttsLanguageCode = identity.preferredLanguageTag
         )
-        liveStartError = "Anteprima di ${identity.displayName}: TTS $previewTtsVoice · Live ${identity.voiceName}. Si chiuderà automaticamente."
+        liveStartError = "Anteprima di ${identity.displayName}: voce nativa Gemini Live ${identity.voiceName}. Si chiuderà automaticamente."
     }
 
     val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
