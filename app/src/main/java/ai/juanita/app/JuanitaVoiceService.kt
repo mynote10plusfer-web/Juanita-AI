@@ -1068,6 +1068,11 @@ class JuanitaVoiceService : Service() {
         private val _visualSearchStatus = MutableStateFlow("")
         val visualSearchStatus: StateFlow<String> = _visualSearchStatus.asStateFlow()
 
+        fun clearVisualSearchResult() {
+            _visualSearchResult.value = null
+            _visualSearchStatus.value = ""
+        }
+
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
 
