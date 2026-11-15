@@ -529,7 +529,7 @@ class JuanitaVoiceService : Service() {
                                         }
                                         _visualSearchResult.value = result
                                         _visualSearchStatus.value = "Immagine trovata e analizzata."
-                                        "Ho trovato ${result.title}. Analisi visiva: ${result.analysis} Fonte: Wikimedia Commons. Autore/licenza: ${result.attribution}. Pagina originale: ${result.sourceUrl}"
+                                        "Ho trovato ${result.title}. Analisi visiva: ${result.analysis} Fonte: ${result.provider}. Autore/licenza: ${result.attribution}. Pagina originale: ${result.sourceUrl}"
                                     } catch (error: Exception) {
                                         _visualSearchStatus.value = "Ricerca visiva non riuscita: ${error.localizedMessage ?: "riprova più tardi"}"
                                         throw error
