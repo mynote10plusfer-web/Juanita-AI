@@ -1,5 +1,17 @@
 # Juanita AI — Product requirements and implementation roadmap
 
+## 2026-11-15 — Regional TTS microphone regression and follow-up health check
+
+**STATUS: DEVICE REGRESSION REPRODUCED; FOLLOW-UP CODE CHANGE COMMITTED; EXACT-HEAD CI RUNNING. NOT FIXED OR RELEASE-ACCEPTED.**
+
+- User tested the APK from commit `a2e4fbffbf54da87aafc880cbf5665527039a680` on the Samsung Galaxy Note10+ / Android 12. The opening prompt was audible, but after that the microphone/audio session stopped responding and the conversation could not continue. The earlier health-monitor correction therefore did not solve the real-device failure.
+- Run `43721425245` for `a2e4fbf` completed successfully (debug APK build, JVM tests, Android instrumentation compile, API 31 emulator instrumentation and package identity check). This is CI evidence only; it did not validate microphone capture on Samsung hardware.
+- Follow-up commit `ed2de0502390f07c1752c25155b1dd446a09a1ab` changes regional-TTS health evaluation to require both the SDK audio-conversation state and the direct receive collector to be active. A coroutine that remains active is not proof that microphone capture is still running.
+- This change is on `experiment/regional-tts-a-b-test` / PR #41 only. Stable `v0.11.12`, PR #40 and the protected production signing identity remain untouched. Exact-head CI run `43725940060` is in progress.
+- Firebase LiveSession reference distinguishes `stopReceiving()` (stops server-message reception; direct `receive()` can resume it) from `stopAudioConversation()` (stops the audio conversation). Do not assume these states are interchangeable. Validate the combined health predicate on the actual Note10+ before calling the issue fixed.
+- Next diagnostic gate: confirm that the SDK audio conversation remains active after the receiver handoff; record state transitions and the first input-transcription event without logging private transcript text. If the SDK audio state drops, investigate the SDK microphone lifecycle and the TTS receiver handoff rather than increasing reconnect retries.
+- Do not resume new feature implementation until the voice path can complete repeated user/assistant turns, interruption/barge-in, and a sustained session on the Note10+ without microphone loss. Then continue in the approved order: C3 presence integration, C4 shared learning/character engine, C5 scalable encrypted archive, Personal Organizer/Agenda, and Avatar last.
+
 ## 2026-11-13 — C2/C5 regression coverage and CI emulator baseline
 
 **STATUS: REGRESSION TESTS ADDED; EXACT-HEAD CI RUNNING. C3/C4/C5 IMPLEMENTATION IS NOT DECLARED COMPLETE.**
