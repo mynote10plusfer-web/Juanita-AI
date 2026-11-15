@@ -439,7 +439,7 @@ class GeminiLiveAssistant {
                 try {
                     onDiagnosticEvent("receiver.collect.start", "direct receive collector launched")
                     activeSession.receive().collect { message ->
-                        onDiagnosticEvent("receiver.message", "inputTranscription=${!message.inputTranscription?.text.isNullOrBlank()}; outputTranscription=${!message.outputTranscription?.text.isNullOrBlank()}; turnComplete=${message.turnComplete}; interrupted=${message.interrupted}")
+                        onDiagnosticEvent("receiver.message", "server message received; messageType=${message.javaClass.simpleName}")
                         handleRegionalTtsServerMessage(activeSession, message)
                     }
                 } catch (cancelled: CancellationException) {
