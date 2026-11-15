@@ -14,6 +14,8 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
+import android.media.AudioManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -106,6 +108,9 @@ class JuanitaVoiceService : Service() {
     private val videoFrameInFlight = AtomicBoolean(false)
     @Volatile private var cpuWakeLock: PowerManager.WakeLock? = null
     private var thermalListenerRegistered = false
+    private var audioRecordingDiagnosticsJob: Job? = null
+    private var lastAudioRecordingDiagnosticSignature: String? = null
+    private var lastAudioRecordingDiagnosticAtMs: Long = 0L
     private val thermalStatusListener = PowerManager.OnThermalStatusChangedListener { status ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
             status >= PowerManager.THERMAL_STATUS_SEVERE
@@ -583,6 +588,7 @@ class JuanitaVoiceService : Service() {
                             }
                             lifecycleState = VoiceLifecycleState.ACTIVE
                             voiceDiagnostics.event("session.active", "service lifecycle ACTIVE")
+                            startAudioRecordingDiagnostics()
                             startThermalMonitoring()
                             _state.value = if (previewDurationMillis > 0L) "Anteprima della voce Gemini in corso…"
                                 else "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
@@ -597,6 +603,7 @@ class JuanitaVoiceService : Service() {
                         } catch (cancelled: CancellationException) {
                             throw cancelled
                         } catch (error: Exception) {
+                            stopAudioRecordingDiagnostics()
                             val captureStopped = stopAudioCaptureWithDeadline(6_000L)
                             // Restore Android's global communication route even when the SDK
                             // recorder fails to acknowledge shutdown. Do not keep MODE_IN_COMMUNICATION
@@ -698,6 +705,7 @@ class JuanitaVoiceService : Service() {
             return
         }
         lifecycleState = VoiceLifecycleState.STOPPING
+        stopAudioRecordingDiagnostics()
         stopThermalMonitoring()
         _state.value = "Richiesta di chiusura audio in corso…"
         stopJob = serviceScope.launch {
@@ -901,6 +909,65 @@ class JuanitaVoiceService : Service() {
     }
 
     /**
+     * Observe Android's own active-recording registry while Gemini Live is running.
+     * This does not open a second microphone or change audio routing. It lets diagnostics
+     * distinguish an active SDK session from an AudioRecord that Android no longer reports.
+     * Only technical metadata is logged; no audio samples or transcript text are accessed.
+     */
+    private fun startAudioRecordingDiagnostics() {
+        stopAudioRecordingDiagnostics()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        voiceDiagnostics.event("audio.recording.probe.started", "pollIntervalMs=5000")
+        audioRecordingDiagnosticsJob = serviceScope.launch(Dispatchers.IO) {
+            var consecutiveEmptySamples = 0
+            while (true) {
+                val configsResult = runCatching { audioManager.activeRecordingConfigurations }
+                val configs = configsResult.getOrNull()
+                if (configs != null) {
+                    if (configs.isEmpty()) consecutiveEmptySamples++ else consecutiveEmptySamples = 0
+                    val recorders = configs.joinToString(",") { config ->
+                        val silenced = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            config.isClientSilenced
+                        } else {
+                            false
+                        }
+                        "source=${config.clientAudioSource},rateHz=${config.clientFormat.sampleRate},silenced=$silenced"
+                    }.ifBlank { "none" }
+                    val sdkSnapshot = assistant.audioDiagnosticSnapshot()
+                    val detail = "activeRecordings=${configs.size}; recorders=$recorders; emptySamples=$consecutiveEmptySamples; $sdkSnapshot"
+                    val now = SystemClock.elapsedRealtime()
+                    if (
+                        detail != lastAudioRecordingDiagnosticSignature ||
+                        now - lastAudioRecordingDiagnosticAtMs >= 15_000L
+                    ) {
+                        voiceDiagnostics.event("audio.recording.health", detail)
+                        lastAudioRecordingDiagnosticSignature = detail
+                        lastAudioRecordingDiagnosticAtMs = now
+                    }
+                    if (consecutiveEmptySamples == 3) {
+                        voiceDiagnostics.event(
+                            "audio.recording.empty.warning",
+                            "Android reported no active recording configuration in three consecutive samples; $sdkSnapshot"
+                        )
+                    }
+                } else {
+                    val error = configsResult.exceptionOrNull()?.javaClass?.simpleName ?: "Unknown"
+                    voiceDiagnostics.event("audio.recording.probe.error", "error=$error")
+                }
+                delay(5_000L)
+            }
+        }
+    }
+
+    private fun stopAudioRecordingDiagnostics() {
+        audioRecordingDiagnosticsJob?.cancel()
+        audioRecordingDiagnosticsJob = null
+        lastAudioRecordingDiagnosticSignature = null
+        lastAudioRecordingDiagnosticAtMs = 0L
+    }
+
+    /**
      * Android reports device-wide thermal pressure. Stop only the active voice session at
      * SEVERE or above; lower levels are advisory and must not interrupt ordinary use.
      */
@@ -1029,6 +1096,7 @@ class JuanitaVoiceService : Service() {
         activeIdentityId = null
         pendingStartIntent = null
         pendingStartId = 0
+        stopAudioRecordingDiagnostics()
         stopThermalMonitoring()
         releaseCpuWakeLock()
         transcriptChannel?.close()
