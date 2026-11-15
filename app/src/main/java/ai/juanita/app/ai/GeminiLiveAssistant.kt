@@ -430,7 +430,8 @@ class GeminiLiveAssistant {
         healthJob = recoveryScope.launch {
             while (!manualStop && session === activeSession) {
                 delay(2_500L)
-                if (activeSession.isClosed()) {
+                if (activeSession.isClosed() || !activeSession.isAudioConversationActive()) {
+                    Log.w(TAG, "Live session or SDK audio pipeline became inactive; starting controlled recovery")
                     recoverAfterServerDisconnect(activeSession)
                     break
                 }
