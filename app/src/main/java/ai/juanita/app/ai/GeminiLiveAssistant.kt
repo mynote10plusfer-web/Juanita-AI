@@ -107,7 +107,7 @@ class GeminiLiveAssistant {
         this.onDiagnosticEvent = onDiagnosticEvent
         onDiagnosticEvent("assistant.start", "voice=$voiceName; regionalTts=${!ttsVoiceName.isNullOrBlank()}; ttsTarget=${ttsTargetId ?: "none"}")
         ttsOutput = ttsVoiceName?.takeIf { it.isNotBlank() }?.let { voice ->
-            GeminiTtsSpeechOutput(voice, ttsTargetId, ttsLanguageCode)
+            GeminiTtsSpeechOutput(voice, ttsTargetId, ttsLanguageCode, onDiagnosticEvent)
         }
         automaticRecoveryCount = 0
         synchronized(recentTranscript) { recentTranscript.clear() }
@@ -466,13 +466,23 @@ class GeminiLiveAssistant {
         when (message) {
             is LiveServerContent -> {
                 val inputText = message.inputTranscription?.text?.trim().orEmpty()
+                val outputText = message.outputTranscription?.text?.trim().orEmpty()
+                val pcmParts = message.content?.parts
+                    ?.filterIsInstance<InlineDataPart>()
+                    ?.filter { it.mimeType.startsWith("audio/pcm", ignoreCase = true) }
+                    .orEmpty()
+                val pcmBytes = pcmParts.sumOf { it.inlineData.size }
+                onDiagnosticEvent(
+                    "live.content.metrics",
+                    "inputTranscriptionChars=${inputText.length}; outputTranscriptionChars=${outputText.length}; " +
+                        "audioPcmParts=${pcmParts.size}; audioPcmBytes=$pcmBytes; interrupted=${message.interrupted}; " +
+                        "turnComplete=${message.turnComplete}; generationComplete=${message.generationComplete}"
+                )
                 if (inputText.isNotBlank()) cancelPendingTtsTurn()
                 transcriptHandler?.invoke(message.inputTranscription, message.outputTranscription)
 
-                message.content?.parts?.filterIsInstance<InlineDataPart>()?.forEach { part ->
-                    if (part.mimeType.startsWith("audio/pcm", ignoreCase = true)) {
-                        synchronized(ttsBufferLock) { pendingLivePcm.write(part.inlineData) }
-                    }
+                pcmParts.forEach { part ->
+                    synchronized(ttsBufferLock) { pendingLivePcm.write(part.inlineData) }
                 }
                 message.outputTranscription?.text?.trim()?.takeIf { it.isNotEmpty() }?.let(::appendTtsTranscript)
 
