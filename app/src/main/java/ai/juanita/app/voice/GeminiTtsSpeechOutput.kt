@@ -15,6 +15,7 @@ import com.google.firebase.ai.type.Voice
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -67,6 +68,9 @@ class GeminiTtsSpeechOutput(
                 coroutineContext.ensureActive()
                 playWav(wav)
             }
+        } catch (timeout: TimeoutCancellationException) {
+            if (liveFallbackPcm.isEmpty()) throw timeout
+            playPcm(liveFallbackPcm)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (ttsFailure: Exception) {
