@@ -1,6 +1,7 @@
 package ai.juanita.app.vision
 
 import android.content.ContentResolver
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -21,6 +22,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -217,5 +219,52 @@ private fun decodePhoto(resolver: ContentResolver, uri: Uri): Bitmap? {
     }
     return resolver.openInputStream(uri)?.use { input: InputStream ->
         BitmapFactory.decodeStream(input, null, options)
+    }
+}
+
+
+@Composable
+fun VisualSearchResultCard(
+    result: VisualSearchResult?,
+    status: String,
+    accent: Color,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    if (result == null && status.isBlank()) return
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF17191D))
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("RICERCA VISIVA DI JUANITA", color = accent, fontSize = 13.sp)
+            if (status.isNotBlank()) Text(status, color = Color(0xFFB9BBC1), fontSize = 12.sp)
+            result?.let { found ->
+                Text(found.title, color = Color.White, fontSize = 14.sp)
+                Image(
+                    bitmap = found.bitmap.asImageBitmap(),
+                    contentDescription = "Fotografia trovata da Juanita",
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp),
+                    contentScale = ContentScale.Fit
+                )
+                Text(found.analysis, color = Color.White, fontSize = 14.sp)
+                Text(found.attribution, color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            runCatching {
+                                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(found.sourceUrl)))
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black)
+                    ) { Text("Apri fonte originale") }
+                    TextButton(onClick = onDismiss) { Text("Chiudi", color = accent) }
+                }
+            }
+        }
     }
 }
