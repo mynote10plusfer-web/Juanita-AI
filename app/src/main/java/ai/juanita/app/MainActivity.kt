@@ -88,7 +88,6 @@ import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import ai.juanita.app.identity.toSystemInstruction
 import ai.juanita.app.voice.RegionalVoiceLabSection
-import ai.juanita.app.vision.VisionAssistantSection
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -1045,7 +1044,6 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "HOME") {
-                VisionAssistantSection(panel = panel, gold = gold)
                 SettingsCard(panel, gold, "CONVERSAZIONE VOCALE LIVE") {
                     Text("Motore Gemini Live · ${GeminiLiveAssistant.MODEL_NAME}", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                     Text(
