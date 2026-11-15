@@ -12,6 +12,7 @@ import com.google.firebase.ai.type.ResponseModality
 import com.google.firebase.ai.type.SpeechConfig
 import com.google.firebase.ai.type.SpeechMetadata
 import com.google.firebase.ai.type.Voice
+import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
 import kotlinx.coroutines.CancellationException
@@ -138,19 +139,16 @@ class GeminiTtsSpeechOutput(
         }
     }
 
-    private fun speechTarget(id: String?, requestedLanguage: String): SpeechTarget = when (id) {
-        "paisa-medellin" -> SpeechTarget(
-            languageCode = "es-CO",
-            style = "Natural contemporary Spanish from Medellín and Antioquia, Colombia. Use a recognizably local Paisa melody and relaxed conversational rhythm, with clear articulation. Use regional forms naturally and consistently; do not force slang, exaggerate the accent, or sound like a radio presenter. Preserve the selected voice's own vocal character."
-        )
-        "canario-tenerife" -> SpeechTarget(
-            languageCode = "es-ES",
-            style = "Natural Spanish from the Canary Islands, with Tenerife as the regional reference. Use a relaxed island rhythm, natural seseo and gentle final-s aspiration only where appropriate, and prefer ustedes when natural. Avoid a caricature or exaggerated slang. Preserve the selected voice's own vocal character."
-        )
-        else -> SpeechTarget(
-            languageCode = requestedLanguage.ifBlank { "es-ES" },
-            style = "Speak naturally and conversationally in the requested language. Use clear articulation, a calm pace and natural pauses. Preserve the selected voice's own vocal character."
-        )
+    private fun speechTarget(id: String?, requestedLanguage: String): SpeechTarget {
+        val regional = RegionalTtsTargetCatalog.byId(id)
+        return if (regional != null) {
+            SpeechTarget(regional.languageCode, regional.delivery)
+        } else {
+            SpeechTarget(
+                requestedLanguage.ifBlank { "es-ES" },
+                "Speak naturally and conversationally in the requested language. Use clear articulation, a calm pace and natural pauses. Preserve the selected voice's own vocal character and gender presentation."
+            )
+        }
     }
 
     private data class SpeechTarget(val languageCode: String, val style: String)
