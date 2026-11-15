@@ -15,6 +15,35 @@ object DigitalIdentityVoiceCatalog {
         if (presentation == IdentityPresentation.MASCULINE) "Achird" else "Kore"
 }
 
+/** Shared regional delivery presets used identically by the voice lab and conversation output. */
+data class RegionalTtsTarget(
+    val id: String,
+    val label: String,
+    val languageCode: String,
+    val sample: String,
+    val delivery: String
+)
+
+object RegionalTtsTargetCatalog {
+    val paisa = RegionalTtsTarget(
+        id = "paisa-medellin",
+        label = "Paisa · Medellín",
+        languageCode = "es-CO",
+        sample = "¡Hola! ¿Qué más? ¿Cómo vas? Me alegra escucharte. Si querés, hoy podemos salir a tomar un cafecito y conversar con calma. Contame, ¿cómo te fue el día?",
+        delivery = "Natural contemporary Spanish from Medellín, Antioquia, Colombia. Use a recognizable Paisa melody, warm but not exaggerated, fluent conversational rhythm, clear vowels and authentic local intonation. Use coherent, spontaneous voseo where appropriate; do not force slang or sound like a radio presenter or theatrical imitation. Preserve the selected voice's own vocal character and gender presentation."
+    )
+    val canario = RegionalTtsTarget(
+        id = "canario-tenerife",
+        label = "Canario · Tenerife",
+        languageCode = "es-ES",
+        sample = "Hola, ¿qué tal? Me alegra escucharte. Si te apetece, hoy podemos salir a tomar algo y charlar tranquilamente. Cuéntame, ¿cómo te fue el día? Ya sabes que aquí lo importante es disfrutar sin prisas.",
+        delivery = "Natural Spanish from the Canary Islands, with Tenerife as the regional reference. Use natural Canarian Spanish, seseo and gentle final-s aspiration only where appropriate, a relaxed rhythm and authentic island intonation. Prefer ustedes when it sounds natural. Avoid imitating peninsular Castilian Spanish or exaggerating regional traits. Preserve the selected voice's own vocal character and gender presentation."
+    )
+    val all = listOf(paisa, canario)
+    val targetIds = all.map { it.id }.toSet()
+    fun byId(id: String?): RegionalTtsTarget? = all.firstOrNull { it.id == id }
+}
+
 /** Complete Gemini TTS catalogue, kept separate from the Gemini Live voice catalogue. */
 object RegionalTtsVoiceCatalog {
     val all = listOf(
@@ -24,7 +53,7 @@ object RegionalTtsVoiceCatalog {
         "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
         "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
     )
-    val targetIds = setOf("paisa-medellin", "canario-tenerife")
+    val targetIds = RegionalTtsTargetCatalog.targetIds
 }
 
 /**
