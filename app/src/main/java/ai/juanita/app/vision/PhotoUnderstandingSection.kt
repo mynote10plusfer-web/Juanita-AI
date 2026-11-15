@@ -252,7 +252,7 @@ fun VisualSearchResultCard(
                     contentScale = ContentScale.Fit
                 )
                 Text(found.analysis, color = Color.White, fontSize = 14.sp)
-                Text(found.attribution, color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                Text("${found.provider} · ${found.attribution}", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
