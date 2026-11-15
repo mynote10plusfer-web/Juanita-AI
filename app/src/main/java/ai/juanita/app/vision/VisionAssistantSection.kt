@@ -40,7 +40,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.io.ByteArrayOutputStream
 
 /**
  * User-initiated photo understanding. Images are decoded in memory and are not
@@ -143,7 +142,7 @@ fun VisionAssistantSection(
             )
             Button(
                 onClick = {
-                    val image = selectedBitmap ?: return@Button
+                    val photoBitmap = selectedBitmap ?: return@Button
                     scope.launch {
                         busy = true
                         answer = ""
@@ -157,7 +156,7 @@ fun VisionAssistantSection(
                                     val model = Firebase.ai(backend = GenerativeBackend.googleAI())
                                         .generativeModel("gemini-3.8-flash")
                                     model.generateContent(content {
-                                        image(image)
+                                        image(photoBitmap)
                                         text(prompt)
                                     })
                                 }
