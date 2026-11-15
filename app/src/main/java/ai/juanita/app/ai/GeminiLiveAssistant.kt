@@ -484,6 +484,9 @@ class GeminiLiveAssistant {
     private suspend fun startManualMicrophone(activeSession: LiveSession) {
         withContext(Dispatchers.IO) {
             synchronized(microphoneLock) {
+                check(!manualStop && session === activeSession) {
+                    "Avvio microfono annullato perché la sessione è già in chiusura."
+                }
                 check(microphoneSession == null) { "Un altro microfono regionale risulta già attivo." }
             }
             val minBuffer = AudioRecord.getMinBufferSize(
@@ -513,6 +516,9 @@ class GeminiLiveAssistant {
                     "AudioRecord non è entrato nello stato RECORDING."
                 }
                 synchronized(microphoneLock) {
+                    check(!manualStop && session === activeSession) {
+                        "Avvio microfono annullato durante l'inizializzazione."
+                    }
                     microphoneRecord = recorder
                     microphoneSession = activeSession
                     microphoneJob = recoveryScope.launch(Dispatchers.IO) {
