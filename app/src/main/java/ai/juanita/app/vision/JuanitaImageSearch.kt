@@ -39,7 +39,11 @@ object JuanitaImageSearch {
         val cleanQuery = query.trim().take(160)
         require(cleanQuery.length >= 2) { "Dimmi che cosa devo cercare." }
         withTimeout(45_000L) {
-            val candidate = searchCommons(cleanQuery)
+            val searchVariants = linkedSetOf(
+                cleanQuery,
+                cleanQuery.replace(Regex("\\b20\\d{2}\\b"), "").replace(Regex("\\s+"), " ").trim()
+            ).filter { it.length >= 2 }
+            val candidate = searchVariants.firstNotNullOfOrNull { searchCommons(it) }
                 ?: error("Non ho trovato una fotografia pertinente su Wikimedia Commons.")
             val bytes = downloadImage(candidate.imageUrl)
             val bitmap = decodeBitmap(bytes) ?: error("La fotografia trovata non è in un formato leggibile.")
