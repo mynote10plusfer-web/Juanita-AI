@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import ai.juanita.app.identity.DigitalIdentity
 import ai.juanita.app.identity.RegionalTtsVoiceCatalog
+import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,29 +49,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
-private enum class RegionalSpeechTarget(
-    val id: String,
-    val label: String,
-    val languageCode: String,
-    val sample: String,
-    val delivery: String
-) {
-    PAISA(
-        id = "paisa-medellin",
-        label = "Paisa · Medellín",
-        languageCode = "es-CO",
-        sample = "¡Hola! ¿Qué más? ¿Cómo vas? Me alegra escucharte. Si querés, hoy podemos salir a tomar un cafecito y conversar con calma. Contame, ¿cómo te fue el día?",
-        delivery = "Voz femenina colombiana de Medellín, Antioquia. Acento paisa contemporáneo, melodía antioqueña cálida y natural, ritmo conversacional fluido, vocales claras y entonación local auténtica. Usa voseo coherente y espontáneo, sin exagerar el parlache, sin sonar como una locutora ni como una imitación teatral."
-    ),
-    CANARIO(
-        id = "canario-tenerife",
-        label = "Canario · Tenerife",
-        languageCode = "es-ES",
-        sample = "Hola, ¿qué tal? Me alegra escucharte. Si te apetece, hoy podemos salir a tomar algo y charlar tranquilamente. Cuéntame, ¿cómo te fue el día? Ya sabes que aquí lo importante es disfrutar sin prisas.",
-        delivery = "Voz femenina de las Islas Canarias, con referencia a Tenerife. Español canario natural, seseo y aspiración suave de la s final cuando resulte propia de la voz, ritmo relajado y cercano, entonación isleña auténtica. Prefiere ustedes cuando corresponda. No imites un acento peninsular castellano ni exageres rasgos regionales."
-    )
-}
-
 private val regionalTestVoices = RegionalTtsVoiceCatalog.all
 /** Isolated TTS audition lab. It never starts or stops the Gemini Live microphone session. */
 @OptIn(PublicPreviewAPI::class)
@@ -83,7 +61,7 @@ fun RegionalVoiceLabSection(
     onSaveVoice: suspend (profileId: String, voiceName: String, targetId: String) -> DigitalIdentity
 ) {
     val scope = rememberCoroutineScope()
-    var target by remember { mutableStateOf(RegionalSpeechTarget.PAISA) }
+    var target by remember { mutableStateOf(RegionalTtsTargetCatalog.paisa) }
     var voice by remember { mutableStateOf("Leda") }
     var profileId by remember(activeProfileId) { mutableStateOf(activeProfileId ?: profiles.firstOrNull { !it.archived }?.id) }
     var targetMenu by remember { mutableStateOf(false) }
@@ -95,7 +73,7 @@ fun RegionalVoiceLabSection(
     LaunchedEffect(selectedProfile?.id, selectedProfile?.regionalTtsVoiceName, selectedProfile?.regionalTtsTargetId) {
         selectedProfile?.let { saved ->
             voice = saved.regionalTtsVoiceName?.takeIf { it in regionalTestVoices } ?: "Leda"
-            target = RegionalSpeechTarget.entries.firstOrNull { it.id == saved.regionalTtsTargetId } ?: RegionalSpeechTarget.PAISA
+            target = RegionalTtsTargetCatalog.byId(saved.regionalTtsTargetId) ?: RegionalTtsTargetCatalog.paisa
         }
     }
 
@@ -117,7 +95,7 @@ fun RegionalVoiceLabSection(
                 Text("Variante", color = Color.White, modifier = Modifier.weight(1f))
                 TextButton(onClick = { targetMenu = true }, enabled = !busy) { Text(target.label, color = gold) }
                 DropdownMenu(expanded = targetMenu, onDismissRequest = { targetMenu = false }) {
-                    RegionalSpeechTarget.entries.forEach { option ->
+                    RegionalTtsTargetCatalog.all.forEach { option ->
                         DropdownMenuItem(text = { Text(option.label) }, onClick = { target = option; targetMenu = false })
                     }
                 }
