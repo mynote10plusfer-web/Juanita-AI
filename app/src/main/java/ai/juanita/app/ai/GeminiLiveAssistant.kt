@@ -329,10 +329,12 @@ class GeminiLiveAssistant {
             }
         this.transcriptHandler = { input, output ->
                 input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    onDiagnosticEvent("transcription.input", "characters=${it.length}")
                     rememberRecentTurn("USER", it)
                     onTranscript("USER", it)
                 }
                 output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    onDiagnosticEvent("transcription.output", "characters=${it.length}")
                     rememberRecentTurn("JUANITA", it)
                     onTranscript("ASSISTANT", it)
                 }
@@ -538,8 +540,11 @@ class GeminiLiveAssistant {
                         output.playFallback(pcm)
                         onDiagnosticEvent("tts.fallback.played", "pcmBytes=${pcm.size}")
                         onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
-                    } else if (!output.speak(text, pcm)) {
-                        onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
+                    } else {
+                        onDiagnosticEvent("tts.synthesis.begin", "characters=${text.length}; fallbackPcmBytes=${pcm.size}")
+                        val spoken = output.speak(text, pcm)
+                        onDiagnosticEvent("tts.synthesis.result", "spoken=$spoken")
+                        if (!spoken) onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
