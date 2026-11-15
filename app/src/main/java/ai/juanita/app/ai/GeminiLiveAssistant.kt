@@ -489,19 +489,26 @@ class GeminiLiveAssistant {
                 }
                 check(microphoneSession == null) { "Un altro microfono regionale risulta già attivo." }
             }
-            val minBuffer = AudioRecord.getMinBufferSize(
-                MANUAL_INPUT_SAMPLE_RATE,
-                AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT
-            )
-            check(minBuffer > 0) { "AudioRecord non supporta PCM mono a 24 kHz (code=$minBuffer)." }
-            val bufferSize = maxOf(minBuffer * 2, MANUAL_INPUT_CHUNK_BYTES * 4)
+            // Prefer the SDK-recommended 24 kHz input rate; fall back to the
+            // widely supported 16 kHz rate on devices that reject 24 kHz capture.
+            val supportedInput = listOf(24_000, 16_000).mapNotNull { rate ->
+                val size = AudioRecord.getMinBufferSize(
+                    rate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT
+                )
+                if (size > 0) rate to size else null
+            }.firstOrNull() ?: error("AudioRecord non supporta PCM mono a 24 o 16 kHz.")
+            val inputSampleRate = supportedInput.first
+            val minBuffer = supportedInput.second
+            val chunkBytes = inputSampleRate * 2 / 50
+            val bufferSize = maxOf(minBuffer * 2, chunkBytes * 4)
             val recorder = AudioRecord.Builder()
                 .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                 .setAudioFormat(
                     AudioFormat.Builder()
                         .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(MANUAL_INPUT_SAMPLE_RATE)
+                        .setSampleRate(inputSampleRate)
                         .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
                         .build()
                 )
@@ -522,12 +529,12 @@ class GeminiLiveAssistant {
                     microphoneRecord = recorder
                     microphoneSession = activeSession
                     microphoneJob = recoveryScope.launch(Dispatchers.IO) {
-                        val buffer = ByteArray(MANUAL_INPUT_CHUNK_BYTES)
+                        val buffer = ByteArray(chunkBytes)
                         var chunksSent = 0L
                         try {
                             onDiagnosticEvent(
                                 "microphone.started",
-                                "source=VOICE_COMMUNICATION; sampleRateHz=$MANUAL_INPUT_SAMPLE_RATE; " +
+                                "source=VOICE_COMMUNICATION; sampleRateHz=$inputSampleRate; " +
                                     "pcmBits=16; channelCount=1; bufferBytes=$bufferSize"
                             )
                             while (isActive && !manualStop && session === activeSession) {
@@ -536,7 +543,7 @@ class GeminiLiveAssistant {
                                     val evenBytes = read - (read % 2)
                                     if (evenBytes > 0) {
                                         activeSession.sendAudioRealtime(
-                                            InlineData(buffer.copyOf(evenBytes), "audio/pcm;rate=$MANUAL_INPUT_SAMPLE_RATE")
+                                            InlineData(buffer.copyOf(evenBytes), "audio/pcm;rate=$inputSampleRate")
                                         )
                                         chunksSent++
                                         if (chunksSent == 1L || chunksSent % 50L == 0L) {
@@ -947,9 +954,6 @@ class GeminiLiveAssistant {
         private const val MAX_AUTOMATIC_RECOVERIES = 1
         private const val LIVE_CONNECT_TIMEOUT_MS = 20_000L
         private const val TTS_TRANSCRIPT_SETTLE_MS = 650L
-        private const val MANUAL_INPUT_SAMPLE_RATE = 24_000
-        // 20 ms of mono PCM16 at 24 kHz.
-        private const val MANUAL_INPUT_CHUNK_BYTES = MANUAL_INPUT_SAMPLE_RATE * 2 / 50
 
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
         const val DEFAULT_VOICE = "Kore"
