@@ -46,6 +46,7 @@ object RegionalTtsTargetCatalog {
 
 /** Complete Gemini TTS catalogue, kept separate from the Gemini Live voice catalogue. */
 object RegionalTtsVoiceCatalog {
+    const val defaultVoice = "Leda"
     val all = listOf(
         "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
         "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
