@@ -28,7 +28,7 @@ object VoiceSessionCommandMatcher {
         Regex("""^(?:per favore )?(?:puoi )?fermarti$"""),
         Regex("""^(?:per favore )?(?:puoi )?terminare (?:la )?(?:conversazione|sessione)$"""),
         Regex("""^(?:per favore )?(?:puoi )?interrompere (?:la )?conversazione$"""),
-        Regex("""^(?:stop|basta|stop conversation|end conversation|stop session)$"")
+        Regex("""^(?:stop|basta|stop conversation|end conversation|stop session)$""")
     )
 
     fun match(transcript: String, activeIdentityName: String): Command? {
