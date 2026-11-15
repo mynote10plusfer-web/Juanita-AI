@@ -25,6 +25,15 @@ class PersonaProfileTest {
     }
 
     @Test
+    fun systemInstructionRequestsMeasuredAndConciseSpokenDelivery() {
+        val instruction = PersonaProfile().toSystemInstruction("Español (Colombia)", "Colombiano paisa")
+
+        assertTrue(instruction.contains("calm, measured conversational pace"))
+        assertTrue(instruction.contains("one to three sentences"))
+        assertTrue(instruction.contains("unhurried rhythm"))
+    }
+
+    @Test
     fun nonPaisaDialectsDoNotReceivePaisaInstructions() {
         val instruction = PersonaProfile().regionalDialectInstruction("Español canario")
 
