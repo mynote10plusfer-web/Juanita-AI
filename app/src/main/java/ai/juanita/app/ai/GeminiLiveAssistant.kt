@@ -464,7 +464,7 @@ class GeminiLiveAssistant {
 
                 if (message.interrupted) {
                     cancelPendingTtsTurn()
-                } else if (message.turnComplete) {
+                } else if (message.generationComplete || message.turnComplete) {
                     scheduleRegionalTtsFlush(activeSession)
                 }
             }
@@ -518,7 +518,12 @@ class GeminiLiveAssistant {
             val output = ttsOutput ?: return@launch
             ttsPlaybackJob = recoveryScope.launch {
                 try {
-                    if (text.isBlank()) output.playFallback(pcm) else output.speak(text, pcm)
+                    if (text.isBlank()) {
+                        output.playFallback(pcm)
+                        onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
+                    } else if (!output.speak(text, pcm)) {
+                        onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
+                    }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
