@@ -144,7 +144,7 @@ object JuanitaImageSearch {
             }
             val declaredLength = connection.contentLengthLong
             require(declaredLength == -1L || declaredLength in 1..MAX_IMAGE_BYTES.toLong()) { "La fotografia supera il limite consentito." }
-            val output = ByteArrayOutputStream(declaredLength.toInt())
+            val output = ByteArrayOutputStream(if (declaredLength > 0L) declaredLength.toInt() else 32 * 1024)
             connection.inputStream.use { input ->
                 val buffer = ByteArray(8 * 1024)
                 var total = 0
