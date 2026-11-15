@@ -85,6 +85,7 @@ import ai.juanita.app.memory.ImprovementReport
 import ai.juanita.app.identity.DigitalIdentitySection
 import ai.juanita.app.identity.DigitalIdentity
 import ai.juanita.app.identity.DigitalIdentityStore
+import ai.juanita.app.identity.RegionalTtsVoiceCatalog
 import ai.juanita.app.identity.toSystemInstruction
 import ai.juanita.app.voice.RegionalVoiceLabSection
 import java.util.Locale
@@ -631,7 +632,10 @@ private fun JuanitaApp(
                         activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
                         identityId = activeDigitalIdentity?.id,
                         backgroundContinuationAuthorized = backgroundContinuationAuthorized,
-                        ttsVoiceName = activeDigitalIdentity?.regionalTtsVoiceName,
+                        ttsVoiceName = activeDigitalIdentity?.let { identity ->
+                            identity.regionalTtsVoiceName?.takeIf { it in RegionalTtsVoiceCatalog.all }
+                                ?: RegionalTtsVoiceCatalog.defaultVoice
+                        },
                         ttsTargetId = activeDigitalIdentity?.regionalTtsTargetId,
                         ttsLanguageCode = activeDigitalIdentity?.preferredLanguageTag
                     )
@@ -684,14 +688,20 @@ private fun JuanitaApp(
         val instruction = identity.toSystemInstruction() +
             "\nANTEPRIMA VOCALE: pronuncia soltanto il breve testo iniziale fornito. Usa la voce Gemini selezionata e le indicazioni linguistiche di questo profilo. Non avviare una conversazione, non chiedere informazioni e poi resta in silenzio."
         liveSessionIdentityName = identity.displayName
+        val previewTtsVoice = identity.regionalTtsVoiceName
+            ?.takeIf { it in RegionalTtsVoiceCatalog.all }
+            ?: RegionalTtsVoiceCatalog.defaultVoice
         JuanitaVoiceService.start(
             context = context,
             instruction = instruction,
             voiceName = identity.voiceName,
             initialPrompt = sample,
-            previewDurationMillis = 12_000L
+            previewDurationMillis = 25_000L,
+            ttsVoiceName = previewTtsVoice,
+            ttsTargetId = identity.regionalTtsTargetId,
+            ttsLanguageCode = identity.preferredLanguageTag
         )
-        liveStartError = "Anteprima di ${identity.displayName} avviata con la voce ${identity.voiceName}; si chiuderà automaticamente."
+        liveStartError = "Anteprima di ${identity.displayName}: TTS $previewTtsVoice · Live ${identity.voiceName}. Si chiuderà automaticamente."
     }
 
     val voicePreviewPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
