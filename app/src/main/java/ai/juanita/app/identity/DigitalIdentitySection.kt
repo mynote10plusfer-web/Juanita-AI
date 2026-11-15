@@ -347,7 +347,7 @@ fun DigitalIdentitySection(
                 OutlinedTextField(value = otherLanguages, onValueChange = { otherLanguages = it }, label = { Text("Altre lingue · codici separati da virgola") }, modifier = Modifier.fillMaxWidth())
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("VOCE PERSONALE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("VOCE GEMINI LIVE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         Text("La voce viene salvata in questo profilo, non nelle impostazioni generali.", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                     }
                     Button(onClick = { voiceMenuExpanded = true }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)) { Text("SCEGLI VOCE · $voiceName") }
