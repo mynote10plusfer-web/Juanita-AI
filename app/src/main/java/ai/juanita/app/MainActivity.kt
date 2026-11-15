@@ -89,6 +89,7 @@ import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import ai.juanita.app.identity.toSystemInstruction
 import ai.juanita.app.voice.RegionalVoiceLabSection
 import ai.juanita.app.vision.PhotoUnderstandingSection
+import ai.juanita.app.vision.VisualSearchResultCard
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -507,6 +508,8 @@ private fun JuanitaApp(
         .any { liveState.contains(it, ignoreCase = true) }
     var liveSessionIdentityName by remember { mutableStateOf(activeDigitalIdentity?.displayName ?: assistantName) }
     val visionState by JuanitaVoiceService.visionState.collectAsState()
+    val visualSearchResult by JuanitaVoiceService.visualSearchResult.collectAsState()
+    val visualSearchStatus by JuanitaVoiceService.visualSearchStatus.collectAsState()
     val memoryState by JuanitaVoiceService.memoryState.collectAsState()
     var liveStartError by remember { mutableStateOf<String?>(null) }
     var callScreenVisible by remember { mutableStateOf(false) }
@@ -1118,6 +1121,7 @@ private fun JuanitaApp(
                     ) { Text("Esci e chiudi completamente") }
                 }
                 PhotoUnderstandingSection(panel = panel, accent = gold)
+                VisualSearchResultCard(result = visualSearchResult, status = visualSearchStatus, accent = gold, onDismiss = { JuanitaVoiceService.clearVisualSearchResult() })
                 }
 
                 if (selectedSection == "AVATAR" && !callScreenVisible) {
