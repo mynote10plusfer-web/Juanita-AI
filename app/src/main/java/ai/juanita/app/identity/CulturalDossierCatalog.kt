@@ -36,6 +36,15 @@ object CulturalDossierCatalog {
             """.trimIndent(),
             sources = listOf(
                 CulturalSource(
+                    title = "Corpus Ameresco-Medellín: conversación espontánea MDE_001_02_12",
+                    geographicScope = "Medellín, Antioquia, Colombia; 30 minutos; hablante mujer con 4.009 palabras transcritas",
+                    url = "https://corpusameresco.org/conversacion/MDE_001_02_12",
+                    publisher = "Corpus Ameresco · Universitat de València",
+                    topic = "female-spontaneous-medellin-speech",
+                    confidence = 0.98f,
+                    summary = "Conversación espontánea con una hablante mujer y un hombre. La transcripción permite estudiar el uso contextual de tú, vos y usted, los marcadores discursivos, las pausas, las reformulaciones y el ritmo conversacional real."
+                ),
+                CulturalSource(
                     title = "El voseo como orgullo paisa: el uso pronominal en el español hablado en Medellín",
                     geographicScope = "Medellín, Antioquia, Colombia",
                     url = "https://www.revistaei.uchile.cl/index.php/BDF/article/view/73296",
@@ -90,7 +99,7 @@ object CulturalDossierCatalog {
                     summary = "Studio AMPER-Col sui contorni intonativi di voci femminili e maschili; gli autori invitano alla cautela perché è uno dei primi studi prosodici colombiani."
                 )
             ),
-            version = 2
+            version = 3
         ),
         CulturalDossier(
             summary = """
