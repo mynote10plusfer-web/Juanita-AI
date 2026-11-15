@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "experiment/live-native-audio-primary" ]
   pull_request:
     branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence" ]
   workflow_dispatch:
