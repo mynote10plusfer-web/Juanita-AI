@@ -1,5 +1,16 @@
 # Juanita AI — Voice Engine Audit (2026-11-15)
 
+## 2026-11-15 — Android microphone recording-state diagnostics
+
+**STATUS: PRIVACY-SAFE DIAGNOSTIC PROBE ADDED; EXACT-HEAD CI AND PHYSICAL NOTE10+ TEST REQUIRED. THIS IS NOT A MICROPHONE FIX.**
+
+- While the foreground voice service is active, the app polls Android's `AudioManager.activeRecordingConfigurations` every five seconds. It logs only changes and a 15-second heartbeat.
+- The diagnostic records the number of active Android recording configurations, audio source, sample rate and (on Android 10+) whether Android reports the client as silenced.
+- The same entry includes Gemini Live session presence/closed state, `isAudioConversationActive()`, and elapsed time since the last input/output transcription callback.
+- The probe does not create a second `AudioRecord`, capture audio samples, record transcript text, alter routing, or trigger recovery. It is stopped as soon as voice shutdown begins.
+- Interpretation gate: an active SDK session with zero Android recording configurations points to a local capture/lifecycle problem; a present but silenced configuration points to Android audio policy; a present, unsilenced configuration with no input transcription leaves VAD/network/server delivery as possible causes. None of these signals alone proves that intelligible speech reached Gemini.
+- Required test: on the physical Galaxy Note10+ / Android 12, start a normal native-Live conversation, let Juanita finish the opening question, speak several replies, interrupt her while speaking, and export the technical voice log. Do not call the microphone issue fixed until the log and repeated device test support that conclusion.
+
 ## Executive decision
 
 Use Gemini Live native audio as the only active voice path for interactive conversations. Do not run a second text-to-speech generation after every Live turn. Keep the cloud Gemini TTS laboratory paused while its free-tier quota is too small for normal use. Evaluate on-device neural TTS separately, behind a capability/benchmark gate; do not make it a mandatory dependency or replace the stable Live path before physical-device acceptance.
