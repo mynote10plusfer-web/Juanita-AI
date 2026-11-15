@@ -55,6 +55,7 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import android.util.Log
+import android.os.SystemClock
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -81,6 +82,8 @@ class GeminiLiveAssistant {
     private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
     private var onConnectionState: (String) -> Unit = {}
     private var onDiagnosticEvent: (String, String) -> Unit = { _, _ -> }
+    @Volatile private var lastInputTranscriptionAtElapsedMs: Long = 0L
+    @Volatile private var lastOutputTranscriptionAtElapsedMs: Long = 0L
     private var onContinuityContext: suspend (String) -> String = { it }
     private val recentTranscript = ArrayDeque<String>()
     private val ttsBufferLock = Any()
@@ -114,6 +117,8 @@ class GeminiLiveAssistant {
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
         this.onDiagnosticEvent = onDiagnosticEvent
+        lastInputTranscriptionAtElapsedMs = 0L
+        lastOutputTranscriptionAtElapsedMs = 0L
         onDiagnosticEvent("assistant.start", "voice=$voiceName; regionalTts=${!ttsVoiceName.isNullOrBlank()}; ttsTarget=${ttsTargetId ?: "none"}")
         ttsOutput = ttsVoiceName?.takeIf { it.isNotBlank() }?.let { voice ->
             GeminiTtsSpeechOutput(voice, ttsTargetId, ttsLanguageCode, onDiagnosticEvent)
@@ -371,11 +376,13 @@ class GeminiLiveAssistant {
             }
         this.transcriptHandler = { input, output ->
                 input?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    lastInputTranscriptionAtElapsedMs = SystemClock.elapsedRealtime()
                     onDiagnosticEvent("transcription.input", "characters=${it.length}")
                     rememberRecentTurn("USER", it)
                     onTranscript("USER", it)
                 }
                 output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    lastOutputTranscriptionAtElapsedMs = SystemClock.elapsedRealtime()
                     onDiagnosticEvent("transcription.output", "characters=${it.length}")
                     rememberRecentTurn("JUANITA", it)
                     onTranscript("ASSISTANT", it)
@@ -908,6 +915,20 @@ class GeminiLiveAssistant {
         val output = java.io.ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 78, output)
         activeSession.sendVideoRealtime(InlineData(output.toByteArray(), "image/jpeg"))
+    }
+
+    /**
+     * Privacy-safe snapshot used by the foreground service's microphone diagnostics.
+     * It reports SDK/audio state and transcription timing only; never transcript text.
+     */
+    fun audioDiagnosticSnapshot(): String {
+        val active = session
+        val now = SystemClock.elapsedRealtime()
+        val closed = runCatching { active?.isClosed() ?: true }.getOrDefault(true)
+        val audioActive = runCatching { active?.isAudioConversationActive() ?: false }.getOrDefault(false)
+        val inputAge = lastInputTranscriptionAtElapsedMs.takeIf { it > 0L }?.let { (now - it).coerceAtLeast(0L) } ?: -1L
+        val outputAge = lastOutputTranscriptionAtElapsedMs.takeIf { it > 0L }?.let { (now - it).coerceAtLeast(0L) } ?: -1L
+        return "sessionPresent=${active != null}; sessionClosed=$closed; sdkAudioActive=$audioActive; inputTranscriptionAgeMs=$inputAge; outputTranscriptionAgeMs=$outputAge"
     }
 
     /**
