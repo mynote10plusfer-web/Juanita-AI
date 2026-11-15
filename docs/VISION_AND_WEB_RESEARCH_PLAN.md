@@ -11,33 +11,33 @@ Documento di progettazione per una nuova funzionalità richiesta dall'utente il 
 - Questa funzione è comprensione visiva e ricerca di contenuti, non generazione/animazione dell'Avatar. La fase Avatar resta ultima.
 - L'utente deve poter scegliere esplicitamente se inviare una fotografia. Nessun upload automatico, nessuna memorizzazione cloud permanente.
 
-## Esperienza richiesta
+## Esperienza richiesta — semplicità prima di tutto
 
-Juanita deve poter:
-1. Ricevere una fotografia scelta dalla galleria, oltre alle immagini catturate dalla fotocamera già presente.
-2. Comprendere la fotografia e rispondere a domande sul contenuto.
-3. Cercare sul Web informazioni aggiornate quando richiesto o utile, mostrando fonti verificabili.
-4. Cercare fotografie pertinenti a una descrizione, mostrare anteprime e attribuzione/fonte, e analizzare le immagini recuperate.
-5. Discutere ciò che vede distinguendo fatti visivi, ipotesi e dettagli non verificabili.
+La priorità scelta dall'utente è una funzione automatica gestita da Juanita, senza configurazione tecnica da parte della persona che usa l'app:
+1. L'utente formula una normale richiesta vocale o testuale («Che ne pensi esteticamente della Tricity 300?»).
+2. Juanita decide se le serve una fotografia e avvia autonomamente la ricerca.
+3. Recupera una o poche immagini pertinenti da un provider pubblico che non richiede all'utente account, chiavi API o impostazioni.
+4. Le immagini vengono analizzate da Gemini multimodale; Juanita commenta ciò che è effettivamente visibile.
+5. Juanita può mostrare la fotografia e la sua fonte nella conversazione, senza chiedere all'utente di scegliere o caricare file.
 
-Esempio: «Cerca la Yamaha Tricity 300 2025, versione/colore/accessori X. Guardala e dimmi cosa ne pensi». Juanita deve mostrare le immagini candidate, identificare il modello solo quando gli elementi sono sufficienti, citare la provenienza e dichiarare se l'anno/versione non è verificabile dalla sola foto.
+La selezione di fotografie personali dalla galleria e l'upload manuale sono rinviati: non vanno mostrati controlli che complichino l'esperienza nella prima versione. La fotocamera già presente nell'Avatar resta indipendente.
+
+Esempio: «Cerca la Yamaha Tricity 300 2025 e dimmi cosa ne pensi esteticamente». Juanita deve cercare, guardare e commentare; identificare anno/versione solo se dimostrabile, distinguendo osservazioni da ipotesi.
 
 ## Architettura proposta
 
-### A. Fotografia dell'utente
-- Integrare Android Photo Picker tramite Activity Result API (selezione singola e, in futuro, multipla).
-- Mantenere il flusso CameraX esistente separato e non regressivo.
-- Decodificare l'URI in bitmap su dispatcher IO; limitare dimensioni e compressione prima dell'invio.
-- Inviare immagine + domanda a un modello Gemini multimodale tramite Firebase AI Logic / Gemini Developer API, con output testuale.
-- Non salvare automaticamente la foto nell'archivio Memoria, Avatar Studio o cloud. Conservare soltanto il testo/riassunto se l'utente lo chiede esplicitamente o se la normale policy di memoria già attiva lo consente.
-- Mostrare anteprima, nome/indicazione della foto, stato di invio e risposta; permettere rimozione prima dell'invio.
+### A. Ricerca autonoma di fotografie da parte di Juanita
+- Nessuna chiave, registrazione o configurazione richiesta all'utente finale.
+- Primo provider: API pubblica Wikimedia Commons MediaWiki, con ricerca anonima e metadati immagine/licenza/attribuzione. Non promettere che trovi ogni soggetto: per veicoli commerciali specifici la copertura può essere insufficiente.
+- Recuperare solo poche candidate (1–3), con URL immagine, pagina sorgente, autore e licenza quando disponibili. Non scraping indiscriminato di Google Images.
+- Scaricare l'immagine scelta con HTTPS, timeout, limite dimensione/MIME e controlli anti-SSRF; inviarla a Gemini multimodale per l'analisi.
+- Mostrare l'immagine e la fonte nella conversazione, quindi formulare un commento su design e dettagli visibili; indicare incertezza su anno/allestimento se non dimostrabili.
+- Non salvare le immagini in Memoria o Avatar Studio e non conservarle oltre la sessione.
 
-### B. Ricerca web testuale
-- Implementare un servizio on-demand separato dalla sessione audio Live. La prima opzione da valutare è LangSearch Web Search API: il piano pubblicato è gratuito, senza carta, ma richiede una chiave utente e ha un tetto giornaliero di token; non è un servizio garantito né illimitato.
-- La chiave deve essere inserita volontariamente dall'utente in Settaggi, conservata cifrata sul dispositivo e mai inclusa nel repository o in chiaro nell'APK. Nessuna chiave predefinita o condivisa.
-- Passare a Gemini soltanto i risultati/snippet necessari, mantenendo titolo, URL, data e testo sorgente; Juanita deve mostrare collegamenti verificabili e distinguere risultati trovati da conclusioni del modello.
-- Non attivare Google Search grounding tramite Firebase AI Logic su Gemini 3.8 Flash nel piano Spark: la tabella ufficiale indica che il grounding con Google Search non è disponibile nel free tier di Gemini 3 e più recenti. Non abilitare billing o Blaze per aggirare questo limite.
-- La ricerca non deve partire automaticamente per ogni frase: attivarla su richiesta o quando il modello dichiara che l'informazione è attuale/verificabile. Se la chiave manca o il limite gratuito è raggiunto, spiegare il limite e non passare a un endpoint a pagamento.
+### B. Ricerca web testuale generale — fase successiva, non inclusa nel primo rilascio
+- Non richiedere all'utente una chiave LangSearch o altro servizio esterno: l'utente ha esplicitamente chiesto un'esperienza senza configurazione.
+- LangSearch ha un piano API pubblicato gratuito ma richiede una chiave e ha limiti giornalieri; non inserirlo nel percorso iniziale né incorporare una chiave condivisa nell'APK.
+- Non abilitare billing/Blaze per Google Search grounding. Le ricerche generali online saranno implementate solo quando esiste un provider utilizzabile senza configurazioni e costi nascosti.
 
 ### C. Ricerca e analisi di fotografie online
 - Non confondere Google Search grounding testuale con Google Image Search: Firebase AI Logic documenta che Grounding with Google Image Search non è attualmente supportato.
@@ -58,16 +58,16 @@ Esempio: «Cerca la Yamaha Tricity 300 2025, versione/colore/accessori X. Guarda
 
 ## Fasi di implementazione e accettazione
 
-1. **Audit API e UI:** verificare versioni Firebase AI Logic già presenti, API Kotlin esatte per Google Search grounding, multimodal image input e Photo Picker; individuare il punto Home più piccolo per l'integrazione.
-2. **Photo Picker + analisi locale:** una fotografia scelta dall'utente viene mostrata e analizzata; test JPEG/PNG/WebP, immagini grandi, URI revocati, annullamento, rete assente, timeout, errori quota. Nessuna regressione CameraX o Live.
-3. **Ricerca web grounded:** query on-demand, fonti e Search suggestions conformi ai requisiti Google; errori/quota/rete gestiti senza bloccare Home.
-4. **Provider ricerca immagini:** primo adapter gratuito/open (Commons); anteprime, attribuzione, fonte, download controllato e analisi multimodale. Risultati scarsi o non verificabili devono essere dichiarati.
-5. **Conversazione e collaudo:** valutare l'inoltro dei risultati alla conversazione Live senza alterare audio; test API 31/35, build esatta, regressioni sui sei tab e prove fisiche su Note10+.
+1. **Semplificare la UI:** rimuovere la necessità di Photo Picker nella prima esperienza e non aggiungere impostazioni tecniche.
+2. **Ricerca autonoma Commons:** testare query su Yamaha Tricity 300, automobili, oggetti e luoghi; verificare risultati e licenze.
+3. **Analisi multimodale:** scaricare candidate sicure e inviarle a Gemini; risposta visiva con incertezza esplicita.
+4. **Integrazione Home/Live:** presentare il risultato nella conversazione senza modificare audio, VAD, microfono o lifecycle.
+5. **Collaudo:** rete assente, zero risultati, immagini rotte, duplicati, licenza/attribuzione, timeout, quote e regressioni sui sei tab; prove Note10+.
 
 ## Test funzionali minimi
 
-- Foto personale: riconoscere oggetti/dettagli visibili senza attribuire identità o caratteristiche non dimostrabili.
-- Foto moto: distinguere Tricity da modelli simili; non dedurre l'anno esatto se la foto non mostra dettagli sufficienti.
+- Richiesta naturale: «Che ne pensi della Tricity 300?» avvia ricerca autonoma senza chiedere account o chiavi.
+- Foto moto trovata: distinguere Tricity da modelli simili; non dedurre l'anno esatto se la foto non mostra dettagli sufficienti.
 - Ricerca web: ogni affermazione verificabile deve essere associata alla fonte corretta; mostrare Search suggestions quando richiesto.
 - Ricerca immagini: URL immagine rotto, licenza assente, fonte non raggiungibile, immagini duplicate o non pertinenti.
 - Sicurezza: nessuna foto caricata senza azione esplicita; nessun contenuto immagine salvato in memoria senza consenso; URL e dimensioni limitati.
