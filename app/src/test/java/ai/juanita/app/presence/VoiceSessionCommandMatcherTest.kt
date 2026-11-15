@@ -45,6 +45,26 @@ class VoiceSessionCommandMatcherTest {
     }
 
     @Test
+    fun recognizesSpanishApplicationCloseAndStopCommands() {
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
+            VoiceSessionCommandMatcher.match("Juanita, puedes cerrar la aplicación por favor", "Juanita Paisa")
+        )
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
+            VoiceSessionCommandMatcher.match("cierra la app", "Juanita")
+        )
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("Juanita, termina la conversación", "Juanita")
+        )
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("detente", "Juanita")
+        )
+    }
+
+    @Test
     fun recognizesShortNameForMultiWordIdentityAndNameOptionalCommands() {
         val expected = VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION
         assertEquals(expected, VoiceSessionCommandMatcher.match("Juanita, chiudi l'app", "Juanita Paisa"))
