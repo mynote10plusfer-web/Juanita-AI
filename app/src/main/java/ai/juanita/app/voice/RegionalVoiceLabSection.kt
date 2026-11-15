@@ -16,6 +16,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import ai.juanita.app.identity.DigitalIdentity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,18 +48,21 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
 private enum class RegionalSpeechTarget(
+    val id: String,
     val label: String,
     val languageCode: String,
     val sample: String,
     val delivery: String
 ) {
     PAISA(
+        id = "paisa-medellin",
         label = "Paisa · Medellín",
         languageCode = "es-CO",
         sample = "¡Hola! ¿Qué más? ¿Cómo vas? Me alegra escucharte. Si querés, hoy podemos salir a tomar un cafecito y conversar con calma. Contame, ¿cómo te fue el día?",
         delivery = "Voz femenina colombiana de Medellín, Antioquia. Acento paisa contemporáneo, melodía antioqueña cálida y natural, ritmo conversacional fluido, vocales claras y entonación local auténtica. Usa voseo coherente y espontáneo, sin exagerar el parlache, sin sonar como una locutora ni como una imitación teatral."
     ),
     CANARIO(
+        id = "canario-tenerife",
         label = "Canario · Tenerife",
         languageCode = "es-ES",
         sample = "Hola, ¿qué tal? Me alegra escucharte. Si te apetece, hoy podemos salir a tomar algo y charlar tranquilamente. Cuéntame, ¿cómo te fue el día? Ya sabes que aquí lo importante es disfrutar sin prisas.",
@@ -65,22 +70,41 @@ private enum class RegionalSpeechTarget(
     )
 }
 
-private val regionalTestVoices = listOf("Kore", "Aoede", "Leda", "Sulafat")
+private val regionalTestVoices = listOf(
+    "Kore", "Aoede", "Leda", "Sulafat",
+    "Zephyr", "Puck", "Charon", "Fenrir", "Orus", "Callirrhoe", "Autonoe",
+    "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome",
+    "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar",
+    "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix",
+    "Sadachbia", "Sadaltager"
+)
 
 /** Isolated TTS audition lab. It never starts or stops the Gemini Live microphone session. */
 @OptIn(PublicPreviewAPI::class)
 @Composable
 fun RegionalVoiceLabSection(
     panel: Color,
-    gold: Color
+    gold: Color,
+    profiles: List<DigitalIdentity>,
+    activeProfileId: String?,
+    onSaveVoice: suspend (profileId: String, voiceName: String, targetId: String) -> DigitalIdentity
 ) {
     val scope = rememberCoroutineScope()
     var target by remember { mutableStateOf(RegionalSpeechTarget.PAISA) }
-    var voice by remember { mutableStateOf("Kore") }
+    var voice by remember { mutableStateOf("Leda") }
+    var profileId by remember(activeProfileId) { mutableStateOf(activeProfileId ?: profiles.firstOrNull { !it.archived }?.id) }
     var targetMenu by remember { mutableStateOf(false) }
     var voiceMenu by remember { mutableStateOf(false) }
+    var profileMenu by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("Prova isolata: non attiva il microfono e non modifica Gemini Live.") }
+    val selectedProfile = profiles.firstOrNull { it.id == profileId && !it.archived }
+    LaunchedEffect(selectedProfile?.id, selectedProfile?.regionalTtsVoiceName, selectedProfile?.regionalTtsTargetId) {
+        selectedProfile?.let { saved ->
+            voice = saved.regionalTtsVoiceName?.takeIf { it in regionalTestVoices } ?: "Leda"
+            target = RegionalSpeechTarget.entries.firstOrNull { it.id == saved.regionalTtsTargetId } ?: RegionalSpeechTarget.PAISA
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -115,6 +139,24 @@ fun RegionalVoiceLabSection(
                 }
             }
             Text("Campione: ${target.sample}", color = Color.White, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Salva nel personaggio", color = Color.White, modifier = Modifier.weight(1f))
+                TextButton(onClick = { profileMenu = true }, enabled = !busy && profiles.any { !it.archived }) {
+                    Text(selectedProfile?.displayName ?: "Seleziona profilo", color = gold)
+                }
+                DropdownMenu(expanded = profileMenu, onDismissRequest = { profileMenu = false }) {
+                    profiles.filter { !it.archived }.forEach { profile ->
+                        DropdownMenuItem(text = { Text(profile.displayName) }, onClick = {
+                            profileId = profile.id
+                            profileMenu = false
+                        })
+                    }
+                }
+            }
+            selectedProfile?.let { saved ->
+                Text("Voce TTS salvata: ${saved.regionalTtsVoiceName ?: "non configurata"} · ${saved.regionalTtsTargetId ?: "nessuna variante"}",
+                    color = Color(0xFF9A9DA4), fontSize = 11.sp)
+            } ?: Text("Crea o seleziona prima un personaggio per salvare una voce personale.", color = Color(0xFFFFCC80), fontSize = 11.sp)
             Button(
                 onClick = {
                     scope.launch {
@@ -153,7 +195,30 @@ fun RegionalVoiceLabSection(
             ) {
                 Text(if (busy) "Generazione / riproduzione…" else "GENERA E ASCOLTA")
             }
-            Text(status, color = if (status.startsWith("Test non riuscito")) Color(0xFFFFAB91) else Color(0xFF9A9DA4), fontSize = 11.sp)
+            Button(
+                onClick = {
+                    val destination = selectedProfile
+                    if (destination == null) {
+                        status = "Seleziona un personaggio esistente prima di salvare."
+                    } else {
+                        scope.launch {
+                            busy = true
+                            status = "Salvo la voce nel profilo ${destination.displayName}…"
+                            try {
+                                val updated = onSaveVoice(destination.id, voice, target.id)
+                                status = "Salvato: $voice · ${target.label} nel personaggio ${updated.displayName}."
+                            } catch (error: Exception) {
+                                status = "Salvataggio non riuscito: ${error.message ?: error::class.java.simpleName}"
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                },
+                enabled = !busy && selectedProfile != null,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (busy) "ATTENDI…" else "SALVA NEL PERSONAGGIO") }
+            Text(status, color = if (status.startsWith("Test non riuscito") || status.startsWith("Salvataggio non riuscito")) Color(0xFFFFAB91) else Color(0xFF9A9DA4), fontSize = 11.sp)
             Text(
                 "Motore sperimentale in anteprima. La richiesta usa il livello gratuito Gemini Developer API quando disponibile; non abilita Blaze né configura servizi a pagamento. Se Google rifiuta la richiesta sul progetto Spark, l'errore apparirà qui.",
                 color = Color(0xFF777D87),
