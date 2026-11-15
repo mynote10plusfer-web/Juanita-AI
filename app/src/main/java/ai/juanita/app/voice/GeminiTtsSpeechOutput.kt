@@ -37,7 +37,7 @@ class GeminiTtsSpeechOutput(
     @Volatile
     private var activeTrack: AudioTrack? = null
 
-    suspend fun speak(text: String, liveFallbackPcm: ByteArray) {
+    suspend fun speak(text: String, liveFallbackPcm: ByteArray): Boolean {
         require(text.isNotBlank()) { "Il testo da pronunciare è vuoto." }
         try {
             withTimeout(MAX_TTS_TIMEOUT_MS) {
@@ -69,15 +69,18 @@ class GeminiTtsSpeechOutput(
                 coroutineContext.ensureActive()
                 playWav(wav)
             }
+            true
         } catch (timeout: TimeoutCancellationException) {
             if (liveFallbackPcm.isEmpty()) throw timeout
             playPcm(liveFallbackPcm)
+            false
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (ttsFailure: Exception) {
             if (liveFallbackPcm.isEmpty()) throw ttsFailure
             // The original Live voice is used only as a fail-safe for this same response.
             playPcm(liveFallbackPcm)
+            false
         }
     }
 
