@@ -85,7 +85,6 @@ import ai.juanita.app.memory.ImprovementReport
 import ai.juanita.app.identity.DigitalIdentitySection
 import ai.juanita.app.identity.DigitalIdentity
 import ai.juanita.app.identity.DigitalIdentityStore
-import ai.juanita.app.identity.RegionalTtsVoiceCatalog
 import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import ai.juanita.app.identity.toSystemInstruction
 import ai.juanita.app.voice.RegionalVoiceLabSection
