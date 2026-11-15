@@ -275,8 +275,14 @@ class DigitalIdentityStore(context: Context) {
             preferredLanguageTag = json.getString("preferredLanguageTag"),
             voiceName = json.optString("voiceName").takeIf { it.isNotBlank() && DigitalIdentityVoiceCatalog.forPresentation(IdentityPresentation.valueOf(json.getString("presentation"))).contains(it) }
                 ?: DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.valueOf(json.getString("presentation"))),
-            regionalTtsVoiceName = json.optString("regionalTtsVoiceName").takeIf { it.isNotBlank() },
-            regionalTtsTargetId = json.optString("regionalTtsTargetId").takeIf { it.isNotBlank() },
+            // JSONObject.optString(JSONObject.NULL) returns the literal "null" on Android.
+            // Treat absent and explicit JSON null as an unset optional TTS preference.
+            regionalTtsVoiceName = json.opt("regionalTtsVoiceName")
+                .takeUnless { it == null || it == JSONObject.NULL }
+                ?.toString()?.takeIf { it.isNotBlank() },
+            regionalTtsTargetId = json.opt("regionalTtsTargetId")
+                .takeUnless { it == null || it == JSONObject.NULL }
+                ?.toString()?.takeIf { it.isNotBlank() },
             languages = languages,
             personality = IdentityPersonality(
                 irony = personality.optDouble("irony", 0.5).toFloat(),
