@@ -77,6 +77,7 @@ class GeminiLiveAssistant {
     private var functionCallHandler: ((FunctionCallPart) -> FunctionResponsePart)? = null
     private var transcriptHandler: ((com.google.firebase.ai.type.Transcription?, com.google.firebase.ai.type.Transcription?) -> Unit)? = null
     private var onConnectionState: (String) -> Unit = {}
+    private var onDiagnosticEvent: (String, String) -> Unit = { _, _ -> }
     private var onContinuityContext: suspend (String) -> String = { it }
     private val recentTranscript = ArrayDeque<String>()
     private val ttsBufferLock = Any()
@@ -97,11 +98,14 @@ class GeminiLiveAssistant {
         onArchiveSearch: (query: String) -> String = { "" },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
         onConnectionState: (status: String) -> Unit = {},
+        onDiagnosticEvent: (event: String, detail: String) -> Unit = { _, _ -> },
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
+        this.onDiagnosticEvent = onDiagnosticEvent
+        onDiagnosticEvent("assistant.start", "voice=$voiceName; regionalTts=${!ttsVoiceName.isNullOrBlank()}; ttsTarget=${ttsTargetId ?: "none"}")
         ttsOutput = ttsVoiceName?.takeIf { it.isNotBlank() }?.let { voice ->
             GeminiTtsSpeechOutput(voice, ttsTargetId, ttsLanguageCode)
         }
@@ -371,6 +375,7 @@ class GeminiLiveAssistant {
             return@lifecycleLock
         }
         session = connected
+        onDiagnosticEvent("session.connected", "audioActive=${connected.isAudioConversationActive()}")
         startAudioOnSession(connected)
         if (initialPrompt.isNotBlank() && !manualStop) {
             // Speak the morning briefing through the selected Gemini Live voice.
@@ -395,6 +400,7 @@ class GeminiLiveAssistant {
      */
     private suspend fun startAudioOnSession(activeSession: LiveSession) {
         val useRegionalTts = ttsOutput != null
+        onDiagnosticEvent("audio.start.request", "regionalTts=$useRegionalTts")
         activeSession.startAudioConversation(
             liveAudioConversationConfig {
                 if (!useRegionalTts) {
@@ -424,16 +430,21 @@ class GeminiLiveAssistant {
         if (useRegionalTts) {
             // The SDK audio helper owns the only microphone. Stop its receive/playback collector,
             // then take over receiving directly; never run two receive collectors concurrently.
+            onDiagnosticEvent("receiver.handoff.begin", "calling stopReceiving")
             activeSession.stopReceiving()
+            onDiagnosticEvent("receiver.handoff.done", "sdkAudioActive=${activeSession.isAudioConversationActive()}")
             ttsReceiverJob = recoveryScope.launch {
                 try {
+                    onDiagnosticEvent("receiver.collect.start", "direct receive collector launched")
                     activeSession.receive().collect { message ->
+                        onDiagnosticEvent("receiver.message", "inputTranscription=${!message.inputTranscription?.text.isNullOrBlank()}; outputTranscription=${!message.outputTranscription?.text.isNullOrBlank()}; turnComplete=${message.turnComplete}; interrupted=${message.interrupted}")
                         handleRegionalTtsServerMessage(activeSession, message)
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
                     if (!manualStop && session === activeSession) {
+                        onDiagnosticEvent("receiver.exception", "${failure.javaClass.simpleName}: ${failure.message.orEmpty()}")
                         Log.w(TAG, "Regional TTS receive loop failed; requesting controlled recovery", failure)
                         onConnectionState("Ricezione vocale interrotta: sto tentando un recupero controllato…")
                         // Recovery must run outside this collector; closeLiveSession joins it.
@@ -443,6 +454,7 @@ class GeminiLiveAssistant {
             }
         }
         startHealthMonitor(activeSession)
+        onDiagnosticEvent("health.monitor.started", "sdkAudioActive=${activeSession.isAudioConversationActive()}; receiverActive=${ttsReceiverJob?.isActive == true}")
     }
 
     private suspend fun handleRegionalTtsServerMessage(
@@ -513,13 +525,18 @@ class GeminiLiveAssistant {
                 pendingLivePcm.reset()
                 transcript to fallback
             }
-            if (text.isBlank() && pcm.isEmpty()) return@launch
+            if (text.isBlank() && pcm.isEmpty()) {
+                onDiagnosticEvent("tts.flush.empty", "no transcript and no fallback PCM after turn completion")
+                return@launch
+            }
+            onDiagnosticEvent("tts.flush.ready", "transcriptChars=${text.length}; fallbackPcmBytes=${pcm.size}")
             ttsPlaybackJob?.cancel()
             val output = ttsOutput ?: return@launch
             ttsPlaybackJob = recoveryScope.launch {
                 try {
                     if (text.isBlank()) {
                         output.playFallback(pcm)
+                        onDiagnosticEvent("tts.fallback.played", "pcmBytes=${pcm.size}")
                         onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
                     } else if (!output.speak(text, pcm)) {
                         onConnectionState("Gemini TTS non disponibile: sto usando temporaneamente la voce Live di riserva.")
@@ -527,6 +544,7 @@ class GeminiLiveAssistant {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
+                    onDiagnosticEvent("tts.playback.exception", "${failure.javaClass.simpleName}: ${failure.message.orEmpty()}")
                     Log.w(TAG, "Regional Gemini TTS and Live fallback playback failed", failure)
                     onConnectionState("Voce non disponibile in questo momento. La conversazione resta attiva: puoi riprovare o terminare.")
                 }
@@ -589,6 +607,7 @@ class GeminiLiveAssistant {
             while (!manualStop && session === activeSession) {
                 delay(2_500L)
                 if (!isAudioPipelineHealthy(activeSession)) {
+                    onDiagnosticEvent("health.inactive", "sdkAudioActive=${activeSession.isAudioConversationActive()}; receiverActive=${ttsReceiverJob?.isActive == true}; sessionClosed=${activeSession.isClosed()}")
                     Log.w(TAG, "Live session or active audio receiver became inactive; starting controlled recovery")
                     recoverAfterServerDisconnect(activeSession)
                     break
@@ -607,6 +626,7 @@ class GeminiLiveAssistant {
             return@withLock
         }
         automaticRecoveryCount += 1
+        onDiagnosticEvent("recovery.begin", "attempt=$automaticRecoveryCount")
         Log.i(TAG, "Starting controlled Live recovery #$automaticRecoveryCount")
         onConnectionState("La connessione vocale si sta rinnovando…")
         healthJob?.cancel()
@@ -671,6 +691,7 @@ class GeminiLiveAssistant {
             onConnectionState("Juanita è di nuovo in ascolto.")
             return@withLock
         } catch (failure: Exception) {
+            onDiagnosticEvent("recovery.attempt.exception", "${failure.javaClass.simpleName}: ${failure.message.orEmpty()}")
             lastFailure = failure
             if (session === next) session = null
             if (!closeLiveSession(next, 1_500L)) {
