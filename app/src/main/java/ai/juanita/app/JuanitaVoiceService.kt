@@ -524,7 +524,7 @@ class JuanitaVoiceService : Service() {
                                 onImageSearch = { query ->
                                     _visualSearchStatus.value = "Sto cercando e analizzando: $query"
                                     try {
-                                        val result = runBlocking(Dispatchers.IO) {
+                                        val result = withContext(Dispatchers.IO) {
                                             JuanitaImageSearch.searchAndAnalyze(query)
                                         }
                                         _visualSearchResult.value = result
