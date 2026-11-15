@@ -76,6 +76,10 @@ class GeminiTtsSpeechOutput(
         }
     }
 
+    suspend fun playFallback(liveFallbackPcm: ByteArray) {
+        if (liveFallbackPcm.isNotEmpty()) playPcm(liveFallbackPcm)
+    }
+
     /** Interrupts current TTS/fallback playback immediately; caller also cancels speak(). */
     fun stop() {
         val track = activeTrack ?: return
