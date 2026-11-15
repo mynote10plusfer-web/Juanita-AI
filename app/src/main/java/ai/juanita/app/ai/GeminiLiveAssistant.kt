@@ -529,10 +529,12 @@ class GeminiLiveAssistant {
         }
     }
 
-    private fun cancelPendingTtsTurn() {
-        ttsFlushJob?.cancel()
-        ttsPlaybackJob?.cancel()
+    private suspend fun cancelPendingTtsTurn() {
         ttsOutput?.stop()
+        ttsFlushJob?.cancelAndJoin()
+        ttsFlushJob = null
+        ttsPlaybackJob?.cancelAndJoin()
+        ttsPlaybackJob = null
         synchronized(ttsBufferLock) {
             pendingTtsTranscript.clear()
             pendingLivePcm.reset()
