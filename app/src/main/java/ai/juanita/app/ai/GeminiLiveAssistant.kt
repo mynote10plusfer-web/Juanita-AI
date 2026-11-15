@@ -44,6 +44,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -523,7 +524,7 @@ class GeminiLiveAssistant {
                                 "source=VOICE_COMMUNICATION; sampleRateHz=$MANUAL_INPUT_SAMPLE_RATE; " +
                                     "pcmBits=16; channelCount=1; bufferBytes=$bufferSize"
                             )
-                            while (kotlinx.coroutines.isActive && !manualStop && session === activeSession) {
+                            while (isActive && !manualStop && session === activeSession) {
                                 val read = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
                                 if (read > 0) {
                                     val evenBytes = read - (read % 2)
