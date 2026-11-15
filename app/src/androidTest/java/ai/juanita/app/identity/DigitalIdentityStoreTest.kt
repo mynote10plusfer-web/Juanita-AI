@@ -235,6 +235,27 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
+    fun paisaIdentityGetsItsOwnRegionalSpeechAndMeasuredPacingWithoutAnApprovedDossier() {
+        val paisa = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+        val instruction = paisa.toSystemInstruction()
+
+        assertTrue(instruction.contains("CONTEMPORARY PAISA / MEDELLÍN"))
+        assertTrue(instruction.contains("vos sos, tenés, querés"))
+        assertTrue(instruction.contains("Do not repeat pues as a verbal tic"))
+        assertTrue(instruction.contains("calm, measured conversational pace"))
+        assertFalse(instruction.contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+    }
+
+    @Test
+    fun canarianIdentityDoesNotInheritPaisaSpeechInstructions() {
+        val canarian = identity("Juanita Canaria", IdentityPresentation.FEMININE, "ES", "España", "Canarias", "Tenerife", "Canario")
+        val instruction = canarian.toSystemInstruction()
+
+        assertTrue(instruction.contains("REGIONAL SPEECH — CANARY ISLANDS"))
+        assertFalse(instruction.contains("CONTEMPORARY PAISA / MEDELLÍN"))
+    }
+
+    @Test
     fun culturalCatalogIsSourceBackedOfflineAndRequiresExplicitApproval() {
         val dossiers = CulturalDossierCatalog.dossiers
         assertEquals(2, dossiers.size)
