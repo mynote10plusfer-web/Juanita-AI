@@ -22,6 +22,7 @@ data class VisualSearchResult(
     val title: String,
     val sourceUrl: String,
     val attribution: String,
+    val provider: String,
     val bitmap: Bitmap,
     val analysis: String
 )
@@ -185,7 +186,7 @@ object JuanitaImageSearch {
             readTimeout = 15_000
             instanceFollowRedirects = false
             setRequestProperty("Accept", "image/*")
-            setRequestProperty("User-Agent", "JuanitaAI-Android/0.11 (visual image search)")
+            setRequestProperty("User-Agent", "JuanitaAI-Android/0.12 (visual image search)")
         }
         try {
             val contentType = connection.contentType.orEmpty().substringBefore(";").lowercase()
