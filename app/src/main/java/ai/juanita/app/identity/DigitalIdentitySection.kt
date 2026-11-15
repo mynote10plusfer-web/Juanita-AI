@@ -72,6 +72,10 @@ fun DigitalIdentitySection(
     var languageTag by remember { mutableStateOf("es-CO") }
     var voiceName by remember { mutableStateOf("Kore") }
     var voiceMenuExpanded by remember { mutableStateOf(false) }
+    var ttsVoiceName by remember { mutableStateOf("Leda") }
+    var ttsTargetId by remember { mutableStateOf<String?>( "paisa-medellin") }
+    var ttsVoiceMenuExpanded by remember { mutableStateOf(false) }
+    var ttsTargetMenuExpanded by remember { mutableStateOf(false) }
     var otherLanguages by remember { mutableStateOf("it-IT, es-ES") }
     var biography by remember { mutableStateOf("") }
     var irony by remember { mutableStateOf(0.5f) }
@@ -105,6 +109,8 @@ fun DigitalIdentitySection(
         community = "Paisa"
         languageTag = "es-CO"
         voiceName = DigitalIdentityVoiceCatalog.defaultFor(presentation)
+        ttsVoiceName = "Leda"
+        ttsTargetId = "paisa-medellin"
         otherLanguages = "it-IT, es-ES"
         biography = ""
         irony = 0.5f
@@ -140,6 +146,8 @@ fun DigitalIdentitySection(
         community = identity.origin.community
         languageTag = identity.preferredLanguageTag
         voiceName = identity.voiceName
+        ttsVoiceName = identity.regionalTtsVoiceName ?: "Leda"
+        ttsTargetId = identity.regionalTtsTargetId
         otherLanguages = identity.languages.joinToString(", ")
         biography = identity.biography
         irony = identity.personality.irony
@@ -257,7 +265,8 @@ fun DigitalIdentitySection(
                     Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(identity.displayName, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         Text("${if (identity.presentation == IdentityPresentation.FEMININE) "Juanita" else "José"} · ${identity.origin.countryName}${if (identity.origin.region.isNotBlank()) " · ${identity.origin.region}" else ""}${if (identity.origin.community.isNotBlank()) " · ${identity.origin.community}" else ""}", color = Color(0xFFB9BBC1), fontSize = 12.sp)
-                        Text("Voce: ${identity.voiceName}", color = gold, fontSize = 11.sp)
+                        Text("Gemini Live: ${identity.voiceName}", color = gold, fontSize = 11.sp)
+                        Text("Gemini TTS: ${identity.regionalTtsVoiceName ?: "non configurata"} · ${identity.regionalTtsTargetId ?: "senza variante regionale"}", color = Color(0xFFB9BBC1), fontSize = 11.sp)
                         Text("Carattere: dolcezza ${(identity.personality.sweetness * 100).toInt()}% · ironia ${(identity.personality.irony * 100).toInt()}% · empatia ${(identity.personality.empathy * 100).toInt()}%", color = Color(0xFF9A9DA4), fontSize = 11.sp)
                         if (identity.biography.isNotBlank()) Text(identity.biography, color = Color(0xFF9A9DA4), fontSize = 12.sp, maxLines = 3)
                         identity.culturalDossier?.takeIf { it.approvedAtMillis != null }?.let { dossier ->
@@ -351,6 +360,47 @@ fun DigitalIdentitySection(
                         }
                     }
                 }
+                Text("VOCE TTS PER LA CONVERSAZIONE", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("Catalogo completo Gemini TTS: questa scelta è indipendente dalla voce Gemini Live qui sopra. La stessa voce e variante si possono provare anche nel Laboratorio regionale.", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Voce TTS", color = Color.White, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ttsVoiceMenuExpanded = true }) { Text(ttsVoiceName, color = gold) }
+                    DropdownMenu(expanded = ttsVoiceMenuExpanded, onDismissRequest = { ttsVoiceMenuExpanded = false }) {
+                        RegionalTtsVoiceCatalog.all.forEach { option ->
+                            DropdownMenuItem(text = { Text(option) }, onClick = {
+                                ttsVoiceName = option
+                                ttsVoiceMenuExpanded = false
+                            })
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Variante regionale", color = Color.White, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { ttsTargetMenuExpanded = true }) {
+                        Text(
+                            when (ttsTargetId) {
+                                "paisa-medellin" -> "Paisa · Medellín"
+                                "canario-tenerife" -> "Canario · Tenerife"
+                                else -> "Nessuna"
+                            },
+                            color = gold
+                        )
+                    }
+                    DropdownMenu(expanded = ttsTargetMenuExpanded, onDismissRequest = { ttsTargetMenuExpanded = false }) {
+                        DropdownMenuItem(text = { Text("Nessuna variante") }, onClick = {
+                            ttsTargetId = null
+                            ttsTargetMenuExpanded = false
+                        })
+                        DropdownMenuItem(text = { Text("Paisa · Medellín") }, onClick = {
+                            ttsTargetId = "paisa-medellin"
+                            ttsTargetMenuExpanded = false
+                        })
+                        DropdownMenuItem(text = { Text("Canario · Tenerife") }, onClick = {
+                            ttsTargetId = "canario-tenerife"
+                            ttsTargetMenuExpanded = false
+                        })
+                    }
+                }
                 val draftForVoicePreview = {
                     val existing = editingId?.let { id -> identities.firstOrNull { it.id == id } }
                     DigitalIdentity(
@@ -360,6 +410,8 @@ fun DigitalIdentitySection(
                         origin = CulturalOrigin(countryCode.trim(), countryName.trim(), region.trim(), locality.trim(), community.trim()),
                         preferredLanguageTag = languageTag.trim().ifBlank { "es-ES" },
                         voiceName = voiceName,
+                        regionalTtsVoiceName = ttsVoiceName,
+                        regionalTtsTargetId = ttsTargetId,
                         languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
                         personality = IdentityPersonality(
                             irony = irony, sweetness = sweetness, sensuality = sensuality, friendliness = friendliness,
@@ -420,6 +472,8 @@ fun DigitalIdentitySection(
                                 origin = CulturalOrigin(countryCode.trim(), countryName.trim(), region.trim(), locality.trim(), community.trim()),
                                 preferredLanguageTag = languageTag.trim(),
                                 voiceName = voiceName,
+                                regionalTtsVoiceName = ttsVoiceName,
+                                regionalTtsTargetId = ttsTargetId,
                                 languages = otherLanguages.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct(),
                                 personality = IdentityPersonality(
                                     irony = irony, sweetness = sweetness, sensuality = sensuality, friendliness = friendliness,
