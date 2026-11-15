@@ -546,6 +546,22 @@ class GeminiLiveAssistant {
         }
     }
 
+    /**
+     * In regional-TTS mode we deliberately stop the SDK-managed receive collector and
+     * replace it with ttsReceiverJob. The SDK audio-conversation flag can therefore be
+     * false even while the single microphone and our direct Live receive loop are healthy.
+     * Treating that SDK flag as authoritative caused the health monitor to reconnect
+     * every few seconds immediately after selecting a regional TTS voice.
+     */
+    private fun isAudioPipelineHealthy(activeSession: LiveSession): Boolean {
+        if (activeSession.isClosed()) return false
+        return if (ttsOutput != null) {
+            ttsReceiverJob?.isActive == true
+        } else {
+            activeSession.isAudioConversationActive()
+        }
+    }
+
     private fun startHealthMonitor(activeSession: LiveSession) {
         healthJob?.cancel()
         stabilityJob?.cancel()
@@ -555,12 +571,7 @@ class GeminiLiveAssistant {
         // if this session remains healthy for 90 seconds, reset the circuit breaker.
         stabilityJob = recoveryScope.launch {
             delay(90_000L)
-            if (
-                !manualStop &&
-                session === activeSession &&
-                !activeSession.isClosed() &&
-                activeSession.isAudioConversationActive()
-            ) {
+            if (!manualStop && session === activeSession && isAudioPipelineHealthy(activeSession)) {
                 automaticRecoveryCount = 0
                 Log.i(TAG, "Live session stable; automatic recovery circuit breaker reset")
             }
@@ -569,8 +580,8 @@ class GeminiLiveAssistant {
         healthJob = recoveryScope.launch {
             while (!manualStop && session === activeSession) {
                 delay(2_500L)
-                if (activeSession.isClosed() || !activeSession.isAudioConversationActive()) {
-                    Log.w(TAG, "Live session or SDK audio pipeline became inactive; starting controlled recovery")
+                if (!isAudioPipelineHealthy(activeSession)) {
+                    Log.w(TAG, "Live session or active audio receiver became inactive; starting controlled recovery")
                     recoverAfterServerDisconnect(activeSession)
                     break
                 }
@@ -646,8 +657,8 @@ class GeminiLiveAssistant {
                 // startAudioOnSession has already stopped and closed this session.
                 return@withLock
             }
-            if (session !== next || next.isClosed() || !next.isAudioConversationActive()) {
-                throw IllegalStateException("La nuova sessione Live non ha mantenuto attivo il canale audio")
+            if (session !== next || !isAudioPipelineHealthy(next)) {
+                throw IllegalStateException("La nuova sessione Live non ha mantenuto attivo il ricevitore audio")
             }
             onConnectionState("Juanita è di nuovo in ascolto.")
             return@withLock
