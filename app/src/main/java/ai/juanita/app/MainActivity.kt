@@ -88,6 +88,7 @@ import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.identity.RegionalTtsTargetCatalog
 import ai.juanita.app.identity.toSystemInstruction
 import ai.juanita.app.voice.RegionalVoiceLabSection
+import ai.juanita.app.vision.PhotoUnderstandingSection
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -1116,6 +1117,7 @@ private fun JuanitaApp(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
                     ) { Text("Esci e chiudi completamente") }
                 }
+                PhotoUnderstandingSection(panel = panel, accent = gold)
                 }
 
                 if (selectedSection == "AVATAR" && !callScreenVisible) {
