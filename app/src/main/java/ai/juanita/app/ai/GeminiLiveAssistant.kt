@@ -571,25 +571,24 @@ class GeminiLiveAssistant {
 
     /**
      * In regional-TTS mode we deliberately stop the SDK-managed receive collector and
-     * replace it with ttsReceiverJob. The SDK audio-conversation flag can therefore be
-     * false even while the single microphone and our direct Live receive loop are healthy.
-     * Treating that SDK flag as authoritative caused the health monitor to reconnect
-     * every few seconds immediately after selecting a regional TTS voice.
+     * replace it with ttsReceiverJob. After this handoff the SDK audio-conversation flag
+     * is not a valid health signal: it may be false while the Live session and our
+     * direct server-message receiver are still operating.
+     *
+     * This check confirms session/receiver continuity only. It does NOT prove that the
+     * SDK microphone capture is still delivering audio; that requires a separate,
+     * SDK-supported signal or verified incoming-user-audio evidence.
      */
     private fun isAudioPipelineHealthy(activeSession: LiveSession): Boolean {
         if (activeSession.isClosed()) return false
 
-        // A live collector coroutine is not proof that the SDK microphone pipeline is
-        // still active. stopReceiving() only transfers response collection to receive();
-        // it does not replace or validate the SDK-owned audio capture lifecycle.
-        // In regional TTS mode require BOTH the SDK audio conversation and our one
-        // direct receiver to remain active. This prevents a stuck collector from
-        // masking a microphone pipeline that has silently stopped.
-        val audioConversationActive = activeSession.isAudioConversationActive()
         return if (ttsOutput != null) {
-            audioConversationActive && ttsReceiverJob?.isActive == true
+            // stopReceiving() is the intentional receive handoff for regional TTS.
+            // Do not trigger recovery merely because the SDK flag changed during it.
+            ttsReceiverJob?.isActive == true
         } else {
-            audioConversationActive
+            // Standard Live mode continues to use the SDK audio-conversation state.
+            activeSession.isAudioConversationActive()
         }
     }
 
