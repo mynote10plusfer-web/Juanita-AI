@@ -105,6 +105,8 @@ class DigitalIdentityStore(context: Context) {
         require(identity.origin.countryName.isNotBlank()) { "Il paese di origine è obbligatorio." }
         require(identity.preferredLanguageTag.isNotBlank()) { "La lingua preferita è obbligatoria." }
         require(DigitalIdentityVoiceCatalog.forPresentation(identity.presentation).contains(identity.voiceName)) { "La voce selezionata non è compatibile con il tipo di personaggio." }
+        require(identity.regionalTtsVoiceName == null || identity.regionalTtsVoiceName in REGIONAL_TTS_VOICES) { "La voce Gemini TTS selezionata non è riconosciuta." }
+        require(identity.regionalTtsTargetId == null || identity.regionalTtsTargetId in REGIONAL_TTS_TARGETS) { "La variante regionale selezionata non è riconosciuta." }
         require(identity.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE || identity.memoryNamespace == identity.id) { "Spazio di memoria non riconosciuto." }
         require(identity.schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata." }
         val traits = identity.personality
@@ -200,6 +202,8 @@ class DigitalIdentityStore(context: Context) {
         })
         put("preferredLanguageTag", identity.preferredLanguageTag)
         put("voiceName", identity.voiceName)
+        put("regionalTtsVoiceName", identity.regionalTtsVoiceName ?: JSONObject.NULL)
+        put("regionalTtsTargetId", identity.regionalTtsTargetId ?: JSONObject.NULL)
         put("languages", JSONArray(identity.languages))
         put("personality", JSONObject().apply {
             put("irony", identity.personality.irony.toDouble())
@@ -271,6 +275,8 @@ class DigitalIdentityStore(context: Context) {
             preferredLanguageTag = json.getString("preferredLanguageTag"),
             voiceName = json.optString("voiceName").takeIf { it.isNotBlank() && DigitalIdentityVoiceCatalog.forPresentation(IdentityPresentation.valueOf(json.getString("presentation"))).contains(it) }
                 ?: DigitalIdentityVoiceCatalog.defaultFor(IdentityPresentation.valueOf(json.getString("presentation"))),
+            regionalTtsVoiceName = json.optString("regionalTtsVoiceName").takeIf { it.isNotBlank() },
+            regionalTtsTargetId = json.optString("regionalTtsTargetId").takeIf { it.isNotBlank() },
             languages = languages,
             personality = IdentityPersonality(
                 irony = personality.optDouble("irony", 0.5).toFloat(),
@@ -353,5 +359,7 @@ class DigitalIdentityStore(context: Context) {
         private const val TAG_LENGTH_BYTES = 16
         private const val TAG_BITS = 128
         private const val SCHEMA_VERSION = 1
+        private val REGIONAL_TTS_VOICES = setOf("Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat")
+        private val REGIONAL_TTS_TARGETS = setOf("paisa-medellin", "canario-tenerife")
     }
 }
