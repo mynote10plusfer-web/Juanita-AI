@@ -30,6 +30,7 @@ import ai.juanita.app.presence.ConversationalPresenceContext
 import ai.juanita.app.presence.ConversationalPresencePolicy
 import ai.juanita.app.presence.ConversationalPresenceSettings
 import ai.juanita.app.presence.PresenceDecision
+import ai.juanita.app.diagnostics.VoiceDiagnosticLog
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
@@ -61,6 +62,7 @@ private enum class VoiceLifecycleState { IDLE, STARTING, ACTIVE, STOPPING, ERROR
 class JuanitaVoiceService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val assistant = GeminiLiveAssistant()
+    private val voiceDiagnostics by lazy { VoiceDiagnosticLog(applicationContext) }
     // One dedicated worker serializes blocking SDK recorder teardown. A timed-out native
     // call is interrupted and the service remains fail-closed; no second recorder is opened.
     private val audioTeardownExecutor = Executors.newSingleThreadExecutor { runnable ->
@@ -138,6 +140,7 @@ class JuanitaVoiceService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        voiceDiagnostics.event("service.created")
         memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
         automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
         personalProfileStore = PersonalProfileStore(applicationContext)
@@ -145,6 +148,7 @@ class JuanitaVoiceService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        voiceDiagnostics.event("service.command", "action=${intent?.action ?: "null"}; lifecycle=$lifecycleState")
         when (intent?.action) {
             ACTION_UPDATE_BACKGROUND_CONSENT -> {
                 backgroundContinuationAuthorized =
@@ -229,6 +233,7 @@ class JuanitaVoiceService : Service() {
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
+                voiceDiagnostics.event("session.start.request", "voice=$voice; regionalTts=${!ttsVoice.isNullOrBlank()}; alarm=${alarmId != null}; preview=${previewDurationMillis > 0L}")
                 val requestedBackgroundContinuation = intent.getBooleanExtra(
                     EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED,
                     false
@@ -429,13 +434,15 @@ class JuanitaVoiceService : Service() {
                                     finalMessage = "Sessione vocale interrotta: priorità audio passata a un'altra app."
                                 )
                             }
-                            check(audioFocusGranted) {
+                            voiceDiagnostics.event("audio.focus", "granted=$audioFocusGranted")
+            check(audioFocusGranted) {
                                 "Audio occupato da un'altra applicazione: microfono non avviato."
                             }
                             // Live input transcription may arrive as several incremental callbacks.
                             // Accumulate the current user utterance before matching spoken stop/exit commands.
                             val commandTranscript = VoiceSessionCommandMatcher.TranscriptAccumulator()
                             val spokenCommandHandled = AtomicBoolean(false)
+                            voiceDiagnostics.event("assistant.start.call", "regionalTts=${!ttsVoice.isNullOrBlank()}; ttsLanguage=$ttsLanguage")
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
@@ -529,6 +536,7 @@ class JuanitaVoiceService : Service() {
                                     else "Profile fields updated or removed: " + saved.joinToString(", ") + "."
                                 },
                                 onConnectionState = { status ->
+                                    voiceDiagnostics.event("connection.state", status)
                                     _state.value = status
                                     updateNotification(status)
                                     // A failed reconnect must not leave a foreground service,
@@ -542,6 +550,7 @@ class JuanitaVoiceService : Service() {
                                         )
                                     }
                                 },
+                                onDiagnosticEvent = { event, detail -> voiceDiagnostics.event(event, detail) },
                                 initialPrompt = effectiveInitialPrompt,
                                 onAlarmCommand = { name, arguments ->
                                     ai.juanita.app.alarm.AlarmVoiceCommandHandler(applicationContext).execute(name, arguments)
@@ -552,6 +561,7 @@ class JuanitaVoiceService : Service() {
                                     .putBoolean(profilePromptKey, true).apply()
                             }
                             lifecycleState = VoiceLifecycleState.ACTIVE
+                            voiceDiagnostics.event("session.active", "service lifecycle ACTIVE")
                             startThermalMonitoring()
                             _state.value = if (previewDurationMillis > 0L) "Anteprima della voce Gemini in corso…"
                                 else "Juanita è in ascolto. Puoi spegnere lo schermo e continuare a parlare."
@@ -637,13 +647,16 @@ class JuanitaVoiceService : Service() {
 
     private suspend fun stopAudioCaptureWithDeadline(timeoutMillis: Long): Boolean =
         runAudioTeardownWithDeadline("SDK microphone teardown", timeoutMillis) {
-            assistant.stopAudioCapture()
+            voiceDiagnostics.event("microphone.stop.begin", "timeoutMs=$timeoutMillis")
+            assistant.stopAudioCapture().also { voiceDiagnostics.event("microphone.stop.done", "completed=true") }
         }
 
     private suspend fun stopAssistantWithDeadline(timeoutMillis: Long): Boolean =
         runAudioTeardownWithDeadline("Gemini Live session close", timeoutMillis) {
             runBlocking {
+                voiceDiagnostics.event("assistant.stop.begin", "timeoutMs=$timeoutMillis")
                 assistant.stop()
+                voiceDiagnostics.event("assistant.stop.done")
                 true
             }
         }
@@ -977,6 +990,7 @@ class JuanitaVoiceService : Service() {
     override fun onBind(intent: Intent?): IBinder = localBinder
 
     override fun onDestroy() {
+        voiceDiagnostics.event("service.destroyed", "lifecycle=$lifecycleState")
         // Normal destruction is reached only after requestStop() has awaited SDK
         // microphone and Live-session shutdown. Never launch detached cleanup here:
         // Android could destroy this Service while that unowned coroutine is still running.
