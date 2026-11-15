@@ -886,7 +886,25 @@ private fun JuanitaApp(
                     onPreviewVoice = previewIdentityVoice
                 )
 
-                RegionalVoiceLabSection(panel = panel, gold = gold)
+                RegionalVoiceLabSection(
+                    panel = panel,
+                    gold = gold,
+                    profiles = digitalIdentities,
+                    activeProfileId = activeDigitalIdentityId,
+                    onSaveVoice = { identityId, voiceName, targetId ->
+                        val updated = withContext(Dispatchers.IO) {
+                            val existing = profileStore.get(identityId)
+                                ?: error("Il personaggio selezionato non esiste più.")
+                            profileStore.update(existing.copy(
+                                regionalTtsVoiceName = voiceName,
+                                regionalTtsTargetId = targetId
+                            ))
+                        }
+                        digitalIdentities = digitalIdentities.map { if (it.id == updated.id) updated else it }
+                        identityRefreshSignal += 1
+                        updated
+                    }
+                )
 
                 SettingsCard(panel, gold, if (activeDigitalIdentity == null) "CARATTERE E PERSONALITÀ · STANDARD" else "CARATTERE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
                     if (activeDigitalIdentity == null) {
