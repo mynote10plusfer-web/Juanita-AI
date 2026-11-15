@@ -555,10 +555,18 @@ class GeminiLiveAssistant {
      */
     private fun isAudioPipelineHealthy(activeSession: LiveSession): Boolean {
         if (activeSession.isClosed()) return false
+
+        // A live collector coroutine is not proof that the SDK microphone pipeline is
+        // still active. stopReceiving() only transfers response collection to receive();
+        // it does not replace or validate the SDK-owned audio capture lifecycle.
+        // In regional TTS mode require BOTH the SDK audio conversation and our one
+        // direct receiver to remain active. This prevents a stuck collector from
+        // masking a microphone pipeline that has silently stopped.
+        val audioConversationActive = activeSession.isAudioConversationActive()
         return if (ttsOutput != null) {
-            ttsReceiverJob?.isActive == true
+            audioConversationActive && ttsReceiverJob?.isActive == true
         } else {
-            activeSession.isAudioConversationActive()
+            audioConversationActive
         }
     }
 
