@@ -29,6 +29,22 @@ class VoiceSessionCommandMatcherTest {
     }
 
     @Test
+    fun recognizesCloseCommandAcrossIncrementalLiveTranscriptionChunks() {
+        val buffer = VoiceSessionCommandMatcher.TranscriptAccumulator()
+        var transcript = buffer.append("Juanita")
+        transcript = buffer.append("Juanita, puedes")
+        transcript = buffer.append("cerrar")
+        transcript = buffer.append("la aplicación")
+        assertEquals(
+            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
+            VoiceSessionCommandMatcher.match(transcript, "Juanita Paisa")
+        )
+
+        buffer.clear()
+        assertEquals("", buffer.append(""))
+    }
+
+    @Test
     fun recognizesShortNameForMultiWordIdentityAndNameOptionalCommands() {
         val expected = VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION
         assertEquals(expected, VoiceSessionCommandMatcher.match("Juanita, chiudi l'app", "Juanita Paisa"))
