@@ -105,8 +105,8 @@ class DigitalIdentityStore(context: Context) {
         require(identity.origin.countryName.isNotBlank()) { "Il paese di origine è obbligatorio." }
         require(identity.preferredLanguageTag.isNotBlank()) { "La lingua preferita è obbligatoria." }
         require(DigitalIdentityVoiceCatalog.forPresentation(identity.presentation).contains(identity.voiceName)) { "La voce selezionata non è compatibile con il tipo di personaggio." }
-        require(identity.regionalTtsVoiceName == null || identity.regionalTtsVoiceName in REGIONAL_TTS_VOICES) { "La voce Gemini TTS selezionata non è riconosciuta." }
-        require(identity.regionalTtsTargetId == null || identity.regionalTtsTargetId in REGIONAL_TTS_TARGETS) { "La variante regionale selezionata non è riconosciuta." }
+        require(identity.regionalTtsVoiceName == null || identity.regionalTtsVoiceName in RegionalTtsVoiceCatalog.all) { "La voce Gemini TTS selezionata non è riconosciuta." }
+        require(identity.regionalTtsTargetId == null || identity.regionalTtsTargetId in RegionalTtsVoiceCatalog.targetIds) { "La variante regionale selezionata non è riconosciuta." }
         require(identity.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE || identity.memoryNamespace == identity.id) { "Spazio di memoria non riconosciuto." }
         require(identity.schemaVersion == SCHEMA_VERSION) { "Versione del profilo non supportata." }
         val traits = identity.personality
@@ -365,7 +365,5 @@ class DigitalIdentityStore(context: Context) {
         private const val TAG_LENGTH_BYTES = 16
         private const val TAG_BITS = 128
         private const val SCHEMA_VERSION = 1
-        private val REGIONAL_TTS_VOICES = setOf("Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat")
-        private val REGIONAL_TTS_TARGETS = setOf("paisa-medellin", "canario-tenerife")
     }
 }
