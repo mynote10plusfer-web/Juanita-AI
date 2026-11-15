@@ -15,6 +15,8 @@ import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import android.graphics.Bitmap
 import android.media.MediaRecorder
+import android.media.AudioRecord
+import android.media.AudioFormat
 import android.media.AudioAttributes
 import com.google.firebase.ai.type.ActivityDetectionConfig
 import com.google.firebase.ai.type.RealtimeInputConfig
@@ -85,6 +87,10 @@ class GeminiLiveAssistant {
     private val pendingLivePcm = ByteArrayOutputStream()
     @Volatile private var ttsOutput: GeminiTtsSpeechOutput? = null
     private var ttsReceiverJob: Job? = null
+    @Volatile private var microphoneRecord: AudioRecord? = null
+    @Volatile private var microphoneJob: Job? = null
+    @Volatile private var microphoneSession: LiveSession? = null
+    private val microphoneLock = Any()
     private var ttsPlaybackJob: Job? = null
     private var ttsFlushJob: Job? = null
 
@@ -377,7 +383,7 @@ class GeminiLiveAssistant {
             return@lifecycleLock
         }
         session = connected
-        onDiagnosticEvent("session.connected", "audioActive=${connected.isAudioConversationActive()}")
+        onDiagnosticEvent("session.connected", "sdkAudioActive=${connected.isAudioConversationActive()}; regionalTts=${ttsOutput != null}")
         startAudioOnSession(connected)
         if (initialPrompt.isNotBlank() && !manualStop) {
             // Speak the morning briefing through the selected Gemini Live voice.
@@ -403,38 +409,33 @@ class GeminiLiveAssistant {
     private suspend fun startAudioOnSession(activeSession: LiveSession) {
         val useRegionalTts = ttsOutput != null
         onDiagnosticEvent("audio.start.request", "regionalTts=$useRegionalTts")
-        activeSession.startAudioConversation(
-            liveAudioConversationConfig {
-                if (!useRegionalTts) {
+
+        if (!useRegionalTts) {
+            // Keep the Firebase SDK-managed audio path unchanged for the standard Live voice.
+            activeSession.startAudioConversation(
+                liveAudioConversationConfig {
                     functionCallHandler = this@GeminiLiveAssistant.functionCallHandler
                     transcriptHandler = this@GeminiLiveAssistant.transcriptHandler
+                    goAwayHandler = {
+                        recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
+                    }
+                    enableInterruptions = true
+                    initializationHandler = { audioRecordBuilder, audioTrackBuilder ->
+                        audioRecordBuilder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                        audioTrackBuilder.setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+                    }
                 }
-                goAwayHandler = {
-                    recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
-                }
-                enableInterruptions = true
-                initializationHandler = { audioRecordBuilder, audioTrackBuilder ->
-                    audioRecordBuilder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
-                    audioTrackBuilder.setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                            .build()
-                    )
-                }
-            }
-        )
-        if (manualStop) {
-            if (session === activeSession) session = null
-            closeLiveSession(activeSession, 1_500L)
-            return
-        }
-        if (useRegionalTts) {
-            // The SDK audio helper owns the only microphone. Stop its receive/playback collector,
-            // then take over receiving directly; never run two receive collectors concurrently.
-            onDiagnosticEvent("receiver.handoff.begin", "calling stopReceiving")
-            activeSession.stopReceiving()
-            onDiagnosticEvent("receiver.handoff.done", "sdkAudioActive=${activeSession.isAudioConversationActive()}")
+            )
+        } else {
+            // Regional TTS needs the server transcript and PCM, so it owns one direct
+            // receiver. Do not start the SDK audio helper and then stop its receiver:
+            // that hybrid handoff leaves microphone capture without an observable owner.
+            onDiagnosticEvent("receiver.manual.start", "regional TTS uses app-owned AudioRecord and one Live receiver")
             ttsReceiverJob = recoveryScope.launch {
                 try {
                     onDiagnosticEvent("receiver.collect.start", "direct receive collector launched")
@@ -449,14 +450,144 @@ class GeminiLiveAssistant {
                         onDiagnosticEvent("receiver.exception", "${failure.javaClass.simpleName}: ${failure.message.orEmpty()}")
                         Log.w(TAG, "Regional TTS receive loop failed; requesting controlled recovery", failure)
                         onConnectionState("Ricezione vocale interrotta: sto tentando un recupero controllato…")
-                        // Recovery must run outside this collector; closeLiveSession joins it.
                         recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
                     }
                 }
             }
+            try {
+                startManualMicrophone(activeSession)
+            } catch (failure: Exception) {
+                ttsReceiverJob?.cancel()
+                ttsReceiverJob = null
+                throw failure
+            }
+        }
+
+        if (manualStop) {
+            if (session === activeSession) session = null
+            closeLiveSession(activeSession, 1_500L)
+            return
         }
         startHealthMonitor(activeSession)
-        onDiagnosticEvent("health.monitor.started", "sdkAudioActive=${activeSession.isAudioConversationActive()}; receiverActive=${ttsReceiverJob?.isActive == true}")
+        onDiagnosticEvent(
+            "health.monitor.started",
+            "regionalTts=$useRegionalTts; sdkAudioActive=${activeSession.isAudioConversationActive()}; " +
+                "receiverActive=${ttsReceiverJob?.isActive == true}; microphoneActive=${microphoneJob?.isActive == true}"
+        )
+    }
+
+    /**
+     * Captures mono PCM16 at 24 kHz and streams it directly to Live.
+     * This is used only for regional TTS; standard Live keeps the SDK audio helper.
+     */
+    private suspend fun startManualMicrophone(activeSession: LiveSession) {
+        withContext(Dispatchers.IO) {
+            synchronized(microphoneLock) {
+                check(microphoneSession == null) { "Un altro microfono regionale risulta già attivo." }
+            }
+            val minBuffer = AudioRecord.getMinBufferSize(
+                MANUAL_INPUT_SAMPLE_RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            check(minBuffer > 0) { "AudioRecord non supporta PCM mono a 24 kHz (code=$minBuffer)." }
+            val bufferSize = maxOf(minBuffer * 2, MANUAL_INPUT_CHUNK_BYTES * 4)
+            val recorder = AudioRecord.Builder()
+                .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(MANUAL_INPUT_SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize)
+                .build()
+            try {
+                check(recorder.state == AudioRecord.STATE_INITIALIZED) {
+                    "AudioRecord non inizializzato (state=${recorder.state})."
+                }
+                recorder.startRecording()
+                check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    "AudioRecord non è entrato nello stato RECORDING."
+                }
+                synchronized(microphoneLock) {
+                    microphoneRecord = recorder
+                    microphoneSession = activeSession
+                    microphoneJob = recoveryScope.launch(Dispatchers.IO) {
+                        val buffer = ByteArray(MANUAL_INPUT_CHUNK_BYTES)
+                        var chunksSent = 0L
+                        try {
+                            onDiagnosticEvent(
+                                "microphone.started",
+                                "source=VOICE_COMMUNICATION; sampleRateHz=$MANUAL_INPUT_SAMPLE_RATE; " +
+                                    "pcmBits=16; channelCount=1; bufferBytes=$bufferSize"
+                            )
+                            while (kotlinx.coroutines.isActive && !manualStop && session === activeSession) {
+                                val read = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
+                                if (read > 0) {
+                                    val evenBytes = read - (read % 2)
+                                    if (evenBytes > 0) {
+                                        activeSession.sendAudioRealtime(
+                                            InlineData(buffer.copyOf(evenBytes), "audio/pcm;rate=$MANUAL_INPUT_SAMPLE_RATE")
+                                        )
+                                        chunksSent++
+                                        if (chunksSent == 1L || chunksSent % 50L == 0L) {
+                                            onDiagnosticEvent(
+                                                "microphone.audio.sent",
+                                                "chunks=$chunksSent; lastChunkBytes=$evenBytes; " +
+                                                    "recordingState=${recorder.recordingState}"
+                                            )
+                                        }
+                                    }
+                                } else if (read < 0 && !manualStop) {
+                                    throw IllegalStateException("AudioRecord.read failed (code=$read).")
+                                }
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
+                            if (!manualStop && session === activeSession) {
+                                onDiagnosticEvent(
+                                    "microphone.exception",
+                                    "${failure.javaClass.simpleName}: ${failure.message.orEmpty()}; chunksSent=$chunksSent"
+                                )
+                                Log.w(TAG, "Regional TTS microphone stream failed", failure)
+                                recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
+                            }
+                        }
+                    }
+                }
+            } catch (failure: Exception) {
+                runCatching { if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop() }
+                runCatching { recorder.release() }
+                throw failure
+            }
+        }
+    }
+
+    /** Stops and releases the app-owned regional microphone, if this session owns it. */
+    private fun stopManualMicrophone(activeSession: LiveSession): Boolean {
+        synchronized(microphoneLock) {
+            if (microphoneSession !== activeSession) return true
+            val recorder = microphoneRecord
+            microphoneRecord = null
+            microphoneSession = null
+            microphoneJob?.cancel()
+            microphoneJob = null
+            return runCatching {
+                if (recorder != null) {
+                    if (recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) recorder.stop()
+                    recorder.release()
+                }
+                onDiagnosticEvent("microphone.stopped", "regional AudioRecord released")
+                true
+            }.getOrElse {
+                Log.w(TAG, "Could not stop regional AudioRecord cleanly", it)
+                onDiagnosticEvent("microphone.stop.failed", it.javaClass.simpleName)
+                false
+            }
+        }
     }
 
     private suspend fun handleRegionalTtsServerMessage(
@@ -593,9 +724,11 @@ class GeminiLiveAssistant {
         if (activeSession.isClosed()) return false
 
         return if (ttsOutput != null) {
-            // stopReceiving() is the intentional receive handoff for regional TTS.
-            // Do not trigger recovery merely because the SDK flag changed during it.
-            ttsReceiverJob?.isActive == true
+            // Regional mode is healthy only while both independent halves are alive:
+            // the direct server receiver AND the app-owned microphone sender.
+            ttsReceiverJob?.isActive == true &&
+                microphoneJob?.isActive == true &&
+                microphoneRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING
         } else {
             // Standard Live mode continues to use the SDK audio-conversation state.
             activeSession.isAudioConversationActive()
@@ -757,7 +890,11 @@ class GeminiLiveAssistant {
     private fun stopAudioConversationOnce(active: LiveSession) {
         synchronized(audioStopLock) {
             if (audioStoppedSession === active) return
-            active.stopAudioConversation()
+            if (microphoneSession === active) {
+                check(stopManualMicrophone(active)) { "Chiusura del microfono regionale non confermata." }
+            } else {
+                active.stopAudioConversation()
+            }
             audioStoppedSession = active
         }
     }
@@ -803,6 +940,9 @@ class GeminiLiveAssistant {
         private const val MAX_AUTOMATIC_RECOVERIES = 1
         private const val LIVE_CONNECT_TIMEOUT_MS = 20_000L
         private const val TTS_TRANSCRIPT_SETTLE_MS = 650L
+        private const val MANUAL_INPUT_SAMPLE_RATE = 24_000
+        // 20 ms of mono PCM16 at 24 kHz.
+        private const val MANUAL_INPUT_CHUNK_BYTES = MANUAL_INPUT_SAMPLE_RATE * 2 / 50
 
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
         const val DEFAULT_VOICE = "Kore"
