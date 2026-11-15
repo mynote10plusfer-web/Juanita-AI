@@ -7,53 +7,43 @@ import org.junit.Test
 class VoiceSessionCommandMatcherTest {
     @Test
     fun recognizesDirectStopCommandsForTheActiveIdentity() {
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.STOP_SESSION,
-            VoiceSessionCommandMatcher.match("Juanita, fermati", "Juanita")
-        )
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.STOP_SESSION,
-            VoiceSessionCommandMatcher.match("Ehi Juanita, termina la conversazione per favore", "Juanita")
-        )
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.STOP_SESSION,
-            VoiceSessionCommandMatcher.match("Oye José, stop conversation", "José")
-        )
+        assertEquals(VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("Juanita, fermati", "Juanita"))
+        assertEquals(VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("Ehi Juanita, termina la conversazione per favore", "Juanita"))
+        assertEquals(VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("Oye José, stop conversation", "José"))
+        assertEquals(VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("puoi fermarti per favore", "Juanita"))
     }
 
     @Test
-    fun recognizesExplicitApplicationCloseCommands() {
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
-            VoiceSessionCommandMatcher.match("Juanita, chiudi l'applicazione", "Juanita")
-        )
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
-            VoiceSessionCommandMatcher.match("Ehi Juanita, chiudi app", "Juanita")
-        )
+    fun recognizesNaturalApplicationCloseRequests() {
+        val expected = VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION
+        assertEquals(expected, VoiceSessionCommandMatcher.match("Juanita, chiudi l'applicazione", "Juanita"))
+        assertEquals(expected, VoiceSessionCommandMatcher.match("Ehi Juanita, chiudi app", "Juanita"))
+        assertEquals(expected, VoiceSessionCommandMatcher.match("Juanita, puoi chiudere l'applicazione?", "Juanita"))
+        assertEquals(expected, VoiceSessionCommandMatcher.match("Juanita, per favore chiudi questa app", "Juanita"))
+        assertEquals(expected, VoiceSessionCommandMatcher.match("vorrei che chiudessi l'app", "Juanita"))
+        assertEquals(expected, VoiceSessionCommandMatcher.match("chiudi applicazione per favore", "José"))
     }
 
     @Test
-    fun recognizesCommandsWithoutRepeatingTheCharacterName() {
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.STOP_SESSION,
-            VoiceSessionCommandMatcher.match("fermati", "Juanita")
-        )
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
-            VoiceSessionCommandMatcher.match("chiudi l'app", "Juanita")
-        )
-        assertEquals(
-            VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION,
-            VoiceSessionCommandMatcher.match("chiudi applicazione per favore", "José")
-        )
+    fun recognizesShortNameForMultiWordIdentityAndNameOptionalCommands() {
+        val expected = VoiceSessionCommandMatcher.Command.CLOSE_APPLICATION
+        assertEquals(expected, VoiceSessionCommandMatcher.match("Juanita, chiudi l'app", "Juanita Paisa"))
+        assertEquals(expected, VoiceSessionCommandMatcher.match("chiudi l'app", "Juanita Paisa"))
+        assertEquals(VoiceSessionCommandMatcher.Command.STOP_SESSION,
+            VoiceSessionCommandMatcher.match("fermati", "Juanita Paisa"))
     }
 
     @Test
-    fun ignoresIncidentalMentionsAndCommandsAddressedToAnotherIdentity() {
+    fun ignoresIncidentalMentionsAndNegatedOrUnrelatedCommands() {
         assertNull(VoiceSessionCommandMatcher.match("Per favore fermati Juanita", "Juanita"))
         assertNull(VoiceSessionCommandMatcher.match("Juanita, fermati", "José"))
         assertNull(VoiceSessionCommandMatcher.match("Ieri Juanita mi ha detto fermati", "Juanita"))
         assertNull(VoiceSessionCommandMatcher.match("Juanita, continua pure", "Juanita"))
+        assertNull(VoiceSessionCommandMatcher.match("non chiudere l'applicazione", "Juanita"))
+        assertNull(VoiceSessionCommandMatcher.match("puoi chiudere la finestra?", "Juanita"))
     }
 }
