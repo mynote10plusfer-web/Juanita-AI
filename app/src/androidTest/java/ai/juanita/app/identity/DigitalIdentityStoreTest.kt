@@ -203,6 +203,38 @@ class DigitalIdentityStoreTest {
     }
 
     @Test
+    fun regionalTtsVoiceAndTargetPersistPerCharacterWithoutChangingLiveVoice() {
+        val paisa = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(voiceName = "Kore", regionalTtsVoiceName = "Leda", regionalTtsTargetId = "paisa-medellin")
+        val canarian = identity("Jose Canario", IdentityPresentation.MASCULINE, "ES", "España")
+            .copy(voiceName = "Achird", regionalTtsVoiceName = "Puck", regionalTtsTargetId = "canario-tenerife")
+        store.create(paisa)
+        store.create(canarian)
+
+        val reopened = DigitalIdentityStore(isolatedContext())
+        val restoredPaisa = reopened.get(paisa.id)!!
+        val restoredCanarian = reopened.get(canarian.id)!!
+
+        assertEquals("Kore", restoredPaisa.voiceName)
+        assertEquals("Leda", restoredPaisa.regionalTtsVoiceName)
+        assertEquals("paisa-medellin", restoredPaisa.regionalTtsTargetId)
+        assertEquals("Achird", restoredCanarian.voiceName)
+        assertEquals("Puck", restoredCanarian.regionalTtsVoiceName)
+        assertEquals("canario-tenerife", restoredCanarian.regionalTtsTargetId)
+    }
+
+    @Test
+    fun invalidRegionalTtsVoiceOrTargetIsRejected() {
+        val base = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        assertThrows(IllegalArgumentException::class.java) {
+            store.create(base.copy(regionalTtsVoiceName = "UnknownVoice"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.create(base.copy(regionalTtsVoiceName = "Leda", regionalTtsTargetId = "unknown-region"))
+        }
+    }
+
+    @Test
     fun newIdentityReceivesDefinedCharacterDefaults() {
         val original = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
         store.create(original)
