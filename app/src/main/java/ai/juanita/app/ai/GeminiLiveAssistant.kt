@@ -94,6 +94,7 @@ class GeminiLiveAssistant {
     private val microphoneLock = Any()
     private var ttsPlaybackJob: Job? = null
     private var ttsFlushJob: Job? = null
+    private var imageSearchJob: Job? = null
 
     suspend fun start(
         systemInstruction: String,
@@ -103,7 +104,7 @@ class GeminiLiveAssistant {
         ttsLanguageCode: String = "es-ES",
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
-        onImageSearch: (query: String) -> String = { "La ricerca di immagini non è disponibile in questa sessione." },
+        onImageSearch: suspend (query: String) -> String = { "La ricerca di immagini non è disponibile in questa sessione." },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
         onConnectionState: (status: String) -> Unit = {},
         onDiagnosticEvent: (event: String, detail: String) -> Unit = { _, _ -> },
@@ -310,13 +311,20 @@ class GeminiLiveAssistant {
                         functionCall.id
                     )
                 } else if (functionCall.name == "searchAndAnalyzeImages") {
-                    val query = functionCall.args["query"]?.jsonPrimitive?.content.orEmpty()
-                    val result = runCatching {
-                        runBlocking(Dispatchers.IO) { onImageSearch(query.take(160)) }
-                    }.getOrElse { "La ricerca visiva non è riuscita: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+                    val query = functionCall.args["query"]?.jsonPrimitive?.content.orEmpty().take(160)
+                    imageSearchJob?.cancel()
+                    imageSearchJob = recoveryScope.launch {
+                        val result = runCatching { onImageSearch(query) }
+                            .getOrElse { "La ricerca visiva non è riuscita: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+                        val activeSession = session
+                        if (activeSession != null && !activeSession.isClosed()) {
+                            runCatching { activeSession.send(result.take(5000), turnComplete = true) }
+                                .onFailure { onDiagnosticEvent("vision.send_result_failed", it.javaClass.simpleName) }
+                        }
+                    }
                     FunctionResponsePart(
                         functionCall.name,
-                        JsonObject(mapOf("visual_search_result" to JsonPrimitive(result.take(5000)))),
+                        JsonObject(mapOf("status" to JsonPrimitive("Ricerca visiva avviata. Attendi il risultato nella conversazione."))),
                         functionCall.id
                     )
                 } else if (functionCall.name == "savePersonalProfile") {
@@ -960,6 +968,8 @@ class GeminiLiveAssistant {
 
     private suspend fun stopSessionLocked() {
         manualStop = true
+        imageSearchJob?.cancel()
+        imageSearchJob = null
         cancelPendingTtsTurn()
         ttsOutput = null
         healthJob?.cancel()
