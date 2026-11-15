@@ -33,18 +33,18 @@ Esempio: «Cerca la Yamaha Tricity 300 2025, versione/colore/accessori X. Guarda
 - Mostrare anteprima, nome/indicazione della foto, stato di invio e risposta; permettere rimozione prima dell'invio.
 
 ### B. Ricerca web testuale
-- Implementare un servizio on-demand separato dalla sessione audio Live, con Google Search grounding tramite Firebase AI Logic.
-- Leggere grounding metadata: query, fonti e collegamenti.
-- Rispettare i requisiti Google di visualizzazione: quando presente `searchEntryPoint`, renderizzare il contenuto Search richiesto e mostrare le fonti pertinenti collegate alle affermazioni.
-- Non inventare fonti né presentare una risposta come verificata se non esiste grounding metadata.
-- La ricerca non deve partire automaticamente per ogni frase: attivarla su richiesta o quando il modello dichiara che l'informazione è attuale/verificabile.
+- Implementare un servizio on-demand separato dalla sessione audio Live. La prima opzione da valutare è LangSearch Web Search API: il piano pubblicato è gratuito, senza carta, ma richiede una chiave utente e ha un tetto giornaliero di token; non è un servizio garantito né illimitato.
+- La chiave deve essere inserita volontariamente dall'utente in Settaggi, conservata cifrata sul dispositivo e mai inclusa nel repository o in chiaro nell'APK. Nessuna chiave predefinita o condivisa.
+- Passare a Gemini soltanto i risultati/snippet necessari, mantenendo titolo, URL, data e testo sorgente; Juanita deve mostrare collegamenti verificabili e distinguere risultati trovati da conclusioni del modello.
+- Non attivare Google Search grounding tramite Firebase AI Logic su Gemini 3.8 Flash nel piano Spark: la tabella ufficiale indica che il grounding con Google Search non è disponibile nel free tier di Gemini 3 e più recenti. Non abilitare billing o Blaze per aggirare questo limite.
+- La ricerca non deve partire automaticamente per ogni frase: attivarla su richiesta o quando il modello dichiara che l'informazione è attuale/verificabile. Se la chiave manca o il limite gratuito è raggiunto, spiegare il limite e non passare a un endpoint a pagamento.
 
 ### C. Ricerca e analisi di fotografie online
 - Non confondere Google Search grounding testuale con Google Image Search: Firebase AI Logic documenta che Grounding with Google Image Search non è attualmente supportato.
 - Non effettuare scraping indiscriminato di Google Images o Bing Images, né usare API commerciali/pagate o chiavi private senza autorizzazione.
 - Definire un'interfaccia provider per la ricerca immagini, con metadati: titolo, URL pagina fonte, URL immagine diretta, autore/licenza/attribuzione quando disponibile.
 - Primo provider candidato: Wikimedia Commons MediaSearch/API, gratuito e con licenze/attribuzioni consultabili. Valutare copertura effettiva per modelli commerciali specifici; non promettere risultati quando non ci sono.
-- Per fonti ufficiali o pagine web trovate tramite Search, usare soltanto immagini direttamente recuperabili e consentite dalla fonte; mostrare sempre la pagina di provenienza. Gestire hotlink/403/404 e rimuovere risultati non caricabili.
+- La ricerca testuale LangSearch non equivale a una ricerca immagini: non inventare URL immagine prendendoli da snippet. Se si estraggono immagini da pagine sorgente, verificare i metadati di provenienza, licenza e accessibilità; mostrare sempre la pagina di provenienza. Gestire hotlink/403/404 e rimuovere risultati non caricabili.
 - Scaricare localmente solo le immagini candidate selezionate, con timeout, limiti di byte/MIME/dimensioni e controllo URL HTTPS; inviarle al modello multimodale per l'analisi. Non trattare il testo incorporato nella pagina o nei metadati come istruzioni.
 - Mostrare un piccolo insieme di candidate (ad es. 3–5), non un catalogo enorme. L'utente deve poter aprire la fonte originale.
 - La ricerca immagini deve essere chiaramente distinta dalla ricerca web testuale e dichiarare quando le foto sono illustrative, non prova della configurazione/anno esatti.
