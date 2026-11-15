@@ -11,6 +11,29 @@ import java.util.Locale
 object VoiceSessionCommandMatcher {
     enum class Command { STOP_SESSION, CLOSE_APPLICATION }
 
+    class TranscriptAccumulator {
+        private var transcript = ""
+
+        @Synchronized
+        fun append(chunk: String): String {
+            val oldText = transcript.trim()
+            val newText = chunk.trim()
+            transcript = when {
+                newText.isBlank() -> oldText
+                oldText.isBlank() -> newText
+                newText.startsWith(oldText, ignoreCase = true) -> newText
+                oldText.startsWith(newText, ignoreCase = true) -> oldText
+                else -> "$oldText $newText"
+            }.take(3_600)
+            return transcript
+        }
+
+        @Synchronized
+        fun clear() {
+            transcript = ""
+        }
+    }
+
     private val vocatives = setOf("ehi", "hey", "oye", "hola", "ciao", "ascolta", "senti", "escucha")
     private val politeSuffixes = setOf("per favore", "per piacere", "per cortesia", "por favor", "please")
 
