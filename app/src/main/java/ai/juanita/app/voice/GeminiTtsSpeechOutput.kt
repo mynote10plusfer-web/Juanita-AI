@@ -39,7 +39,7 @@ class GeminiTtsSpeechOutput(
 
     suspend fun speak(text: String, liveFallbackPcm: ByteArray): Boolean {
         require(text.isNotBlank()) { "Il testo da pronunciare è vuoto." }
-        try {
+        return try {
             withTimeout(MAX_TTS_TIMEOUT_MS) {
                 val wav = withContext(Dispatchers.IO) {
                     val target = speechTarget(targetId, languageCode)
