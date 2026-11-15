@@ -450,6 +450,7 @@ class JuanitaVoiceService : Service() {
                                 ttsTargetId = ttsTarget,
                                 ttsLanguageCode = ttsLanguage,
                                 onTranscript = { role, text ->
+                                    voiceDiagnostics.event("transcript.callback", "role=$role; characters=${text.length}")
                                     if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true) &&
                                         !spokenCommandHandled.get()
                                     ) {
