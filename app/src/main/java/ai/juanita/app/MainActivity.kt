@@ -82,6 +82,7 @@ import ai.juanita.app.identity.DigitalIdentitySection
 import ai.juanita.app.identity.DigitalIdentity
 import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.identity.toSystemInstruction
+import ai.juanita.app.voice.RegionalVoiceLabSection
 import java.util.Locale
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -884,6 +885,8 @@ private fun JuanitaApp(
                     onIdentitiesChanged = { digitalIdentities = it },
                     onPreviewVoice = previewIdentityVoice
                 )
+
+                RegionalVoiceLabSection(panel = panel, gold = gold)
 
                 SettingsCard(panel, gold, if (activeDigitalIdentity == null) "CARATTERE E PERSONALITÀ · STANDARD" else "CARATTERE DI ${activeDigitalIdentity?.displayName ?: "profilo"}") {
                     if (activeDigitalIdentity == null) {
