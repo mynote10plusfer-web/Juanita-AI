@@ -3,7 +3,6 @@ package ai.juanita.app.vision
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.text.Html
-import android.util.Base64
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
@@ -140,7 +139,7 @@ object JuanitaImageSearch {
                 "Il risultato trovato non è un'immagine supportata."
             }
             val declaredLength = connection.contentLengthLong
-            require(declaredLength in 1..MAX_IMAGE_BYTES.toLong()) { "La fotografia supera il limite consentito." }
+            require(declaredLength == -1L || declaredLength in 1..MAX_IMAGE_BYTES.toLong()) { "La fotografia supera il limite consentito." }
             val output = ByteArrayOutputStream(declaredLength.toInt())
             connection.inputStream.use { input ->
                 val buffer = ByteArray(8 * 1024)
