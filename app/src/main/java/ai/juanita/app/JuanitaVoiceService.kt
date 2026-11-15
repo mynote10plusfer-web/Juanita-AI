@@ -523,12 +523,17 @@ class JuanitaVoiceService : Service() {
                                 },
                                 onImageSearch = { query ->
                                     _visualSearchStatus.value = "Sto cercando e analizzando: $query"
-                                    val result = runBlocking(Dispatchers.IO) {
-                                        JuanitaImageSearch.searchAndAnalyze(query)
+                                    try {
+                                        val result = runBlocking(Dispatchers.IO) {
+                                            JuanitaImageSearch.searchAndAnalyze(query)
+                                        }
+                                        _visualSearchResult.value = result
+                                        _visualSearchStatus.value = "Immagine trovata e analizzata."
+                                        "Ho trovato ${result.title}. Analisi visiva: ${result.analysis} Fonte: Wikimedia Commons. Autore/licenza: ${result.attribution}. Pagina originale: ${result.sourceUrl}"
+                                    } catch (error: Exception) {
+                                        _visualSearchStatus.value = "Ricerca visiva non riuscita: ${error.localizedMessage ?: "riprova più tardi"}"
+                                        throw error
                                     }
-                                    _visualSearchResult.value = result
-                                    _visualSearchStatus.value = "Immagine trovata e analizzata."
-                                    "Ho trovato ${result.title}. Analisi visiva: ${result.analysis} Fonte: Wikimedia Commons. Autore/licenza: ${result.attribution}. Pagina originale: ${result.sourceUrl}"
                                 },
                                 onProfileUpdate = { fields ->
                                     val saved = mutableListOf<String>()
