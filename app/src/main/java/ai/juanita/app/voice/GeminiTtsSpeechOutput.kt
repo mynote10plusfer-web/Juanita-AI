@@ -32,7 +32,8 @@ import kotlin.coroutines.coroutineContext
 class GeminiTtsSpeechOutput(
     private val voiceName: String,
     private val targetId: String?,
-    private val languageCode: String
+    private val languageCode: String,
+    private val onDiagnosticEvent: (event: String, detail: String) -> Unit = { _, _ -> }
 ) {
     @Volatile
     private var activeTrack: AudioTrack? = null
@@ -66,6 +67,7 @@ class GeminiTtsSpeechOutput(
                         ?.firstOrNull()?.inlineData
                         ?: error("Gemini TTS non ha restituito audio.")
                 }
+                onDiagnosticEvent("tts.audio.generated", "wavBytes=${wav.size}")
                 coroutineContext.ensureActive()
                 playWav(wav)
             }
@@ -99,6 +101,7 @@ class GeminiTtsSpeechOutput(
 
     private suspend fun playWav(wav: ByteArray) {
         val pcm = extractPcm16Mono(wav)
+        onDiagnosticEvent("tts.audio.pcm", "pcmBytes=${pcm.size}; sampleRateHz=$OUTPUT_SAMPLE_RATE")
         playPcm(pcm)
     }
 
@@ -125,6 +128,14 @@ class GeminiTtsSpeechOutput(
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
         activeTrack = track
+        val routedDevice = {
+            val device = runCatching { track.routedDevice }.getOrNull()
+            device?.let { "${it.productName}/type=${it.type}" } ?: "unknown"
+        }
+        onDiagnosticEvent(
+            "tts.audio.track.created",
+            "state=${track.state}; bufferBytes=${maxOf(pcm.size, minBuffer)}; routedDevice=${routedDevice()}"
+        )
         try {
             var offset = 0
             while (offset < pcm.size) {
@@ -132,9 +143,19 @@ class GeminiTtsSpeechOutput(
                 check(written > 0) { "Impossibile caricare l'audio sul dispositivo." }
                 offset += written
             }
+            onDiagnosticEvent("tts.audio.track.loaded", "writtenBytes=$offset; expectedBytes=${pcm.size}")
             track.play()
+            onDiagnosticEvent(
+                "tts.audio.play.started",
+                "playState=${track.playState}; routedDevice=${routedDevice()}"
+            )
             val durationMillis = (pcm.size * 1_000L / (OUTPUT_SAMPLE_RATE.toLong() * 2L)).coerceAtLeast(250L)
             delay(durationMillis + 120L)
+            onDiagnosticEvent(
+                "tts.audio.play.completed",
+                "playbackHeadFrames=${track.playbackHeadPosition}; expectedFrames=${pcm.size / 2}; " +
+                    "playState=${track.playState}; routedDevice=${routedDevice()}"
+            )
         } finally {
             if (activeTrack === track) activeTrack = null
             runCatching { if (track.playState == AudioTrack.PLAYSTATE_PLAYING) track.stop() }
