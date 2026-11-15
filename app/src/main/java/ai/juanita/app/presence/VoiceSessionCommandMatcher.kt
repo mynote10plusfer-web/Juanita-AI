@@ -25,9 +25,9 @@ object VoiceSessionCommandMatcher {
     )
 
     private val stopPatterns = listOf(
-        Regex("""^(?:per favore )?(?:puoi )?fermarti$"""),
-        Regex("""^(?:per favore )?(?:puoi )?terminare (?:la )?(?:conversazione|sessione)$"""),
-        Regex("""^(?:per favore )?(?:puoi )?interrompere (?:la )?conversazione$"""),
+        Regex("""^(?:(?:per favore|per piacere) )?(?:puoi )?(?:fermati|fermarti)$"""),
+        Regex("""^(?:(?:per favore|per piacere) )?(?:puoi )?(?:termina|terminare) (?:la )?(?:conversazione|sessione)$"""),
+        Regex("""^(?:(?:per favore|per piacere) )?(?:puoi )?(?:interrompi|interrompere) (?:la )?conversazione$"""),
         Regex("""^(?:stop|basta|stop conversation|end conversation|stop session)$""")
     )
 
