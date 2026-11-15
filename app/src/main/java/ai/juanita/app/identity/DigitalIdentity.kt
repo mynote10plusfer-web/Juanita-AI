@@ -15,6 +15,18 @@ object DigitalIdentityVoiceCatalog {
         if (presentation == IdentityPresentation.MASCULINE) "Achird" else "Kore"
 }
 
+/** Complete Gemini TTS catalogue, kept separate from the Gemini Live voice catalogue. */
+object RegionalTtsVoiceCatalog {
+    val all = listOf(
+        "Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede",
+        "Callirrhoe", "Autonoe", "Enceladus", "Iapetus", "Umbriel", "Algieba",
+        "Despina", "Erinome", "Algenib", "Rasalgethi", "Laomedeia", "Achernar",
+        "Alnilam", "Schedar", "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi",
+        "Vindemiatrix", "Sadachbia", "Sadaltager", "Sulafat"
+    )
+    val targetIds = setOf("paisa-medellin", "canario-tenerife")
+}
+
 /**
  * Stable gender identity of the character. It controls grammatical self-reference, compatible voice
  * choices and the character's feminine/masculine behavioural foundation. Individual personality
