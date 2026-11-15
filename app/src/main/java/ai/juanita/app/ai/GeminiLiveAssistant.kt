@@ -1,5 +1,16 @@
 package ai.juanita.app.ai
 
+import ai.juanita.app.voice.GeminiTtsSpeechOutput
+import com.google.firebase.ai.type.InlineDataPart
+import com.google.firebase.ai.type.LiveServerContent
+import com.google.firebase.ai.type.LiveServerGoAway
+import com.google.firebase.ai.type.LiveServerMessage
+import com.google.firebase.ai.type.LiveServerToolCall
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.collect
+
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import android.graphics.Bitmap
@@ -68,10 +79,20 @@ class GeminiLiveAssistant {
     private var onConnectionState: (String) -> Unit = {}
     private var onContinuityContext: suspend (String) -> String = { it }
     private val recentTranscript = ArrayDeque<String>()
+    private val ttsBufferLock = Any()
+    private val pendingTtsTranscript = StringBuilder()
+    private val pendingLivePcm = ByteArrayOutputStream()
+    @Volatile private var ttsOutput: GeminiTtsSpeechOutput? = null
+    private var ttsReceiverJob: Job? = null
+    private var ttsPlaybackJob: Job? = null
+    private var ttsFlushJob: Job? = null
 
     suspend fun start(
         systemInstruction: String,
         voiceName: String = DEFAULT_VOICE,
+        ttsVoiceName: String? = null,
+        ttsTargetId: String? = null,
+        ttsLanguageCode: String = "es-ES",
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
@@ -81,6 +102,9 @@ class GeminiLiveAssistant {
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
+        ttsOutput = ttsVoiceName?.takeIf { it.isNotBlank() }?.let { voice ->
+            GeminiTtsSpeechOutput(voice, ttsTargetId, ttsLanguageCode)
+        }
         automaticRecoveryCount = 0
         synchronized(recentTranscript) { recentTranscript.clear() }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
@@ -370,23 +394,18 @@ class GeminiLiveAssistant {
      * a second microphone reader or run a competing receive() collector.
      */
     private suspend fun startAudioOnSession(activeSession: LiveSession) {
+        val useRegionalTts = ttsOutput != null
         activeSession.startAudioConversation(
             liveAudioConversationConfig {
-                functionCallHandler = this@GeminiLiveAssistant.functionCallHandler
-                transcriptHandler = this@GeminiLiveAssistant.transcriptHandler
+                if (!useRegionalTts) {
+                    functionCallHandler = this@GeminiLiveAssistant.functionCallHandler
+                    transcriptHandler = this@GeminiLiveAssistant.transcriptHandler
+                }
                 goAwayHandler = {
                     recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
                 }
-                // Keep natural barge-in, but rely on LOW-sensitivity server VAD above.
                 enableInterruptions = true
-
-                // Ask Android's voice-communication capture path for hardware/platform
-                // acoustic echo cancellation (speaker bleed) and noise suppression.
-                // This is device/HAL dependent; do not force AGC, which can amplify room noise.
                 initializationHandler = { audioRecordBuilder, audioTrackBuilder ->
-                    // Input: ask Android's communication capture path for its voice-processing
-                    // chain. Output: tag Gemini speech as communication audio as well, so the
-                    // platform AEC can use the rendered assistant signal as its echo reference.
                     audioRecordBuilder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
                     audioTrackBuilder.setAudioAttributes(
                         AudioAttributes.Builder()
@@ -397,14 +416,126 @@ class GeminiLiveAssistant {
                 }
             }
         )
-        // A user stop can race with an in-flight reconnect/start operation.
-        // Re-check after the SDK has finished initializing its audio pipeline.
         if (manualStop) {
             if (session === activeSession) session = null
             closeLiveSession(activeSession, 1_500L)
             return
         }
+        if (useRegionalTts) {
+            // The SDK audio helper owns the only microphone. Stop its receive/playback collector,
+            // then take over receiving directly; never run two receive collectors concurrently.
+            activeSession.stopReceiving()
+            ttsReceiverJob = recoveryScope.launch {
+                try {
+                    activeSession.receive().collect { message ->
+                        handleRegionalTtsServerMessage(activeSession, message)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    if (!manualStop && session === activeSession) {
+                        Log.w(TAG, "Regional TTS receive loop failed; requesting controlled recovery", failure)
+                        onConnectionState("Ricezione vocale interrotta: sto tentando un recupero controllato…")
+                        recoverAfterServerDisconnect(activeSession)
+                    }
+                }
+            }
+        }
         startHealthMonitor(activeSession)
+    }
+
+    private suspend fun handleRegionalTtsServerMessage(
+        activeSession: LiveSession,
+        message: LiveServerMessage
+    ) {
+        when (message) {
+            is LiveServerContent -> {
+                val inputText = message.inputTranscription?.text?.trim().orEmpty()
+                if (inputText.isNotBlank()) cancelPendingTtsTurn()
+                transcriptHandler?.invoke(message.inputTranscription, message.outputTranscription)
+
+                message.content?.parts?.filterIsInstance<InlineDataPart>()?.forEach { part ->
+                    if (part.mimeType.startsWith("audio/pcm", ignoreCase = true)) {
+                        synchronized(ttsBufferLock) { pendingLivePcm.write(part.inlineData) }
+                    }
+                }
+                message.outputTranscription?.text?.trim()?.takeIf { it.isNotEmpty() }?.let(::appendTtsTranscript)
+
+                if (message.interrupted) {
+                    cancelPendingTtsTurn()
+                } else if (message.turnComplete) {
+                    scheduleRegionalTtsFlush(activeSession)
+                }
+            }
+            is LiveServerToolCall -> {
+                val responses = message.functionCalls.mapNotNull { call ->
+                    functionCallHandler?.invoke(call)
+                }
+                if (responses.isNotEmpty()) activeSession.sendFunctionResponse(responses)
+            }
+            is LiveServerGoAway -> {
+                recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
+            }
+        }
+    }
+
+    private fun appendTtsTranscript(chunk: String) {
+        synchronized(ttsBufferLock) {
+            val current = pendingTtsTranscript.toString()
+            when {
+                current.isBlank() -> pendingTtsTranscript.append(chunk)
+                chunk.startsWith(current) -> {
+                    pendingTtsTranscript.clear()
+                    pendingTtsTranscript.append(chunk)
+                }
+                current.endsWith(chunk) -> Unit
+                else -> {
+                    val overlap = (minOf(current.length, chunk.length) downTo 1)
+                        .firstOrNull { current.endsWith(chunk.substring(0, it)) } ?: 0
+                    pendingTtsTranscript.append(chunk.substring(overlap))
+                }
+            }
+        }
+    }
+
+    private fun scheduleRegionalTtsFlush(activeSession: LiveSession) {
+        ttsFlushJob?.cancel()
+        ttsFlushJob = recoveryScope.launch {
+            // Output transcription is delivered independently of model content; allow its
+            // final chunk to arrive after turnComplete before synthesizing the full response.
+            delay(TTS_TRANSCRIPT_SETTLE_MS)
+            if (manualStop || session !== activeSession) return@launch
+            val (text, pcm) = synchronized(ttsBufferLock) {
+                val transcript = pendingTtsTranscript.toString().trim()
+                val fallback = pendingLivePcm.toByteArray()
+                pendingTtsTranscript.clear()
+                pendingLivePcm.reset()
+                transcript to fallback
+            }
+            if (text.isBlank() && pcm.isEmpty()) return@launch
+            ttsPlaybackJob?.cancel()
+            val output = ttsOutput ?: return@launch
+            ttsPlaybackJob = recoveryScope.launch {
+                try {
+                    if (text.isBlank()) output.playFallback(pcm) else output.speak(text, pcm)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    Log.w(TAG, "Regional Gemini TTS and Live fallback playback failed", failure)
+                    onConnectionState("Voce non disponibile in questo momento. La conversazione resta attiva: puoi riprovare o terminare.")
+                }
+            }
+        }
+    }
+
+    private fun cancelPendingTtsTurn() {
+        ttsFlushJob?.cancel()
+        ttsPlaybackJob?.cancel()
+        ttsOutput?.stop()
+        synchronized(ttsBufferLock) {
+            pendingTtsTranscript.clear()
+            pendingLivePcm.reset()
+        }
     }
 
     private fun startHealthMonitor(activeSession: LiveSession) {
@@ -572,6 +703,9 @@ class GeminiLiveAssistant {
     /** Stop capture and close one active Live session, retaining it for retry on any failure. */
     private suspend fun closeLiveSession(active: LiveSession, closeTimeoutMillis: Long): Boolean {
         closingSession = active
+        ttsReceiverJob?.cancelAndJoin()
+        ttsReceiverJob = null
+        cancelPendingTtsTurn()
         val audioStopped = withContext(Dispatchers.IO) {
             runCatching { stopAudioConversationOnce(active) }.isSuccess
         }
@@ -588,6 +722,8 @@ class GeminiLiveAssistant {
 
     private suspend fun stopSessionLocked() {
         manualStop = true
+        cancelPendingTtsTurn()
+        ttsOutput = null
         healthJob?.cancel()
         stabilityJob?.cancel()
         sessionFactory = null
@@ -604,6 +740,7 @@ class GeminiLiveAssistant {
         private const val TAG = "GeminiLiveAssistant"
         private const val MAX_AUTOMATIC_RECOVERIES = 1
         private const val LIVE_CONNECT_TIMEOUT_MS = 20_000L
+        private const val TTS_TRANSCRIPT_SETTLE_MS = 650L
 
         const val MODEL_NAME = "gemini-3.1-flash-live-preview"
         const val DEFAULT_VOICE = "Kore"
