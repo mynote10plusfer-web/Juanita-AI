@@ -40,6 +40,9 @@ object VoiceSessionCommandMatcher {
     private val closePatterns = listOf(
         Regex("""^(?:(?:per favore|per piacere|per cortesia) )?(?:puoi )?chiud(?:i|ere|essi) (?:questa )?(?:l )?(?:applicazione|app)$"""),
         Regex("""^vorrei che (?:tu )?chiudessi (?:l )?(?:applicazione|app)$"""),
+        Regex("""^(?:(?:por favor) )?(?:puedes )?cerrar (?:la )?(?:aplicacion|app)$"""),
+        Regex("""^cierra (?:la )?(?:aplicacion|app)$"""),
+        Regex("""^sal de (?:la )?(?:aplicacion|app)$"""),
         Regex("""^esci dall applicazione$"""),
         Regex("""^esci dalla app$"""),
         Regex("""^esci dall app$"""),
@@ -48,10 +51,10 @@ object VoiceSessionCommandMatcher {
     )
 
     private val stopPatterns = listOf(
-        Regex("""^(?:(?:per favore|per piacere) )?(?:puoi )?(?:fermati|fermarti)$"""),
-        Regex("""^(?:(?:per favore|per piacere) )?(?:puoi )?(?:termina|terminare) (?:la )?(?:conversazione|sessione)$"""),
-        Regex("""^(?:(?:per favore|per piacere) )?(?:puoi )?(?:interrompi|interrompere) (?:la )?conversazione$"""),
-        Regex("""^(?:stop|basta|stop conversation|end conversation|stop session)$""")
+        Regex("""^(?:(?:per favore|per piacere|por favor) )?(?:puoi )?(?:fermati|fermarti|detente)$"""),
+        Regex("""^(?:(?:per favore|per piacere|por favor) )?(?:puoi )?(?:termina|terminare) (?:la )?(?:conversacion|sesion|conversazione|sessione)$"""),
+        Regex("""^(?:(?:per favore|per piacere|por favor) )?(?:puoi )?(?:interrompi|interrompere) (?:la )?(?:conversacion|conversazione)$"""),
+        Regex("""^(?:stop|basta|para|stop conversation|end conversation|stop session)$""")
     )
 
     fun match(transcript: String, activeIdentityName: String): Command? {
