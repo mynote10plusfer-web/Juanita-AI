@@ -265,7 +265,7 @@ class DigitalIdentityStoreTest {
         store.create(approved)
         val restored = DigitalIdentityStore(isolatedContext()).get(base.id)!!
         assertEquals(456L, restored.culturalDossier?.approvedAtMillis)
-        assertEquals(3, restored.culturalDossier?.sources?.size)
+        assertEquals(CulturalDossierCatalog.dossiers.first().sources.size, restored.culturalDossier?.sources?.size)
         assertEquals(
             CulturalDossierCatalog.dossiers.first().sources.map { it.geographicScope },
             restored.culturalDossier?.sources?.map { it.geographicScope }
