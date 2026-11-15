@@ -18,6 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import ai.juanita.app.identity.DigitalIdentity
+import ai.juanita.app.identity.RegionalTtsVoiceCatalog
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,15 +71,7 @@ private enum class RegionalSpeechTarget(
     )
 }
 
-private val regionalTestVoices = listOf(
-    "Kore", "Aoede", "Leda", "Sulafat",
-    "Zephyr", "Puck", "Charon", "Fenrir", "Orus", "Callirrhoe", "Autonoe",
-    "Enceladus", "Iapetus", "Umbriel", "Algieba", "Despina", "Erinome",
-    "Algenib", "Rasalgethi", "Laomedeia", "Achernar", "Alnilam", "Schedar",
-    "Gacrux", "Pulcherrima", "Achird", "Zubenelgenubi", "Vindemiatrix",
-    "Sadachbia", "Sadaltager"
-)
-
+private val regionalTestVoices = RegionalTtsVoiceCatalog.all
 /** Isolated TTS audition lab. It never starts or stops the Gemini Live microphone session. */
 @OptIn(PublicPreviewAPI::class)
 @Composable
