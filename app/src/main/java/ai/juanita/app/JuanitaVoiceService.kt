@@ -31,6 +31,8 @@ import ai.juanita.app.presence.ConversationalPresencePolicy
 import ai.juanita.app.presence.ConversationalPresenceSettings
 import ai.juanita.app.presence.PresenceDecision
 import ai.juanita.app.diagnostics.VoiceDiagnosticLog
+import ai.juanita.app.vision.JuanitaImageSearch
+import ai.juanita.app.vision.VisualSearchResult
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
@@ -518,6 +520,15 @@ class JuanitaVoiceService : Service() {
                                     withContext(Dispatchers.IO) {
                                         memoryStore.buildContinuityContext(conversationId, recentTranscript, selectedIdentity?.id)
                                     }
+                                },
+                                onImageSearch = { query ->
+                                    _visualSearchStatus.value = "Sto cercando e analizzando: $query"
+                                    val result = runBlocking(Dispatchers.IO) {
+                                        JuanitaImageSearch.searchAndAnalyze(query)
+                                    }
+                                    _visualSearchResult.value = result
+                                    _visualSearchStatus.value = "Immagine trovata e analizzata."
+                                    "Ho trovato ${result.title}. Analisi visiva: ${result.analysis} Fonte: Wikimedia Commons. Autore/licenza: ${result.attribution}. Pagina originale: ${result.sourceUrl}"
                                 },
                                 onProfileUpdate = { fields ->
                                     val saved = mutableListOf<String>()
@@ -1051,6 +1062,11 @@ class JuanitaVoiceService : Service() {
 
         private val _visionState = MutableStateFlow("La visione è inattiva")
         val visionState: StateFlow<String> = _visionState.asStateFlow()
+
+        private val _visualSearchResult = MutableStateFlow<VisualSearchResult?>(null)
+        val visualSearchResult: StateFlow<VisualSearchResult?> = _visualSearchResult.asStateFlow()
+        private val _visualSearchStatus = MutableStateFlow("")
+        val visualSearchStatus: StateFlow<String> = _visualSearchStatus.asStateFlow()
 
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
