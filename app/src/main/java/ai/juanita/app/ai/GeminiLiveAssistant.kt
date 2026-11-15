@@ -436,7 +436,8 @@ class GeminiLiveAssistant {
                     if (!manualStop && session === activeSession) {
                         Log.w(TAG, "Regional TTS receive loop failed; requesting controlled recovery", failure)
                         onConnectionState("Ricezione vocale interrotta: sto tentando un recupero controllato…")
-                        recoverAfterServerDisconnect(activeSession)
+                        // Recovery must run outside this collector; closeLiveSession joins it.
+                        recoveryScope.launch { recoverAfterServerDisconnect(activeSession) }
                     }
                 }
             }
