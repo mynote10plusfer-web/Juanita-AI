@@ -265,6 +265,10 @@ class JuanitaVoiceService : Service() {
                 }
                 if (startRequested || lifecycleState != VoiceLifecycleState.IDLE) {
                     if (activeIdentityId == identityId && lifecycleState != VoiceLifecycleState.ERROR) {
+                        voiceDiagnostics.event(
+                            "session.start.duplicate_ignored",
+                            "lifecycle=$lifecycleState; sameIdentity=true"
+                        )
                         _state.value = if (lifecycleState == VoiceLifecycleState.ACTIVE) {
                             "Questa personalità è già attiva."
                         } else {
