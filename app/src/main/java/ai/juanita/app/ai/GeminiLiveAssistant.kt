@@ -103,6 +103,7 @@ class GeminiLiveAssistant {
         ttsLanguageCode: String = "es-ES",
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
+        onImageSearch: (query: String) -> String = { "La ricerca di immagini non è disponibile in questa sessione." },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
         onConnectionState: (status: String) -> Unit = {},
         onDiagnosticEvent: (event: String, detail: String) -> Unit = { _, _ -> },
@@ -202,6 +203,13 @@ class GeminiLiveAssistant {
                             )
                         ),
                         FunctionDeclaration(
+                            name = "searchAndAnalyzeImages",
+                            description = "Search for a relevant public photograph and actually inspect its pixels with a multimodal model. Use when the user asks for a visual opinion, asks you to find/show/inspect a real-world object, vehicle, place or design, or when a photo materially helps. Do not use for ordinary questions. Returns visual observations and source attribution; if no image is found, report that honestly.",
+                            parameters = mapOf(
+                                "query" to Schema.string("Specific subject to search for, including make/model/year or place when the user supplied those details.")
+                            )
+                        ),
+                        FunctionDeclaration(
                             name = "getCurrentDateTime",
                             description = "Return the exact current date, time, UTC offset and time-zone ID from the Android device clock. Use for current-time and time-sensitive questions.",
                             parameters = emptyMap()
@@ -292,6 +300,16 @@ class GeminiLiveAssistant {
                     FunctionResponsePart(
                         functionCall.name,
                         JsonObject(mapOf("historical_context" to JsonPrimitive(result.take(6000)))),
+                        functionCall.id
+                    )
+                } else if (functionCall.name == "searchAndAnalyzeImages") {
+                    val query = functionCall.args["query"]?.jsonPrimitive?.content.orEmpty()
+                    val result = runCatching {
+                        runBlocking(Dispatchers.IO) { onImageSearch(query.take(160)) }
+                    }.getOrElse { "La ricerca visiva non è riuscita: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+                    FunctionResponsePart(
+                        functionCall.name,
+                        JsonObject(mapOf("visual_search_result" to JsonPrimitive(result.take(5000)))),
                         functionCall.id
                     )
                 } else if (functionCall.name == "savePersonalProfile") {
