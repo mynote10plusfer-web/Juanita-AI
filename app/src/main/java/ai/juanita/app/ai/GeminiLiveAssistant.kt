@@ -140,8 +140,10 @@ class GeminiLiveAssistant {
                     inspect, compare, or give an opinion about a real-world object, vehicle, place, or design
                     and a photograph would materially help. Use a concise subject query, not a vague phrase.
                     The tool searches public Wikimedia Commons images and sends the retrieved image pixels to
-                    a multimodal Gemini model for visual inspection. It returns observed image details and
-                    source attribution. If no relevant image is found, say so; never pretend you saw an image.
+                    a multimodal Gemini model for visual inspection. The search runs asynchronously so it
+                    does not block microphone/audio processing. First acknowledge briefly that you are searching;
+                    when the app sends the completed findings as a follow-up message, base your visual opinion on
+                    those findings. If no relevant image is found, say so; never pretend you saw an image.
                     Do not call it for every ordinary question or for sensitive/private-person image searches.
                     You also have getCurrentDateTime. Call it whenever the user asks for the current
                     date/time or when a time-sensitive answer depends on the present moment. Never
