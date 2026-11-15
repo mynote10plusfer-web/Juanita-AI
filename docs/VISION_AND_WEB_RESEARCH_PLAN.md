@@ -9,7 +9,7 @@ Documento di progettazione per una nuova funzionalità richiesta dall'utente il 
 - Restare su Firebase Spark / Gemini Developer API; nessun Blaze, billing, servizio/API a pagamento, server GPU o chiave segreta incorporata nell'APK.
 - Conservare esattamente sei schede: Home, Avatar, Sveglia, Settaggi, Memoria, Altro.
 - Questa funzione è comprensione visiva e ricerca di contenuti, non generazione/animazione dell'Avatar. La fase Avatar resta ultima.
-- Le due modalità sono entrambe richieste: (1) Juanita cerca autonomamente fotografie online e le analizza; (2) l'utente può scegliere esplicitamente una propria fotografia dalla galleria e mostrarla a Juanita. Nessun upload automatico e nessuna memorizzazione cloud permanente.
+- Le due modalità sono entrambe richieste: (1) Juanita cerca autonomamente fotografie online e le analizza; (2) l'utente può scegliere esplicitamente una propria fotografia dalla galleria e mostrarla a Juanita. Nessun invio automatico e nessuna archiviazione persistente gestita dall'app. Quando l'utente conferma, l'immagine viene trasmessa a Gemini per l'analisi secondo le condizioni di trattamento del provider.
 
 ## Esperienza richiesta — semplicità prima di tutto
 
@@ -29,7 +29,7 @@ Esempio: «Cerca la Yamaha Tricity 300 2025 e dimmi cosa ne pensi esteticamente�
 ### A. Fotografie mostrate dall'utente
 - Aggiungere nella Home un'azione semplice «Mostra una foto» che apre il selettore fotografico Android (Photo Picker) senza permessi estesi di lettura della galleria.
 - L'utente seleziona una foto e conferma esplicitamente l'invio; mostrare una piccola anteprima e consentire di annullare/rimuovere prima dell'invio.
-- Analizzare l'immagine con Gemini multimodale e la domanda o il contesto della conversazione. Non salvare automaticamente il file in Memoria, Avatar Studio o cloud.
+- Analizzare l'immagine con Gemini multimodale e la domanda o il contesto della conversazione. Non salvare automaticamente il file in Memoria, Avatar Studio o in uno storage cloud gestito dall'app. L'immagine viene trasmessa al servizio Gemini per la richiesta esplicitamente confermata.
 - Gestire immagini grandi, formati non supportati, URI non più disponibili, annullamento, rete assente, timeout ed errori quota con messaggi semplici.
 
 ### B. Ricerca autonoma di fotografie da parte di Juanita
@@ -87,4 +87,4 @@ Esempio: «Cerca la Yamaha Tricity 300 2025 e dimmi cosa ne pensi esteticamente�
 - Google Search grounding e obblighi di visualizzazione: https://firebase.google.com/docs/ai-logic/grounding-google-search
 - Requisiti input immagini: https://firebase.google.com/docs/ai-logic/input-file-requirements
 
-Ultimo aggiornamento: 2026-11-15.
+## Stato implementazione (15 novembre 2026)\n\n- Implementato nel ramo sperimentale: selezione esplicita Photo Picker, preview, domanda facoltativa e analisi Gemini multimodale dalla Home.\n- Implementato nel ramo sperimentale: tool Gemini Live `searchAndAnalyzeImages`, ricerca anonima Wikimedia Commons, download HTTPS limitato, analisi dei pixel con Gemini e presentazione immagine/fonte nella Home.\n- In attesa: compilazione CI sull'head esatto, test automatizzati, test manuali Note10+ e verifica qualità/pertinenza dei risultati Commons. Nessuna APK di questa nuova versione è ancora approvata.\n\nUltimo aggiornamento: 2026-11-15.
