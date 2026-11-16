@@ -174,6 +174,7 @@ fun PhotoUnderstandingSection(
                                         )
                                     }
                                     model.generateContent(prompt).text?.takeIf { it.isNotBlank() }
+                                        ?: "Non sono riuscita a ottenere una descrizione della foto."
                                 }
                             }
                             if (result == null) {
@@ -195,7 +196,7 @@ fun PhotoUnderstandingSection(
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black)
             ) {
-                Text(if (busy) "Analisi in corso…" else if (status.contains("Riprova")) "Riprova analisi" else "Invia la foto a Juanita")
+                Text(if (busy) "Analisi in corso…" else if (status.contains("Riprova") || status.startsWith("Analisi non riuscita")) "Riprova analisi" else "Invia la foto a Juanita")
             }
             Text(status, color = Color(0xFF9A9DA4), fontSize = 11.sp)
             if (answer.isNotBlank()) {
