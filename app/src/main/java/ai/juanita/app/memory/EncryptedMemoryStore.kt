@@ -248,7 +248,21 @@ class EncryptedMemoryStore(context: Context) {
         if (!isConversationArchiveEnabled || text.isBlank()) return
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
-        appendEncryptedSessionTurn(ArchivedTurn(UUID.randomUUID().toString(), safeRole, text, timestampMillis, personaId), sessionId)
+        // Preserve an existing derived index in memory, invalidate it before the source
+        // journal changes, then atomically publish the updated index after the frame is durable.
+        // If the process dies between these steps, the missing index is safely rebuilt.
+        val previousIndex = readArchiveRecallIndex()
+        invalidateArchiveRecallIndex()
+        val turn = ArchivedTurn(UUID.randomUUID().toString(), safeRole, text, timestampMillis, personaId)
+        appendEncryptedSessionTurn(turn, sessionId)
+        if (previousIndex != null) {
+            runCatching {
+                writeArchiveRecallIndex((previousIndex + archiveIndexEntry(sessionId, turn)).distinctBy { it.id })
+            }.onFailure {
+                invalidateArchiveRecallIndex()
+                Log.w(TAG, "Unable to update encrypted conversation recall index; it will be rebuilt", it)
+            }
+        }
         purgeExpiredArchive()
     }
 
@@ -717,6 +731,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun deleteConversationRange(sessionId: String, startInclusive: Long, endExclusive: Long) {
         require(endExclusive > startInclusive)
+        invalidateArchiveRecallIndex()
         filterRecords { record ->
             if (record.optString("kind") != "turn" || record.optString("sessionId") != sessionId) true
             else record.optLong("createdAt") < startInclusive || record.optLong("createdAt") >= endExclusive
@@ -731,7 +746,9 @@ class EncryptedMemoryStore(context: Context) {
         }
     }
 
+    @Synchronized
     fun deleteConversation(sessionId: String) {
+        invalidateArchiveRecallIndex()
         filterRecords { record -> record.optString("kind") != "turn" || record.optString("sessionId") != sessionId }
         deleteSessionArchive(sessionId)
     }
@@ -816,20 +833,30 @@ class EncryptedMemoryStore(context: Context) {
         if (terms.isEmpty()) return emptyList()
         purgeExpiredArchive()
         val phrase = normalized.takeIf { it.length >= 5 }
-        return allArchivedTurns().asSequence()
-            .filter { it.first != excludeSessionId && (it.second.personaId == personaId) }
-            .mapNotNull { (sessionId, turn) ->
-            val body = normalizeSearchText(turn.text)
-            val matches = terms.count { term -> body.contains(term) }
-            if (matches == 0) return@mapNotNull null
-            val phraseBonus = if (phrase != null && body.contains(phrase)) 3.0 else 0.0
-            val density = matches.toDouble() / terms.size
-            val ageDays = ((System.currentTimeMillis() - turn.timestampMillis).coerceAtLeast(0L) / MILLIS_PER_DAY).toDouble()
-            val recency = 1.0 / (1.0 + ageDays / 45.0)
-            val score = phraseBonus + density * 4.0 + matches * 0.35 + recency * 0.25
-            ArchivedSearchHit(sessionId, turn, score, matches)
-        }.sortedWith(compareByDescending<ArchivedSearchHit> { it.score }.thenByDescending { it.turn.timestampMillis })
-            .take(limit.coerceIn(1, 20)).toList()
+        val candidates = (readArchiveRecallIndex() ?: rebuildArchiveRecallIndex()).asSequence()
+            .filter { it.sessionId != excludeSessionId && it.personaId == personaId }
+            .mapNotNull { entry ->
+                val matches = terms.count { term -> term in entry.terms }
+                if (matches == 0) return@mapNotNull null
+                val phraseBonus = if (phrase != null && entry.terms.joinToString(" ").contains(phrase)) 3.0 else 0.0
+                val density = matches.toDouble() / terms.size
+                val ageDays = ((System.currentTimeMillis() - entry.timestampMillis).coerceAtLeast(0L) / MILLIS_PER_DAY).toDouble()
+                val recency = 1.0 / (1.0 + ageDays / 45.0)
+                val score = phraseBonus + density * 4.0 + matches * 0.35 + recency * 0.25
+                Triple(entry, score, matches)
+            }
+            .sortedWith(compareByDescending<Triple<ArchiveRecallIndexEntry, Double, Int>> { it.second }
+                .thenByDescending { it.first.timestampMillis })
+            .take(limit.coerceIn(1, 20))
+            .toList()
+
+        // Only decrypt the small ranked result set. The persistent index contains
+        // normalized terms and routing metadata, never transcript text.
+        return candidates.mapNotNull { (entry, score, matches) ->
+            readArchivedTurnById(entry.sessionId, entry.id)?.let { turn ->
+                ArchivedSearchHit(entry.sessionId, turn, score, matches)
+            }
+        }
     }
 
     /**
@@ -1061,6 +1088,135 @@ class EncryptedMemoryStore(context: Context) {
         val matchedTerms: Int
     )
 
+    private data class ArchiveRecallIndexEntry(
+        val id: String,
+        val sessionId: String,
+        val terms: Set<String>,
+        val timestampMillis: Long,
+        val role: String,
+        val personaId: String?
+    )
+
+    private fun archiveRecallIndexFile(): File =
+        File(appContext.filesDir, "conversation_recall_index.enc")
+
+    private fun archiveIndexEntry(sessionId: String, turn: ArchivedTurn) = ArchiveRecallIndexEntry(
+        id = turn.id,
+        sessionId = sessionId,
+        terms = normalizeSearchText(turn.text).split(' ')
+            .filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.toSet(),
+        timestampMillis = turn.timestampMillis,
+        role = turn.role,
+        personaId = turn.personaId
+    )
+
+    private fun invalidateArchiveRecallIndex() {
+        val index = archiveRecallIndexFile()
+        if (index.exists()) check(index.delete()) { "Unable to invalidate encrypted conversation recall index" }
+        val temporary = File(appContext.filesDir, "conversation_recall_index.enc.tmp")
+        if (temporary.exists()) check(temporary.delete()) { "Unable to remove incomplete conversation recall index" }
+    }
+
+    private fun readArchiveRecallIndex(): List<ArchiveRecallIndexEntry>? {
+        val file = archiveRecallIndexFile()
+        if (!file.isFile) return null
+        return runCatching {
+            val packed = file.readBytes()
+            require(packed.size > GCM_IV_LENGTH) { "Encrypted conversation recall index is truncated" }
+            val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+            val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val root = JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+            require(root.optInt("version", -1) == ARCHIVE_RECALL_INDEX_VERSION)
+            val records = root.getJSONArray("entries")
+            buildList {
+                for (index in 0 until records.length()) {
+                    val record = records.getJSONObject(index)
+                    val terms = record.getJSONArray("terms")
+                    add(ArchiveRecallIndexEntry(
+                        id = record.getString("id"),
+                        sessionId = record.getString("sessionId"),
+                        terms = buildSet { for (termIndex in 0 until terms.length()) add(terms.getString(termIndex)) },
+                        timestampMillis = record.getLong("timestamp"),
+                        role = record.optString("role", "USER"),
+                        personaId = record.optString("personaId").takeIf { it.isNotBlank() }
+                    ))
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun rebuildArchiveRecallIndex(): List<ArchiveRecallIndexEntry> {
+        val entries = allArchivedTurns().map { (sessionId, turn) -> archiveIndexEntry(sessionId, turn) }
+            .distinctBy { it.id }
+        writeArchiveRecallIndex(entries)
+        return entries
+    }
+
+    private fun writeArchiveRecallIndex(entries: List<ArchiveRecallIndexEntry>) {
+        val root = JSONObject().apply {
+            put("version", ARCHIVE_RECALL_INDEX_VERSION)
+            put("createdAt", System.currentTimeMillis())
+            put("entries", JSONArray().apply {
+                entries.forEach { entry ->
+                    put(JSONObject().apply {
+                        put("id", entry.id)
+                        put("sessionId", entry.sessionId)
+                        put("terms", JSONArray(entry.terms.sorted()))
+                        put("timestamp", entry.timestampMillis)
+                        put("role", entry.role)
+                        put("personaId", entry.personaId ?: "")
+                    })
+                }
+            })
+        }
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val packed = cipher.iv + cipher.doFinal(root.toString().toByteArray(Charsets.UTF_8))
+        val target = archiveRecallIndexFile()
+        val temporary = File(appContext.filesDir, "conversation_recall_index.enc.tmp")
+        FileOutputStream(temporary).use { output ->
+            output.write(packed)
+            output.fd.sync()
+        }
+        try {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: Exception) {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    private fun readArchivedTurnById(sessionId: String, turnId: String): ArchivedTurn? {
+        // Legacy transcript records remain inside the encrypted metadata envelope.
+        val legacy = readRecords()
+        for (index in 0 until legacy.length()) {
+            val record = legacy.optJSONObject(index) ?: continue
+            if (record.optString("kind") == "turn" &&
+                record.optString("sessionId") == sessionId &&
+                record.optString("id") == turnId
+            ) {
+                return ArchivedTurn(
+                    turnId, record.optString("role"), record.optString("text"),
+                    record.optLong("createdAt"), record.optString("personaId").takeIf { it.isNotBlank() }
+                )
+            }
+        }
+
+        // New append-only journal frames can be located by their authenticated filename
+        // metadata and only the selected AES-GCM frame needs to be decrypted.
+        val journal = sessionJournalDirectory(sessionId)
+        if (journal.isDirectory) {
+            val frame = journal.listFiles { file ->
+                file.isFile && file.name.endsWith("_$turnId.enc")
+            }?.singleOrNull()
+            if (frame != null) return readEncryptedJournalFrame(frame)
+        }
+        // Compatibility with older packed session archives; this path is used only
+        // for legacy files and is removed naturally after compaction/migration.
+        return readPackedSessionArchive(sessionArchiveFile(sessionId)).firstOrNull { it.id == turnId }
+    }
+
     private fun normalizeSearchText(value: String): String =
         java.text.Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{Mn}+"), "")
@@ -1072,6 +1228,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun deleteArchiveRange(startInclusive: Long, endExclusive: Long) {
         require(endExclusive > startInclusive)
+        invalidateArchiveRecallIndex()
         filterRecords { record ->
             if (record.optString("kind") != "turn") true else {
                 val timestamp = record.optLong("createdAt")
@@ -1190,6 +1347,7 @@ class EncryptedMemoryStore(context: Context) {
         // Retention is enforced at most once per day, or immediately after the user changes it.
         if (lastPurge > 0L && (now - lastPurge).coerceAtLeast(0L) < MILLIS_PER_DAY) return
         val cutoff = now - days * MILLIS_PER_DAY
+        invalidateArchiveRecallIndex()
         filterRecords { record -> record.optString("kind") != "turn" || record.optLong("createdAt") >= cutoff }
         var purgeCompleted = true
         sessionArchiveSessionIds().forEach { sessionId ->
@@ -1395,6 +1553,8 @@ class EncryptedMemoryStore(context: Context) {
     /** Clears every archived turn and semantic memory record (legacy all-data operation). */
     @Synchronized
     fun clearAll() {
+        invalidateMemoryRecallIndex()
+        invalidateArchiveRecallIndex()
         check(preferences.edit().remove(KEY_ENCRYPTED_DATA).commit()) {
             "Unable to clear encrypted memory metadata"
         }
@@ -1469,9 +1629,10 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     private fun writeRecords(records: JSONArray, synchronous: Boolean = false) {
-        // Invalidate before touching source records. A crash can only cause a safe rebuild,
-        // never leave a stale index that appears authoritative.
+        // Invalidate derived indexes before touching source records. A crash can only cause
+        // a safe rebuild, never leave a stale index that appears authoritative.
         invalidateMemoryRecallIndex()
+        invalidateArchiveRecallIndex()
         val migratedRecords = migrateLegacyTranscriptRecords(records)
         persistMemoryFiles(migratedRecords)
         val nonMemoryRecords = JSONArray().apply {
@@ -1676,6 +1837,7 @@ class EncryptedMemoryStore(context: Context) {
         private const val KEY_SAFE_MEMORY_DEFAULT_APPLIED = "safe_memory_default_applied"
         private const val KEY_MEMORY_CLEAR_VERSION = "memory_clear_version"
         private const val RECALL_INDEX_VERSION = 1
+        private const val ARCHIVE_RECALL_INDEX_VERSION = 1
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
         private const val KEY_LAST_ARCHIVE_PURGE_AT = "conversation_archive_last_purge_at"
         private const val MILLIS_PER_DAY = 86_400_000L
