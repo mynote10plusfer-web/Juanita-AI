@@ -955,7 +955,8 @@ class JuanitaVoiceService : Service() {
                     val error = configsResult.exceptionOrNull()?.javaClass?.simpleName ?: "Unknown"
                     voiceDiagnostics.event("audio.recording.probe.error", "error=$error")
                 }
-                // Device-wide recorder diagnostics are advisory; sample sparsely to avoid needless wakeups.\n                delay(30_000L)
+                // Device-wide recorder diagnostics are advisory; sample sparsely to avoid needless wakeups.
+                delay(30_000L)
             }
         }
     }
