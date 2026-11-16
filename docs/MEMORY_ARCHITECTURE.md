@@ -1,6 +1,8 @@
 # Juanita AI — Memory Architecture and Human-like Recall
 
-**Status:** user-approved engineering direction, 2026-11-13. Design specification only; implementation and device validation are not yet complete.
+**Status update — 2026-11-16:** source reconciliation and recall regression fix in progress on `feature/memory-recall-reliability`, based on PR #44. Durable personal memories already use independently encrypted per-record files; conversation transcripts already use encrypted per-session archives and append-only AES-GCM journal frames. The old 100-record/32 KB cap no longer applies to durable memory records. Do not restart that migration. The remaining major gaps are an encrypted incremental search index, semantic/paraphrase retrieval, non-blocking observable retrieval, queue overflow handling, and scale/crash/device validation. Automatic extracted memories were previously stored as provisional records but excluded from both session-start context and live recall; the current branch fixes that visibility while explicitly labelling them provisional.
+
+**Status:** user-approved engineering direction, 2026-11-13. Design specification and implementation are in progress; device validation is not complete.
 
 ## Product objective
 
@@ -119,15 +121,16 @@ The goal is human-like continuity and useful initiative, not pretending the soft
 
 ## Current-code gaps to address before claiming completion
 
-The current implementation is a useful first layer, not yet a human-like memory system:
-- The working transcript cache is limited to a small recent-turn window; it is not yet a full task-aware working-memory model.
-- Automatic semantic extraction is batch-based and bounded; failed extraction retains a pending batch, but the queue has a hard capacity that needs back-pressure and durable overflow handling.
-- Curated memory storage has hard caps (currently 100 items / 32 KB) and legacy transcript caps. These must not silently erase important long-term knowledge; replace only after a tested migration and scalable storage design.
-- Retrieval currently performs lexical ranking and can scan/decrypt archive files. Add an incremental encrypted index and hybrid retrieval before the archive grows.
-- Some archive read paths suppress decryption errors and can make unavailable records appear absent. Surface a distinct retrieval error and preserve unreadable ciphertext.
+The current implementation is a useful first layer, not yet a complete memory system:
+- Durable curated memory records are already independently encrypted per record; the former 100-item / 32 KB cap does not apply to these records. Legacy non-memory metadata and pending queues still use the encrypted SharedPreferences envelope and need independent review.
+- The automatic extraction queue is encrypted and survives process recreation, but is bounded to eight turns. Add explicit back-pressure/overflow handling that never drops the only copy of an unprocessed turn.
+- Retrieval is currently lexical and can scan/decrypt all retained archive sessions. There is no incremental encrypted token index yet; add one without modifying or replacing source archives, with rebuild-on-corruption and safe fallback.
+- Lexical matching can miss paraphrases and multilingual synonyms. Add deterministic query expansion and a tested local semantic ranking option only if CPU/RAM/battery cost is acceptable; keyword fallback must always remain available.
+- Automatically extracted memories are deliberately unconfirmed in the UI. They must nevertheless be available to recall as clearly labelled provisional evidence; excluding them made learned information invisible. This is being corrected on the 2026-11-16 memory-recall branch.
+- The Live tool callback currently waits synchronously for local retrieval. Introduce a bounded, observable retrieval path and a natural spoken acknowledgement only when a real delay occurs; do not block transcript intake or audio callbacks.
 - Memory extraction, episodic archive and working continuity are separate layers but their provenance/links and consolidation lifecycle need stronger guarantees.
-- The Live tool callback currently waits synchronously for local retrieval. Introduce a bounded, observable retrieval path and a natural spoken acknowledgement only when a real delay occurs.
-- Memory behavior needs regression tests for process death, restart, network loss, long conversations, corrections, contradictory facts, duplicate extraction, concurrent persona switching, corrupt index/archive, Keystore loss, and cross-persona recall.
+- Some archive read paths suppress decryption errors and can make unavailable records appear absent. Surface a distinct retrieval error and preserve unreadable ciphertext.
+- Memory behavior needs regression tests for process death, restart, network loss, long conversations, corrections, contradictory facts, duplicate extraction, concurrent persona switching, corrupt index/archive, Keystore loss, and cross-persona recall..
 
 ## Delivery gates
 
