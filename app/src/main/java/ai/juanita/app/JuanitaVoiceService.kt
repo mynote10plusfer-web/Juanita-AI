@@ -112,15 +112,29 @@ class JuanitaVoiceService : Service() {
     private var lastAudioRecordingDiagnosticSignature: String? = null
     private var lastAudioRecordingDiagnosticAtMs: Long = 0L
     private val thermalStatusListener = PowerManager.OnThermalStatusChangedListener { status ->
+        val level = when (status) {
+            PowerManager.THERMAL_STATUS_NONE -> "NONE"
+            PowerManager.THERMAL_STATUS_LIGHT -> "LIGHT"
+            PowerManager.THERMAL_STATUS_MODERATE -> "MODERATE"
+            PowerManager.THERMAL_STATUS_SEVERE -> "SEVERE"
+            PowerManager.THERMAL_STATUS_CRITICAL -> "CRITICAL"
+            PowerManager.THERMAL_STATUS_EMERGENCY -> "EMERGENCY"
+            PowerManager.THERMAL_STATUS_SHUTDOWN -> "SHUTDOWN"
+            else -> "UNKNOWN"
+        }
+        voiceDiagnostics.event("thermal.status", "level=$level; value=$status")
+        // SEVERE means Android is applying significant throttling, not that shutdown
+        // is imminent. Keep the conversation alive and reserve automatic stop for
+        // CRITICAL or higher, when the platform has exhausted normal power reductions.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-            status >= PowerManager.THERMAL_STATUS_SEVERE
+            status >= PowerManager.THERMAL_STATUS_CRITICAL
         ) {
             serviceScope.launch {
                 if (lifecycleState == VoiceLifecycleState.ACTIVE) {
-                    Log.w("JuanitaVoiceService", "Severe device thermal status ($status); stopping Live audio to protect the phone")
+                    Log.w("JuanitaVoiceService", "Critical device thermal status ($level/$status); stopping Live audio")
                     requestStop(
                         preserveContinuitySnapshot = true,
-                        finalMessage = "Sessione terminata per proteggere il telefono dal surriscaldamento"
+                        finalMessage = "Sessione terminata per proteggere il telefono: temperatura interna critica"
                     )
                 }
             }
@@ -976,6 +990,8 @@ class JuanitaVoiceService : Service() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || thermalListenerRegistered) return
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         runCatching {
+            val currentStatus = powerManager.currentThermalStatus
+            voiceDiagnostics.event("thermal.initial", "level=$currentStatus")
             powerManager.addThermalStatusListener(
                 androidx.core.content.ContextCompat.getMainExecutor(this),
                 thermalStatusListener
