@@ -98,3 +98,10 @@ These are examples of tone, not fixed scripts. Juanita should vary naturally and
 ## Runtime implementation note — 0.10.7 candidate
 
 The 0.10.7 candidate adds a structured contextual/emotional/social reasoning policy to the active `PersonaProfile.toSystemInstruction` used when Gemini Live starts. It instructs the model to infer conversational need cautiously, adapt between listening and practical help, consider alternative perspectives in relationship conflicts, accept corrections, and avoid diagnosis or overanalysis. This is prompt-level guidance only: it is not a separate emotion classifier, does not inspect voice prosody, and does not establish that the model follows the policy reliably. Regression tests check that the instructions are present; scenario-based evaluation and physical-device conversations remain required.
+
+
+## Runtime reasoning policy extension — 2026-11-16
+
+The active digital identity instruction now adds a structured social-reasoning protocol: identify the likely conversational need; separate reported facts from interpretations, possible feelings, unknowns and alternative explanations; avoid automatically taking sides in interpersonal conflicts; distinguish observations from predictions; prefer honest communication; and adapt depth so ordinary conversation is not over-analysed. It also explicitly keeps inferred mood and theories about third-party motives out of durable memory, while allowing user-confirmed support preferences to be remembered.
+
+This remains model-guided contextual reasoning, not a deterministic emotion classifier. Presence of the instruction and its regression assertions do not prove behavioral accuracy. Scenario evaluation across ambiguity, sarcasm, conflict, explicit corrections and multilingual turns is still required before claiming the feature is complete.
