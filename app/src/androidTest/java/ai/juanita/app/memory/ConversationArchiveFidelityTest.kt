@@ -174,8 +174,8 @@ class ConversationArchiveFidelityTest {
             assertTrue("Continuity persistence must leave unrelated memory ciphertext untouched",
                 unrelatedMemoryFile.isFile && unrelatedMemoryFile.readBytes().contentEquals(byteArrayOf(1, 2, 3, 4)))
         } finally {
-            store.clearContinuitySnapshot(sessionId)
             unrelatedMemoryFile.delete()
+            store.clearContinuitySnapshot(sessionId)
         }
     }
 
