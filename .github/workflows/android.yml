@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability" ]
   pull_request:
-    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability" ]
+    branches: [ "main", "feature/conversational-reflection", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability" ]
   workflow_dispatch:
     inputs:
       detekt_bootstrap:
