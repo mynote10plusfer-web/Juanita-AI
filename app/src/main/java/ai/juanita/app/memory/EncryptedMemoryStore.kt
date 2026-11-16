@@ -845,6 +845,168 @@ class EncryptedMemoryStore(context: Context) {
                 (memory.personaId == null || (personaId != null && memory.personaId == personaId))
         }
 
+    /**
+     * Encrypted, rebuildable concept index for long-term recall. It stores only normalized
+     * terms and record metadata, never replaces the independently encrypted source memories.
+     * A missing, stale or corrupt index is rebuilt from the authoritative memory files.
+     */
+    private data class RecallIndexEntry(
+        val id: String,
+        val terms: Set<String>,
+        val category: String,
+        val source: String,
+        val createdAtMillis: Long,
+        val confidence: Float,
+        val confirmedByUser: Boolean,
+        val sensitive: Boolean,
+        val personaId: String?,
+        val topic: String
+    )
+
+    @Synchronized
+    private fun indexedRecallableMemories(personaId: String?): List<MemoryItem> {
+        val entries = readRecallIndex() ?: rebuildRecallIndex()
+        return entries.asSequence()
+            .filter { entry ->
+                !entry.sensitive &&
+                    (entry.confirmedByUser || entry.source == "automatic") &&
+                    (entry.personaId == null || (personaId != null && entry.personaId == personaId))
+            }
+            .map { entry ->
+                // The index contains concepts, not plaintext memory. The full source text
+                // is loaded only for the small set selected by the ranking engine.
+                MemoryItem(
+                    id = entry.id,
+                    text = entry.terms.joinToString(" "),
+                    category = entry.category,
+                    source = entry.source,
+                    createdAtMillis = entry.createdAtMillis,
+                    confidence = entry.confidence,
+                    confirmedByUser = entry.confirmedByUser,
+                    sensitive = entry.sensitive,
+                    personaId = entry.personaId,
+                    topic = entry.topic
+                )
+            }.toList()
+    }
+
+    private fun rebuildRecallIndex(): List<RecallIndexEntry> {
+        val entries = listMemories().map { memory ->
+            RecallIndexEntry(
+                id = memory.id,
+                terms = MemoryAssociationEngine.indexTerms(memory.text),
+                category = memory.category,
+                source = memory.source,
+                createdAtMillis = memory.createdAtMillis,
+                confidence = memory.confidence,
+                confirmedByUser = memory.confirmedByUser,
+                sensitive = memory.sensitive,
+                personaId = memory.personaId,
+                topic = memory.topic
+            )
+        }
+        writeRecallIndex(entries)
+        return entries
+    }
+
+    private fun recallIndexFile(): File = File(appContext.filesDir, "memory_recall_index.enc")
+
+    private fun invalidateMemoryRecallIndex() {
+        val file = recallIndexFile()
+        if (file.exists()) check(file.delete()) { "Unable to invalidate derived memory index" }
+        val temporary = File(appContext.filesDir, "memory_recall_index.enc.tmp")
+        if (temporary.exists()) check(temporary.delete()) { "Unable to remove incomplete memory index" }
+    }
+
+    private fun readRecallIndex(): List<RecallIndexEntry>? {
+        val file = recallIndexFile()
+        if (!file.isFile) return null
+        return runCatching {
+            val packed = file.readBytes()
+            require(packed.size > GCM_IV_LENGTH) { "Encrypted recall index is truncated" }
+            val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+            val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+            val root = JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+            require(root.optInt("version", -1) == RECALL_INDEX_VERSION) { "Unsupported recall index version" }
+            val records = root.getJSONArray("entries")
+            buildList {
+                for (index in 0 until records.length()) {
+                    val record = records.getJSONObject(index)
+                    val terms = record.getJSONArray("terms")
+                    add(RecallIndexEntry(
+                        id = record.getString("id"),
+                        terms = buildSet { for (termIndex in 0 until terms.length()) add(terms.getString(termIndex)) },
+                        category = record.optString("category", "general"),
+                        source = record.optString("source", "unknown"),
+                        createdAtMillis = record.optLong("createdAt"),
+                        confidence = record.optDouble("confidence", 1.0).toFloat().coerceIn(0f, 1f),
+                        confirmedByUser = record.optBoolean("confirmed", false),
+                        sensitive = record.optBoolean("sensitive", false),
+                        personaId = record.optString("personaId").takeIf { it.isNotBlank() },
+                        topic = record.optString("topic", "general")
+                    ))
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun writeRecallIndex(entries: List<RecallIndexEntry>) {
+        val root = JSONObject().apply {
+            put("version", RECALL_INDEX_VERSION)
+            put("createdAt", System.currentTimeMillis())
+            put("entries", JSONArray().apply {
+                entries.forEach { entry ->
+                    put(JSONObject().apply {
+                        put("id", entry.id)
+                        put("terms", JSONArray(entry.terms.sorted()))
+                        put("category", entry.category)
+                        put("source", entry.source)
+                        put("createdAt", entry.createdAtMillis)
+                        put("confidence", entry.confidence.toDouble())
+                        put("confirmed", entry.confirmedByUser)
+                        put("sensitive", entry.sensitive)
+                        put("personaId", entry.personaId ?: "")
+                        put("topic", entry.topic)
+                    })
+                }
+            })
+        }
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val packed = cipher.iv + cipher.doFinal(root.toString().toByteArray(Charsets.UTF_8))
+        val target = recallIndexFile()
+        val temporary = File(appContext.filesDir, "memory_recall_index.enc.tmp")
+        FileOutputStream(temporary).use { output ->
+            output.write(packed)
+            output.fd.sync()
+        }
+        try {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: Exception) {
+            Files.move(temporary.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
+    }
+
+    @Synchronized
+    private fun readMemoryRecord(id: String): MemoryItem? {
+        if (!id.matches(Regex("[A-Za-z0-9-]{1,80}"))) return null
+        val file = File(memoryDirectory(), "$id.mem")
+        if (!file.isFile) return null
+        val packed = file.readBytes()
+        require(packed.size > GCM_IV_LENGTH) { "Encrypted memory file is invalid: ${file.name}" }
+        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+        val record = JSONObject(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+        require(record.optString("kind") == "memory" && record.optString("id") == id) {
+            "Memory index points to an invalid source record"
+        }
+        return jsonToMemory(record)
+    }
+
     /** Search both curated facts and full episodic history for a live conversational cue. */
     @Synchronized
     fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null, personaId: String? = null): String {
@@ -857,10 +1019,12 @@ class EncryptedMemoryStore(context: Context) {
         // is modified and weak single-word coincidences are rejected by the engine.
         val relevantMemories = MemoryAssociationEngine.rank(
             query = query,
-            memories = recallableMemories(personaId),
+            memories = indexedRecallableMemories(personaId),
             routedTopic = routedTopic,
             limit = 10
-        )
+        ).mapNotNull { ranked ->
+            readMemoryRecord(ranked.memory.id)?.let { ranked.copy(memory = it) }
+        }
         val episodes = searchArchivedTurns(query, 8, excludeSessionId, personaId)
         if (relevantMemories.isEmpty() && episodes.isEmpty()) return ""
         return buildString {
@@ -1305,6 +1469,9 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     private fun writeRecords(records: JSONArray, synchronous: Boolean = false) {
+        // Invalidate before touching source records. A crash can only cause a safe rebuild,
+        // never leave a stale index that appears authoritative.
+        invalidateMemoryRecallIndex()
         val migratedRecords = migrateLegacyTranscriptRecords(records)
         persistMemoryFiles(migratedRecords)
         val nonMemoryRecords = JSONArray().apply {
@@ -1508,6 +1675,7 @@ class EncryptedMemoryStore(context: Context) {
         private const val KEY_AUTO_MEMORY_ENABLED = "automatic_memory_enabled"
         private const val KEY_SAFE_MEMORY_DEFAULT_APPLIED = "safe_memory_default_applied"
         private const val KEY_MEMORY_CLEAR_VERSION = "memory_clear_version"
+        private const val RECALL_INDEX_VERSION = 1
         private const val KEY_ARCHIVE_RETENTION_DAYS = "conversation_archive_retention_days"
         private const val KEY_LAST_ARCHIVE_PURGE_AT = "conversation_archive_last_purge_at"
         private const val MILLIS_PER_DAY = 86_400_000L
