@@ -398,7 +398,7 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
-    fun automaticallySuggestedMemoriesRequireApprovalBeforeTheyEnterAssistantContext() {
+    fun automaticallyExtractedMemoriesAreAvailableAsProvisionalContextUntilConfirmed() {
         val context = isolatedContext()
         val store = EncryptedMemoryStore(context)
         try {
@@ -408,13 +408,22 @@ class IdentityMemoryNamespaceTest {
                 "communication",
                 0.96f,
                 confirmedByUser = false
-            ) ?: throw AssertionError("Expected pending memory")
-            assertFalse(pending.confirmedByUser)
-            assertFalse(store.buildAssistantContext().contains(pending.text))
+            ) ?: throw AssertionError("Expected provisional memory")
+            assertFalse("Extraction must not silently mark a fact as user-confirmed", pending.confirmedByUser)
+
+            val provisionalContext = store.buildAssistantContext()
+            assertTrue("Opted-in automatic memories should support continuity before confirmation",
+                provisionalContext.contains(pending.text))
+            assertTrue("The assistant must receive an explicit provisional label",
+                provisionalContext.contains("automatically-extracted, provisional"))
+
             assertTrue(store.confirmMemory(pending.id))
             val restored = EncryptedMemoryStore(isolatedContext()).listMemories().single { it.id == pending.id }
-            assertTrue(restored.confirmedByUser)
-            assertTrue(store.buildAssistantContext().contains(pending.text))
+            assertTrue("Explicit approval must persist across store recreation", restored.confirmedByUser)
+            val confirmedContext = store.buildAssistantContext()
+            assertTrue(confirmedContext.contains(pending.text))
+            assertTrue("The context must distinguish user approval from automatic extraction",
+                confirmedContext.contains("user-confirmed"))
         } finally {
             store.clearAll()
         }
