@@ -32,7 +32,7 @@ class MemoryAssociationEngineTest {
         val result = MemoryAssociationEngine.rank(
             query = "Tell me about the application",
             memories = listOf(anchor, weak),
-            routedTopic = "general"
+            routedTopic = "projects_technology"
         )
 
         assertEquals(listOf(anchor.id), result.map { it.memory.id })
@@ -40,7 +40,7 @@ class MemoryAssociationEngineTest {
 
     @Test
     fun commonLongWordIsNotTreatedAsDistinctiveWhenRepeatedAcrossArchive() {
-        val anchor = memory("Project history includes conversation")
+        val anchor = memory("Project history includes conversation", topic = "projects_technology")
         val candidate = memory("Conversation quality matters")
         val third = memory("Conversation memory design is evolving")
 
