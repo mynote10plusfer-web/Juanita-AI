@@ -41,9 +41,11 @@ import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.PublicPreviewAPI
 import com.google.firebase.ai.type.content
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.InputStream
 
 /**
@@ -153,41 +155,47 @@ fun PhotoUnderstandingSection(
                     answer = ""
                     status = "Sto osservando la foto…"
                     scope.launch {
-                        val result = runCatching {
-                            withContext(Dispatchers.IO) {
-                                val model = Firebase.ai(backend = GenerativeBackend.googleAI())
-                                    .generativeModel("gemini-3.8-flash")
-                                val prompt = content {
-                                    image(bitmap)
-                                    text(
-                                        buildString {
-                                            append("Sei Juanita, l'assistente personale dell'utente. Analizza attentamente la fotografia. ")
-                                            append("Descrivi solo ciò che è realmente visibile; distingui osservazioni e ipotesi, ")
-                                            append("non inventare identità, dettagli tecnici o contesto non dimostrabili. ")
-                                            append("Rispondi in italiano, in modo naturale e conversazionale. ")
-                                            append("Domanda dell'utente: ")
-                                            append(question.ifBlank { "Che cosa noti in questa fotografia?" })
-                                        }
-                                    )
+                        try {
+                            val result = withTimeoutOrNull(PHOTO_ANALYSIS_TIMEOUT_MS) {
+                                withContext(Dispatchers.IO) {
+                                    val model = Firebase.ai(backend = GenerativeBackend.googleAI())
+                                        .generativeModel("gemini-3.8-flash")
+                                    val prompt = content {
+                                        image(bitmap)
+                                        text(
+                                            buildString {
+                                                append("Sei Juanita, l'assistente personale dell'utente. Analizza attentamente la fotografia. ")
+                                                append("Descrivi solo ciò che è realmente visibile; distingui osservazioni e ipotesi, ")
+                                                append("non inventare identità, dettagli tecnici o contesto non dimostrabili. ")
+                                                append("Rispondi in italiano, in modo naturale e conversazionale. ")
+                                                append("Domanda dell'utente: ")
+                                                append(question.ifBlank { "Che cosa noti in questa fotografia?" })
+                                            }
+                                        )
+                                    }
+                                    model.generateContent(prompt).text?.takeIf { it.isNotBlank() }
                                 }
-                                model.generateContent(prompt).text?.takeIf { it.isNotBlank() }
-                                    ?: "Non sono riuscita a ottenere una descrizione della foto."
                             }
+                            if (result == null) {
+                                status = "Gemini non ha risposto entro 45 secondi. Controlla la connessione e premi Riprova."
+                            } else {
+                                answer = result
+                                status = "Analisi completata."
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (error: Exception) {
+                            status = "Analisi non riuscita: ${error.localizedMessage ?: "controlla la connessione e riprova"}"
+                        } finally {
+                            busy = false
                         }
-                        result.onSuccess {
-                            answer = it
-                            status = "Analisi completata."
-                        }.onFailure {
-                            status = "Analisi non riuscita: ${it.localizedMessage ?: "controlla la connessione e riprova"}"
-                        }
-                        busy = false
                     }
                 },
                 enabled = selectedBitmap != null && !busy,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black)
             ) {
-                Text(if (busy) "Analisi in corso…" else "Invia la foto a Juanita")
+                Text(if (busy) "Analisi in corso…" else if (status.contains("Riprova")) "Riprova analisi" else "Invia la foto a Juanita")
             }
             Text(status, color = Color(0xFF9A9DA4), fontSize = 11.sp)
             if (answer.isNotBlank()) {
@@ -202,6 +210,8 @@ fun PhotoUnderstandingSection(
         }
     }
 }
+
+private const val PHOTO_ANALYSIS_TIMEOUT_MS = 45_000L
 
 private fun decodePhoto(resolver: ContentResolver, uri: Uri): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
