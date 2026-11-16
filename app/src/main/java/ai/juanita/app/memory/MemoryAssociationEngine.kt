@@ -17,7 +17,8 @@ internal object MemoryAssociationEngine {
         val memory: MemoryItem,
         val score: Int,
         val direct: Boolean,
-        val bridgeTerms: List<String>
+        val bridgeTerms: List<String>,
+        val topicFallback: Boolean = false
     )
 
     fun rank(
@@ -71,8 +72,14 @@ internal object MemoryAssociationEngine {
                             (candidate.memory.confidence.coerceIn(0f, 1f) * 2).toInt(),
                         false,
                         bridgeTerms
-                    )
-                }
+                    ) ?: if (candidate.memory.topic == routedTopic) {
+                        // Preserve the previous topic-router fallback, but rank it below
+                        // direct evidence and grounded concept links.
+                        RankedMemory(candidate.memory, 1, false, emptyList(), topicFallback = true)
+                    } else null
+                } ?: if (candidate.memory.topic == routedTopic) {
+                    RankedMemory(candidate.memory, 1, false, emptyList(), topicFallback = true)
+                } else null
             }
         }
 
