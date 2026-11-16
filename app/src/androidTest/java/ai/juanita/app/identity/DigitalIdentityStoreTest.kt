@@ -269,7 +269,7 @@ class DigitalIdentityStoreTest {
         assertTrue(instruction.contains("SPOKEN EXPRESSION AND PROSODY"))
         assertTrue(instruction.contains("Do not add spoken labels"))
         assertTrue(instruction.contains("vary natural openings"))
-        assertTrue(instruction.contains("never claim precise pitch or prosody control"))
+        assertTrue(instruction.contains("Never claim precise pitch or prosody control"))
         assertTrue(instruction.contains("CONTEXTUAL SOCIAL AND PSYCHOLOGICAL REASONING"))
         assertTrue(instruction.contains("separate: what was directly reported"))
         assertTrue(instruction.contains("Do not automatically take sides"))
