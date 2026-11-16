@@ -248,21 +248,13 @@ class EncryptedMemoryStore(context: Context) {
         if (!isConversationArchiveEnabled || text.isBlank()) return
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
         require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
-        // Preserve an existing derived index in memory, invalidate it before the source
-        // journal changes, then atomically publish the updated index after the frame is durable.
-        // If the process dies between these steps, the missing index is safely rebuilt.
-        val previousIndex = readArchiveRecallIndex()
+        // The recall index is derived and rebuildable from the encrypted source journal.
+        // Do not decrypt and rewrite an ever-growing index for every transcript turn:
+        // invalidate the cache, append the authoritative frame, and rebuild only on the
+        // next actual archive search. This keeps per-turn work bounded as sessions grow.
         invalidateArchiveRecallIndex()
         val turn = ArchivedTurn(UUID.randomUUID().toString(), safeRole, text, timestampMillis, personaId)
         appendEncryptedSessionTurn(turn, sessionId)
-        if (previousIndex != null) {
-            runCatching {
-                writeArchiveRecallIndex((previousIndex + archiveIndexEntry(sessionId, turn)).distinctBy { it.id })
-            }.onFailure {
-                invalidateArchiveRecallIndex()
-                Log.w(TAG, "Unable to update encrypted conversation recall index; it will be rebuilt", it)
-            }
-        }
         purgeExpiredArchive()
     }
 
