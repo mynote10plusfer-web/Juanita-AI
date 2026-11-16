@@ -313,6 +313,7 @@ class MainActivity : ComponentActivity() {
                 onListConversationTurns = { sessionId, pageIndex, pageSize -> memoryStore.listConversationTurnsPage(sessionId, pageIndex, pageSize) },
                 onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
                 onRefreshArchive = { runCatching { memoryStore.listArchivedConversations() }.getOrDefault(emptyList()) },
+                 onSearchArchive = { query -> memoryStore.searchArchivedTurns(query, limit = 12) },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
                 onSaveAvatarProfile = { avatarStore.save(it) },
@@ -384,6 +385,7 @@ private fun JuanitaApp(
     onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
+    onSearchArchive: (String) -> List<EncryptedMemoryStore.ArchivedSearchHit>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
     onSaveAvatarProfile: (AvatarProfile) -> AvatarProfile,
@@ -1173,7 +1175,7 @@ private fun JuanitaApp(
                     onRefreshArchive = onRefreshArchive,
                     onClearArchive = onClearArchive,
                     onRetentionChanged = onRetentionChanged,
-                     onSearchArchive = { query -> memoryStore.searchArchivedTurns(query, limit = 12) }
+                     onSearchArchive = onSearchArchive
                 )
 
                 }
