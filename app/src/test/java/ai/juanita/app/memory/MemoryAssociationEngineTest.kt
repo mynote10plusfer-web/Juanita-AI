@@ -47,7 +47,7 @@ class MemoryAssociationEngineTest {
         val result = MemoryAssociationEngine.rank(
             query = "Tell me about project history",
             memories = listOf(anchor, candidate, third),
-            routedTopic = "general"
+            routedTopic = "projects_technology"
         )
 
         assertEquals(listOf(anchor.id), result.map { it.memory.id })
