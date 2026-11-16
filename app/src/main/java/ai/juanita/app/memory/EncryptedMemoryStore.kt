@@ -1188,7 +1188,19 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     private fun readArchivedTurnById(sessionId: String, turnId: String): ArchivedTurn? {
-        // Legacy transcript records remain inside the encrypted metadata envelope.
+        // New append-only journal frames can be located by their authenticated filename
+        // metadata and only the selected AES-GCM frame needs to be decrypted.
+        val journal = sessionJournalDirectory(sessionId)
+        if (journal.isDirectory) {
+            val frame = journal.listFiles { file ->
+                file.isFile && file.name.endsWith("_$turnId.enc")
+            }?.singleOrNull()
+            if (frame != null) return readEncryptedJournalFrame(frame)
+        }
+        // Compatibility with older packed session archives.
+        readPackedSessionArchive(sessionArchiveFile(sessionId)).firstOrNull { it.id == turnId }?.let { return it }
+
+        // Oldest transcript records may still reside in the encrypted metadata envelope.
         val legacy = readRecords()
         for (index in 0 until legacy.length()) {
             val record = legacy.optJSONObject(index) ?: continue
@@ -1202,19 +1214,7 @@ class EncryptedMemoryStore(context: Context) {
                 )
             }
         }
-
-        // New append-only journal frames can be located by their authenticated filename
-        // metadata and only the selected AES-GCM frame needs to be decrypted.
-        val journal = sessionJournalDirectory(sessionId)
-        if (journal.isDirectory) {
-            val frame = journal.listFiles { file ->
-                file.isFile && file.name.endsWith("_$turnId.enc")
-            }?.singleOrNull()
-            if (frame != null) return readEncryptedJournalFrame(frame)
-        }
-        // Compatibility with older packed session archives; this path is used only
-        // for legacy files and is removed naturally after compaction/migration.
-        return readPackedSessionArchive(sessionArchiveFile(sessionId)).firstOrNull { it.id == turnId }
+        return null
     }
 
     private fun normalizeSearchText(value: String): String =
