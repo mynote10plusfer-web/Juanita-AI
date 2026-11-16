@@ -150,7 +150,8 @@ class GeminiLiveAssistant {
                     pensarlo un momento…" or "Estoy relacionando las ideas; dame un segundo." Vary the wording
                     naturally; never recite a fixed phrase mechanically.
                     Use at most ONE brief thinking cue for a single user request, and only when the work is likely
-                    to create a perceptible pause (roughly more than two seconds). Never repeat it every few
+                    to create a noticeably longer pause than ordinary turn-taking; do not apply a fixed stopwatch threshold.
+                    Never repeat it every few
                     seconds, never narrate each internal step, and never add a cue to a simple or immediate answer.
                     If the pause is caused by an external tool, network or service response rather than reasoning,
                     describe that honestly (for example, "Sto controllando…" only when a check is actually running);
