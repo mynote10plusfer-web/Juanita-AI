@@ -384,6 +384,39 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun encryptedEpisodicRecallIndexPersistsUpdatesIncrementallyAndRebuildsAfterDeletion() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "episodic-index-" + UUID.randomUUID()
+        val firstPhrase = "Ricordo sentiero vulcanico Tenerife " + UUID.randomUUID()
+        val secondPhrase = "Ricordo laboratorio astronomico notturno " + UUID.randomUUID()
+        val indexFile = File(context.filesDir, "conversation_recall_index.enc")
+        try {
+            store.appendConversationTurn(sessionId, "USER", firstPhrase, personaId = "juanita-1")
+            val firstHits = store.searchArchivedTurns(firstPhrase, personaId = "juanita-1")
+            assertTrue("Initial recall should find the archived event", firstHits.any { it.turn.text == firstPhrase })
+            assertTrue("A persistent encrypted episodic index should be created", indexFile.isFile)
+            assertFalse("The derived index must never contain transcript plaintext",
+                String(indexFile.readBytes(), Charsets.UTF_8).contains(firstPhrase))
+
+            val restoredStore = EncryptedMemoryStore(isolatedContext())
+            assertTrue("The index should remain reusable after recreating the store",
+                restoredStore.searchArchivedTurns(firstPhrase, personaId = "juanita-1").any { it.turn.text == firstPhrase })
+
+            // Once an index exists, appending a new journal frame updates it incrementally.
+            restoredStore.appendConversationTurn(sessionId, "USER", secondPhrase, personaId = "juanita-1")
+            assertTrue("A newly appended event must become searchable through the updated index",
+                restoredStore.searchArchivedTurns(secondPhrase, personaId = "juanita-1").any { it.turn.text == secondPhrase })
+
+            restoredStore.deleteConversation(sessionId)
+            assertTrue("Deleting the source conversation must invalidate the index and remove its hits",
+                restoredStore.searchArchivedTurns(firstPhrase, personaId = "juanita-1").isEmpty())
+        } finally {
+            store.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
