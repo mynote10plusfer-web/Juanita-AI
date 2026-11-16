@@ -165,6 +165,42 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun automaticallyExtractedMemoriesAreAvailableToRecallAsProvisionalEvidence() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val fact = "Juanita AI usa una memoria condivisa organizzata per progetti."
+        try {
+            val saved = store.addMemory(
+                text = fact,
+                category = "project",
+                source = "automatic",
+                confidence = 0.88f,
+                confirmedByUser = false,
+                sensitive = false
+            )
+
+            assertTrue("Automatic facts must be included in session-start continuity",
+                store.buildAssistantContext().contains(fact))
+
+            val recalled = store.buildRelevantRecallContext("Come procede il progetto Juanita AI?")
+            assertTrue("A topic-matched automatic fact must be returned even before manual confirmation",
+                recalled.contains(fact))
+            assertTrue("The model must be told that this is provisional extracted evidence",
+                recalled.contains("provisional"))
+            assertTrue("The record must remain unconfirmed in the user-facing memory state",
+                store.listMemories().single { it.id == saved.id }.confirmedByUser.not())
+
+            assertTrue(store.confirmMemory(saved.id))
+            val confirmedRecall = store.buildRelevantRecallContext("Come procede il progetto Juanita AI?")
+            assertTrue("Confirmed facts must remain retrievable", confirmedRecall.contains(fact))
+            assertTrue("Confirmed facts must be distinguished from provisional extraction",
+                confirmedRecall.contains("user-confirmed"))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
     fun editingAMemorySupersedesTheOldFactAndPreservesCorrectionHistory() {
         val context = isolatedContext()
         val store = EncryptedMemoryStore(context)
