@@ -79,7 +79,8 @@ internal fun MemoryPrivacySection(
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
-    onRefreshMemories: () -> List<MemoryItem>
+    onRefreshMemories: () -> List<MemoryItem>,
+    onSearchArchive: (String) -> List<EncryptedMemoryStore.ArchivedSearchHit>
 ) {
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var autoMemoryEnabled by remember { mutableStateOf(initialAutoMemoryEnabled) }
@@ -95,6 +96,10 @@ internal fun MemoryPrivacySection(
     var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var memoryPage by remember { mutableStateOf(0) }
+    var archiveSearchQuery by remember { mutableStateOf("") }
+    var archiveSearchResults by remember { mutableStateOf<List<EncryptedMemoryStore.ArchivedSearchHit>>(emptyList()) }
+    var archiveSearchPerformed by remember { mutableStateOf(false) }
+    var archiveSearchLoading by remember { mutableStateOf(false) }
     val ioScope = rememberCoroutineScope()
     // Refresh once when the Memory tab is opened, never on every streaming status update.
     LaunchedEffect(Unit) {
@@ -188,7 +193,7 @@ internal fun MemoryPrivacySection(
                             Text(item.text, color = Color.White, fontSize = 13.sp)
                             Text("${item.category} · ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAtMillis))}", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                             if (!item.confirmedByUser) {
-                                Text("SUGGERITO · IN ATTESA DELLA TUA CONFERMA · NON ANCORA USATO NELLE RISPOSTE", color = Color(0xFFE4BD69), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text("RICORDO AUTOMATICO · PROVVISORIO · NON ANCORA CONFERMATO", color = Color(0xFFE4BD69), fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (!item.confirmedByUser) {
@@ -206,6 +211,64 @@ internal fun MemoryPrivacySection(
                 }
                 TextButton(onClick = { confirmAction = "clear_memories" }) {
                     Text("ELIMINA TUTTI I RICORDI PERSONALI", color = Color(0xFFE6A0A0), fontSize = 11.sp)
+                }
+            }
+
+            Divider(color = Color(0xFF343941))
+            Text("CERCA NELLE CONVERSAZIONI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Cerca un argomento o una frase nei messaggi archiviati. La ricerca usa l'indice cifrato locale e apre solo i passaggi pertinenti.",
+                color = Color(0xFF9A9DA4), fontSize = 11.sp)
+            OutlinedTextField(
+                value = archiveSearchQuery,
+                onValueChange = { archiveSearchQuery = it },
+                label = { Text("Cosa vuoi ritrovare?") },
+                placeholder = { Text("Es. decisioni sul progetto Juanita") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = {
+                        val query = archiveSearchQuery.trim()
+                        if (query.isNotBlank() && !archiveSearchLoading) {
+                            archiveSearchLoading = true
+                            archiveSearchPerformed = false
+                            ioScope.launch {
+                                val result = withContext(Dispatchers.IO) { onSearchArchive(query) }
+                                archiveSearchResults = result
+                                archiveSearchPerformed = true
+                                archiveSearchLoading = false
+                            }
+                        }
+                    },
+                    enabled = archiveSearchQuery.isNotBlank() && !archiveSearchLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                ) { Text(if (archiveSearchLoading) "Ricerca…" else "Cerca") }
+                TextButton(onClick = {
+                    archiveSearchQuery = ""
+                    archiveSearchResults = emptyList()
+                    archiveSearchPerformed = false
+                }) { Text("Pulisci", color = gold) }
+            }
+            if (archiveSearchPerformed) {
+                if (archiveSearchResults.isEmpty()) {
+                    Text("Nessun passaggio pertinente trovato nell'archivio.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                } else {
+                    Text("${archiveSearchResults.size} passaggi pertinenti trovati", color = gold, fontSize = 11.sp)
+                    archiveSearchResults.forEach { hit ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(
+                                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(hit.turn.timestampMillis)) +
+                                    " · " + hit.turn.role,
+                                color = Color(0xFF9A9DA4), fontSize = 10.sp
+                            )
+                            Text(hit.turn.text, color = Color.White, fontSize = 12.sp)
+                        }
+                        Divider(color = Color(0xFF343941))
+                    }
                 }
             }
 
