@@ -165,6 +165,37 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun encryptedRecallIndexIsReusedAcrossSessionsAndRebuiltAfterCorrection() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val indexFile = File(context.filesDir, "memory_recall_index.enc")
+        val original = "Juanita project uses a local encrypted associative memory index."
+        val corrected = "Juanita project uses a rebuildable encrypted semantic recall index."
+        try {
+            val saved = store.addMemory(original, category = "project")
+            assertTrue(store.buildRelevantRecallContext("Tell me about the Juanita project").contains(original))
+            assertTrue("First recall should build a persistent encrypted index", indexFile.isFile)
+            val encryptedBytes = indexFile.readBytes()
+            assertTrue(encryptedBytes.isNotEmpty())
+            assertFalse("Index must not expose plaintext memory", String(encryptedBytes, Charsets.UTF_8).contains(original))
+
+            val recreated = EncryptedMemoryStore(isolatedContext())
+            assertTrue("A recreated store should reuse the persisted index",
+                recreated.buildRelevantRecallContext("Tell me about the Juanita project").contains(original))
+            assertTrue(indexFile.isFile)
+
+            assertTrue(recreated.updateMemory(saved.id, corrected))
+            assertFalse("A source-record mutation must invalidate the derived index", indexFile.exists())
+            val correctedRecall = recreated.buildRelevantRecallContext("Tell me about the Juanita project")
+            assertTrue(correctedRecall.contains(corrected))
+            assertFalse(correctedRecall.contains(original))
+            assertTrue("The next recall must rebuild the index from authoritative encrypted records", indexFile.isFile)
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
     fun automaticallyExtractedMemoriesAreAvailableToRecallAsProvisionalEvidence() {
         val context = isolatedContext()
         val store = EncryptedMemoryStore(context)
