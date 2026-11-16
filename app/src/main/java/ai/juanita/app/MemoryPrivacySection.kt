@@ -100,6 +100,7 @@ internal fun MemoryPrivacySection(
     var archiveSearchResults by remember { mutableStateOf<List<EncryptedMemoryStore.ArchivedSearchHit>>(emptyList()) }
     var archiveSearchPerformed by remember { mutableStateOf(false) }
     var archiveSearchLoading by remember { mutableStateOf(false) }
+    var archiveSearchError by remember { mutableStateOf<String?>(null) }
     val ioScope = rememberCoroutineScope()
     // Refresh once when the Memory tab is opened, never on every streaming status update.
     LaunchedEffect(Unit) {
@@ -233,9 +234,13 @@ internal fun MemoryPrivacySection(
                         if (query.isNotBlank() && !archiveSearchLoading) {
                             archiveSearchLoading = true
                             archiveSearchPerformed = false
+                            archiveSearchError = null
                             ioScope.launch {
-                                val result = withContext(Dispatchers.IO) { onSearchArchive(query) }
-                                archiveSearchResults = result
+                                val result = withContext(Dispatchers.IO) { runCatching { onSearchArchive(query) } }
+                                archiveSearchResults = result.getOrDefault(emptyList())
+                                archiveSearchError = result.exceptionOrNull()?.let {
+                                    "Ricerca non riuscita: l’archivio potrebbe contenere dati temporaneamente non leggibili. I file originali non vengono cancellati."
+                                }
                                 archiveSearchPerformed = true
                                 archiveSearchLoading = false
                             }
@@ -248,10 +253,13 @@ internal fun MemoryPrivacySection(
                     archiveSearchQuery = ""
                     archiveSearchResults = emptyList()
                     archiveSearchPerformed = false
+                    archiveSearchError = null
                 }) { Text("Pulisci", color = gold) }
             }
             if (archiveSearchPerformed) {
-                if (archiveSearchResults.isEmpty()) {
+                if (archiveSearchError != null) {
+                    Text(archiveSearchError.orEmpty(), color = Color(0xFFFFCC80), fontSize = 12.sp)
+                } else if (archiveSearchResults.isEmpty()) {
                     Text("Nessun passaggio pertinente trovato nell'archivio.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 } else {
                     Text("${archiveSearchResults.size} passaggi pertinenti trovati", color = gold, fontSize = 11.sp)
