@@ -1172,7 +1172,8 @@ private fun JuanitaApp(
                     onDeleteConversationRange = onDeleteConversationRange,
                     onRefreshArchive = onRefreshArchive,
                     onClearArchive = onClearArchive,
-                    onRetentionChanged = onRetentionChanged
+                    onRetentionChanged = onRetentionChanged,
+                     onSearchArchive = { query -> memoryStore.searchArchivedTurns(query, limit = 12) }
                 )
 
                 }
