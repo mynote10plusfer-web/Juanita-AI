@@ -109,6 +109,8 @@ internal object MemoryAssociationEngine {
      * high-confidence equivalence groups rather than an open-ended thesaurus: the goal
      * is to bridge obvious wording changes without pretending to understand every phrase.
      */
+    internal fun indexTerms(value: String): Set<String> = meaningfulTerms(value)
+
     private fun meaningfulTerms(value: String): Set<String> =
         normalize(value).split(' ')
             .filter { it.length >= 3 && it !in STOP_WORDS }
