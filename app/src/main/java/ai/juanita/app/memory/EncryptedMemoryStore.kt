@@ -872,7 +872,11 @@ class EncryptedMemoryStore(context: Context) {
                     val memory = ranked.memory
                     val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date(memory.createdAtMillis))
                     val evidenceStatus = if (memory.confirmedByUser) "user-confirmed" else "automatically-extracted; provisional"
-                    val relation = if (ranked.direct) "direct match" else "associated via shared concepts: ${ranked.bridgeTerms.joinToString(", ")}"
+                    val relation = when {
+                        ranked.direct -> "direct match"
+                        ranked.topicFallback -> "same-topic fallback"
+                        else -> "associated via shared concepts: ${ranked.bridgeTerms.joinToString(", ")}"
+                    }
                     appendLine("- [$relation; topic=${memory.topic}; type=${memory.category}; confidence=${memory.confidence}; $evidenceStatus; recorded $date] ${memory.text}")
                 }
             }
