@@ -1,3 +1,15 @@
+# 2026-11-16 — User reprioritizes memory reliability and recall
+
+**DECISION: USER REQUESTED.** Improve memory recall and efficiency as the immediate next feature while preserving the existing six-tab layout, shared user knowledge across Juanita/José, separate persona-private episodes, local encryption, free-only services and stable release isolation.
+
+- Confirmed six tabs from current source: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. Do not add a seventh tab.
+- Current source reconciliation: Home hosts Gemini Live voice, selected identity/session controls and visual-search result; Avatar hosts profile metadata/Studio and camera vision (substantive generation/animation remains last); Sveglia hosts local alarms/scheduler and morning briefing; Settaggi hosts permissions, identity/voice/language/personality editor and regional voice lab; Memoria hosts encrypted personal facts, transcript archive, retention, review/edit/delete and automatic-memory consent; Altro hosts voice diagnostics, improvement reports and exit/debug tools.
+- Critical defect identified: automatically extracted memories are stored with `source="automatic"` and usually `confirmedByUser=false`, while both session-start context and live recall filtered them out. This makes learned facts invisible unless the user manually confirms them. The memory-recall branch changes retrieval to include non-sensitive automatic memories as explicitly provisional evidence, without falsely marking them user-confirmed.
+- Retrieval also uses lexical token overlap and scans/decrypts archived session files; paraphrases can be missed and search is synchronous. Next engineering stages: add encrypted incremental index with rebuild-safe fallback; improve multilingual/paraphrase query expansion; make recall bounded and observable; speak a short acknowledgement only when retrieval actually takes perceptible time; add stronger retrieval, migration, crash, and performance tests.
+- No automatic vector/cloud indexing, paid API, billing, new permission, hidden microphone, or continuous background model inference.
+- Preserve roadmap order outside this user-approved memory focus: reliability/device safety; C3 controlled presence; C4 character learning; C5 scalable encrypted memory/archive; Personal Organizer/Agenda; Avatar last. Continue voice/microphone physical validation separately; do not claim it fixed based on CI.
+- PR #44 remains experimental and unmerged; this memory work branches from its exact head. Stable v0.11.12 and production signing identity remain untouched.
+
 # Juanita AI — Product requirements and implementation roadmap
 
 ## 2026-11-15 — Regional TTS microphone regression and follow-up health check
