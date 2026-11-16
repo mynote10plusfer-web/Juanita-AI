@@ -272,7 +272,7 @@ class EncryptedMemoryStore(context: Context) {
         if (text.isBlank()) return
         require(sessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
         val safeRole = role.uppercase().takeIf { it == "USER" || it == "ASSISTANT" } ?: return
-        val records = readRecords()
+        val records = readMetadataRecords()
         val previous = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
             it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId
         }
@@ -303,7 +303,7 @@ class EncryptedMemoryStore(context: Context) {
                 }
             })
         })
-        writeRecords(kept, synchronous = true)
+        writeMetadataRecords(kept, synchronous = true)
     }
 
     /**
@@ -314,7 +314,7 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun carryForwardLatestContinuitySnapshot(newSessionId: String, personaId: String? = null): String {
         require(newSessionId.matches(Regex("[A-Za-z0-9-]{1,80}"))) { "Invalid conversation id" }
-        val records = readRecords()
+        val records = readMetadataRecords()
         val latest = (0 until records.length())
             .mapNotNull { records.optJSONObject(it) }
             .filter { it.optString("kind") == "continuity_snapshot" && it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId }
@@ -337,14 +337,14 @@ class EncryptedMemoryStore(context: Context) {
             if (record.optString("kind") != "continuity_snapshot" || record.optString("personaId").takeIf { it.isNotBlank() } != personaId) kept.put(record)
         }
         kept.put(carried)
-        writeRecords(kept, synchronous = true)
+        writeMetadataRecords(kept, synchronous = true)
         return buildContinuityContext(newSessionId, personaId = personaId)
     }
 
     /** Build a bounded chronological recovery packet from the encrypted active-session snapshot. */
     @Synchronized
     fun buildContinuityContext(sessionId: String, recentFallback: String = "", personaId: String? = null): String {
-        val records = readRecords()
+        val records = readMetadataRecords()
         val record = (0 until records.length()).mapNotNull { records.optJSONObject(it) }.firstOrNull {
             it.optString("kind") == "continuity_snapshot" && it.optString("sessionId") == sessionId &&
                 it.optString("personaId").takeIf { value -> value.isNotBlank() } == personaId
@@ -1564,6 +1564,42 @@ class EncryptedMemoryStore(context: Context) {
             check(file.deleteRecursively()) { "Unable to clear encrypted memory file: ${file.name}" }
         }
         sessionArchiveSessionIds().forEach(::deleteSessionArchive)
+    }
+
+    /**
+     * Read only the encrypted metadata envelope. Active-session continuity is transient
+     * metadata and must not enumerate/decrypt every independently encrypted personal memory.
+     */
+    private fun readMetadataRecords(): JSONArray {
+        val records = JSONArray()
+        val encoded = preferences.getString(KEY_ENCRYPTED_DATA, null) ?: return records
+        val packed = Base64.decode(encoded, Base64.NO_WRAP)
+        require(packed.size > GCM_IV_LENGTH) { "Encrypted memory data is invalid" }
+        val iv = packed.copyOfRange(0, GCM_IV_LENGTH)
+        val ciphertext = packed.copyOfRange(GCM_IV_LENGTH, packed.size)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.DECRYPT_MODE, getOrCreateKey(), GCMParameterSpec(GCM_TAG_BITS, iv))
+        val stored = JSONArray(String(cipher.doFinal(ciphertext), Charsets.UTF_8))
+        for (index in 0 until stored.length()) stored.optJSONObject(index)?.let(records::put)
+        return records
+    }
+
+    /**
+     * Persist continuity/metadata without touching durable per-record memories or derived
+     * recall indexes. This path deliberately avoids readMemoryFiles()/persistMemoryFiles()
+     * and synchronous full-store memory migration on every transcript turn.
+     */
+    private fun writeMetadataRecords(records: JSONArray, synchronous: Boolean = true) {
+        val boundedRecords = applyStorageLimits(records)
+        val cipher = Cipher.getInstance(TRANSFORMATION)
+        cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
+        val encrypted = cipher.doFinal(boundedRecords.toString().toByteArray(Charsets.UTF_8))
+        val editor = preferences.edit().putString(
+            KEY_ENCRYPTED_DATA,
+            Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
+        )
+        if (synchronous) check(editor.commit()) { "Unable to persist encrypted continuity metadata" }
+        else editor.apply()
     }
 
     private fun readRecords(): JSONArray {
