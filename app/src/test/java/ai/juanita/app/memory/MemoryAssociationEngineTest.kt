@@ -39,6 +39,21 @@ class MemoryAssociationEngineTest {
     }
 
     @Test
+    fun preservesTopicOnlyFallbackWithoutCallingItAnAssociation() {
+        val sameTopic = memory("A previous Android build used a different Gradle plugin", topic = "projects_technology")
+        val result = MemoryAssociationEngine.rank(
+            query = "How is the Juanita project progressing?",
+            memories = listOf(sameTopic),
+            routedTopic = "projects_technology"
+        )
+
+        assertEquals(1, result.size)
+        assertFalse(result.single().direct)
+        assertTrue(result.single().topicFallback)
+        assertTrue(result.single().bridgeTerms.isEmpty())
+    }
+
+    @Test
     fun directEvidenceAlwaysRanksBeforeAssociativeEvidence() {
         val anchor = memory("Juanita project voice engine")
         val linked = memory("Juanita project battery optimization")
