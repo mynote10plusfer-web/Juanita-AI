@@ -808,7 +808,8 @@ class GeminiLiveAssistant {
 
         healthJob = recoveryScope.launch {
             while (!manualStop && session === activeSession) {
-                // Local health checks are inexpensive, but a 5 s cadence avoids needless wakeups.\n                delay(5_000L)
+                // Local health checks are inexpensive, but a 5 s cadence avoids needless wakeups.
+                delay(5_000L)
                 if (!isAudioPipelineHealthy(activeSession)) {
                     onDiagnosticEvent("health.inactive", "sdkAudioActive=${activeSession.isAudioConversationActive()}; receiverActive=${ttsReceiverJob?.isActive == true}; sessionClosed=${activeSession.isClosed()}")
                     Log.w(TAG, "Live session or active audio receiver became inactive; starting controlled recovery")
