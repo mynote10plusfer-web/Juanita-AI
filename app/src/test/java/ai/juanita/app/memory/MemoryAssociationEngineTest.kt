@@ -39,6 +39,21 @@ class MemoryAssociationEngineTest {
     }
 
     @Test
+    fun commonLongWordIsNotTreatedAsDistinctiveWhenRepeatedAcrossArchive() {
+        val anchor = memory("Project history includes conversation")
+        val candidate = memory("Conversation quality matters")
+        val third = memory("Conversation memory design is evolving")
+
+        val result = MemoryAssociationEngine.rank(
+            query = "Tell me about project history",
+            memories = listOf(anchor, candidate, third),
+            routedTopic = "general"
+        )
+
+        assertEquals(listOf(anchor.id), result.map { it.memory.id })
+    }
+
+    @Test
     fun preservesTopicOnlyFallbackWithoutCallingItAnAssociation() {
         val sameTopic = memory("A previous Android build used a different Gradle plugin", topic = "projects_technology")
         val result = MemoryAssociationEngine.rank(
