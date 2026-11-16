@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -305,6 +306,34 @@ class ConversationArchiveFidelityTest {
             assertTrue(!beyondEnd.hasMore)
         } finally {
             store.deleteConversation(sessionId)
+        }
+    }
+
+
+    @Test
+    fun archiveIndexIsRebuiltOnDemandInsteadOfRewrittenForEveryNewTurn() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "lazy-index-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val indexFile = File(context.filesDir, "conversation_recall_index.enc")
+        val archiveWasEnabled = store.isConversationArchiveEnabled
+        store.setConversationArchiveEnabled(true)
+        try {
+            store.appendConversationTurn(sessionId, "USER", "La riunione sul progetto Quercia è fissata per lunedì.")
+            val firstSearch = store.buildRelevantRecallContext("progetto Quercia")
+            assertTrue(firstSearch.contains("progetto Quercia"))
+            assertTrue("A search should build the derived archive index", indexFile.isFile)
+
+            store.appendConversationTurn(sessionId, "ASSISTANT", "Per il progetto Quercia, la scadenza concordata è venerdì.")
+            assertFalse("Appending a turn should invalidate, not rewrite, the derived index", indexFile.exists())
+
+            val refreshedSearch = EncryptedMemoryStore(context).buildRelevantRecallContext("progetto Quercia")
+            assertTrue(refreshedSearch.contains("lunedì"))
+            assertTrue(refreshedSearch.contains("venerdì"))
+            assertTrue("The next search should rebuild the derived index", indexFile.isFile)
+        } finally {
+            store.deleteConversation(sessionId)
+            store.setConversationArchiveEnabled(archiveWasEnabled)
         }
     }
 
