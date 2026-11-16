@@ -852,21 +852,15 @@ class EncryptedMemoryStore(context: Context) {
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
         val routedTopic = MemoryTopicClassifier.classify(query)
-        val relevantMemories = recallableMemories(personaId).mapNotNull { memory ->
-            val body = normalizeSearchText(memory.text)
-            val hits = terms.count { term -> body.contains(term) }
-            val topicMatch = memory.topic == routedTopic
-            // Route into the likely topic first, but retain a broad lexical fallback so
-            // cross-topic facts and legacy records are never hidden by classification.
-            if (hits == 0 && !topicMatch) null
-            else {
-                val confirmationBoost = if (memory.confirmedByUser) 2 else 0
-                val score = hits * 3 + (if (topicMatch) 2 else 0) + confirmationBoost
-                memory to score
-            }
-        }.sortedWith(compareByDescending<Pair<MemoryItem, Int>> { it.second }
-            .thenByDescending { it.first.confidence }
-            .thenByDescending { it.first.createdAtMillis }).take(10)
+        // Build a conservative, query-scoped association graph. Direct evidence anchors
+        // one-hop links to other memories sharing meaningful concepts; no source record
+        // is modified and weak single-word coincidences are rejected by the engine.
+        val relevantMemories = MemoryAssociationEngine.rank(
+            query = query,
+            memories = recallableMemories(personaId),
+            routedTopic = routedTopic,
+            limit = 10
+        )
         val episodes = searchArchivedTurns(query, 8, excludeSessionId, personaId)
         if (relevantMemories.isEmpty() && episodes.isEmpty()) return ""
         return buildString {
