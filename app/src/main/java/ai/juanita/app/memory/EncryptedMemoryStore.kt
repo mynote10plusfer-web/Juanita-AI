@@ -744,11 +744,14 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000, personaId: String? = null): String {
         // Read-only context assembly: do not rewrite the complete encrypted store at session start.
-        val durableMemories = (if (personaId == null) listMemories().filter { it.personaId == null && it.confirmedByUser } else listMemoriesForPersona(personaId)).take(60)
+        // Automatically curated memories remain provisional until user confirmation,
+        // but they are still useful evidence for continuity. Excluding them here made
+        // the assistant appear to forget information it had already learned.
+        val durableMemories = recallableMemories(personaId).take(60)
         val memoryLines = durableMemories
             .take(40)
             .map { item ->
-                "- [${item.category}; confidence=${item.confidence}] ${item.text}"
+                "- [${item.category}; confidence=${item.confidence}; ${if (item.confirmedByUser) "user-confirmed" else "automatically-extracted, provisional"}] ${item.text}"
             }
             .joinToString("\n")
             .take(4200)
@@ -829,6 +832,19 @@ class EncryptedMemoryStore(context: Context) {
             .take(limit.coerceIn(1, 20)).toList()
     }
 
+    /**
+     * Automatically extracted facts are provisional in the UI until user confirmation,
+     * but excluding them from retrieval defeats automatic learning. Include them as
+     * provisional evidence, never as user-verified truth. Sensitive facts are excluded.
+     */
+    @Synchronized
+    private fun recallableMemories(personaId: String?): List<MemoryItem> =
+        listMemories().filter { memory ->
+            !memory.sensitive &&
+                (memory.confirmedByUser || memory.source == "automatic") &&
+                (memory.personaId == null || (personaId != null && memory.personaId == personaId))
+        }
+
     /** Search both curated facts and full episodic history for a live conversational cue. */
     @Synchronized
     fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null, personaId: String? = null): String {
@@ -836,17 +852,21 @@ class EncryptedMemoryStore(context: Context) {
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
         val routedTopic = MemoryTopicClassifier.classify(query)
-        val relevantMemories = (if (personaId == null) listMemories().filter { it.personaId == null && it.confirmedByUser } else listMemoriesForPersona(personaId)).mapNotNull { memory ->
+        val relevantMemories = recallableMemories(personaId).mapNotNull { memory ->
             val body = normalizeSearchText(memory.text)
             val hits = terms.count { term -> body.contains(term) }
             val topicMatch = memory.topic == routedTopic
             // Route into the likely topic first, but retain a broad lexical fallback so
             // cross-topic facts and legacy records are never hidden by classification.
             if (hits == 0 && !topicMatch) null
-            else memory to (hits * 3 + if (topicMatch) 2 else 0)
+            else {
+                val confirmationBoost = if (memory.confirmedByUser) 2 else 0
+                val score = hits * 3 + (if (topicMatch) 2 else 0) + confirmationBoost
+                memory to score
+            }
         }.sortedWith(compareByDescending<Pair<MemoryItem, Int>> { it.second }
             .thenByDescending { it.first.confidence }
-            .thenByDescending { it.first.createdAtMillis }).take(8)
+            .thenByDescending { it.first.createdAtMillis }).take(10)
         val episodes = searchArchivedTurns(query, 8, excludeSessionId, personaId)
         if (relevantMemories.isEmpty() && episodes.isEmpty()) return ""
         return buildString {
@@ -856,7 +876,8 @@ class EncryptedMemoryStore(context: Context) {
                 appendLine("RELATED LONG-TERM MEMORIES (shared topic index; routed topic: $routedTopic):")
                 relevantMemories.forEach { (memory, _) ->
                     val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(java.util.Date(memory.createdAtMillis))
-                    appendLine("- [topic=${memory.topic}; type=${memory.category}; recorded $date] ${memory.text}")
+                    val evidenceStatus = if (memory.confirmedByUser) "user-confirmed" else "automatically-extracted; provisional"
+                    appendLine("- [topic=${memory.topic}; type=${memory.category}; confidence=${memory.confidence}; $evidenceStatus; recorded $date] ${memory.text}")
                 }
             }
             if (episodes.isNotEmpty()) {
