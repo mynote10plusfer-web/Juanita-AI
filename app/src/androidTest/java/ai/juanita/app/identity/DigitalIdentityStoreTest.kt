@@ -264,6 +264,12 @@ class DigitalIdentityStoreTest {
         assertTrue(instruction.contains("does not merge character personalities"))
         assertTrue(instruction.contains("without aggression"))
         assertTrue(instruction.contains("never turn warmth or empathy into flattery"))
+        assertTrue(instruction.contains("NATURAL HUMAN CONVERSATION — ACTIVE EXPRESSION ENGINE"))
+        assertTrue(instruction.contains("Treat the inference as provisional"))
+        assertTrue(instruction.contains("SPOKEN EXPRESSION AND PROSODY"))
+        assertTrue(instruction.contains("Do not add spoken labels"))
+        assertTrue(instruction.contains("vary natural openings"))
+        assertTrue(instruction.contains("never claim precise pitch or prosody control"))
     }
 
     @Test
