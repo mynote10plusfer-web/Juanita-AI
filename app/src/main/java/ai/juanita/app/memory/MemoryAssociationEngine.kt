@@ -104,9 +104,15 @@ internal object MemoryAssociationEngine {
         val directScore: Int
     )
 
+    /**
+     * Deterministic multilingual concept normalization. These are deliberately small,
+     * high-confidence equivalence groups rather than an open-ended thesaurus: the goal
+     * is to bridge obvious wording changes without pretending to understand every phrase.
+     */
     private fun meaningfulTerms(value: String): Set<String> =
         normalize(value).split(' ')
             .filter { it.length >= 3 && it !in STOP_WORDS }
+            .map { CONCEPT_ALIASES[it] ?: it }
             .toSet()
 
     private fun normalize(value: String): String =
@@ -120,6 +126,29 @@ internal object MemoryAssociationEngine {
     private const val DISTINCTIVE_TERM_LENGTH = 8
     private const val ASSOCIATION_WEIGHT = 2
     private const val DISTINCTIVE_TERM_BONUS = 2
+
+    private val CONCEPT_ALIASES = buildMap {
+        fun group(canonical: String, vararg aliases: String) {
+            aliases.forEach { put(it, canonical) }
+            put(canonical, canonical)
+        }
+        group("motorcycle", "moto", "motocicletta", "motocicleta", "motorbike", "motorcycle", "scooter")
+        group("project", "progetto", "proyecto", "proyect", "initiative", "progetto")
+        group("work", "lavoro", "trabajo", "job", "employment", "profession")
+        group("home", "casa", "house", "housing", "hogar", "vivienda")
+        group("daughter", "figlia", "hija", "daughter", "daughters", "figlie", "hijas")
+        group("son", "figlio", "hijo", "son", "sons", "figli", "hijos")
+        group("voice", "voce", "voz", "voice", "voices", "voces")
+        group("battery", "batteria", "bateria", "battery", "batteries")
+        group("memory", "memoria", "memory", "memories", "recuerdo", "recuerdos", "ricordo", "ricordi")
+        group("relationship", "relazione", "relaciones", "relationship", "relationships", "rapporto", "rapporti")
+        group("travel", "viaggio", "viaggi", "viaje", "viajes", "travel", "trip", "trips")
+        group("money", "soldi", "dinero", "money", "finances", "finanza", "finanze")
+        group("health", "salute", "salud", "health", "wellbeing", "wellness")
+        group("food", "cibo", "comida", "food", "cucina", "cocina", "cooking")
+        group("problem", "problema", "problemi", "problemas", "problem", "problems", "issue", "issues")
+        group("decision", "decisione", "decisioni", "decision", "decisions", "decisión", "decisiones")
+    }
 
     private val STOP_WORDS = setOf(
         "che", "chi", "con", "come", "cosa", "dal", "dalla", "dalle", "dello", "della",
