@@ -44,6 +44,14 @@ internal object MemoryAssociationEngine {
             Candidate(memory, terms, direct, directScore)
         }
 
+        // Document frequency helps distinguish a rare concept from a broad word that
+        // happens to be long. Only terms present in at most two records can form a
+        // one-term distinctive bridge.
+        val documentFrequency = candidates
+            .flatMap { it.terms }
+            .groupingBy { it }
+            .eachCount()
+
         // Only evidence-bearing direct matches can act as association anchors.
         val anchors = candidates.filter { it.direct }
         val ranked = candidates.mapNotNull { candidate ->
@@ -53,7 +61,9 @@ internal object MemoryAssociationEngine {
                 val bestBridge = anchors
                     .map { anchor ->
                         val shared = candidate.terms.intersect(anchor.terms)
-                        val distinctive = shared.filter { it.length >= DISTINCTIVE_TERM_LENGTH }
+                        val distinctive = shared.filter {
+                            it.length >= DISTINCTIVE_TERM_LENGTH && (documentFrequency[it] ?: 0) <= 2
+                        }
                         val qualifies = shared.size >= MIN_SHARED_TERMS || distinctive.isNotEmpty()
                         val bridgeScore = if (qualifies) {
                             shared.size * ASSOCIATION_WEIGHT +
