@@ -69,6 +69,20 @@ class MemoryAssociationEngineTest {
     }
 
     @Test
+    fun recognizesHighConfidenceConceptsAcrossItalianSpanishAndEnglish() {
+        val motorcycle = memory("La motocicletta Yamaha è il mezzo usato ogni giorno", topic = "vehicles_transport")
+        val voice = memory("La voz paisa deve suonare naturale", topic = "projects_technology")
+        val result = MemoryAssociationEngine.rank(
+            query = "Tell me about my scooter and voice",
+            memories = listOf(motorcycle, voice),
+            routedTopic = "general"
+        )
+
+        assertEquals(setOf(motorcycle.id, voice.id), result.map { it.memory.id }.toSet())
+        assertTrue(result.all { it.direct })
+    }
+
+    @Test
     fun directEvidenceAlwaysRanksBeforeAssociativeEvidence() {
         val anchor = memory("Juanita project voice engine")
         val linked = memory("Juanita project battery optimization")
