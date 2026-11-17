@@ -882,7 +882,7 @@ private fun JuanitaApp(
                             // Stop it immediately when the selected identity changes; the next
                             // explicit Parla action will start a fresh session with the new profile.
                             JuanitaVoiceService.stop(context)
-                            liveStartError = "Personaggio cambiato: chiusura della conversazione precedente in corso. Premi Parla per usare il nuovo profilo."
+                            liveStartError = "Personaggio cambiato: sto chiudendo la vecchia sessione Gemini Live. Quando premi Parla si aprirà una nuova connessione con lingua, accento e voce del profilo selezionato."
                         }
                         activeDigitalIdentityId = id
                         onActiveDigitalIdentityChanged(id)
