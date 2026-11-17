@@ -293,7 +293,7 @@ class JuanitaVoiceService : Service() {
                                 } ?: throw IllegalStateException("L'identità selezionata non esiste più. Selezionala di nuovo nelle impostazioni.")
                             }
                             memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
-                            automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
+                            automaticMemoryEngine = AutomaticMemoryEngine(memoryStore, selectedIdentity?.effectiveMemoryScopeId ?: "shared")
 
                             val conversationId = UUID.randomUUID().toString()
                             activeConversationId = conversationId
