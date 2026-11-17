@@ -101,16 +101,7 @@ data class DigitalIdentity(
 ) {
     /** Ignore legacy per-profile values: memory sharing is determined by the stable character group. */
     val effectiveMemoryScopeId: String get() = sharedMemoryScopeId()
-    /** Map regional Spanish preferences to supported Live speech locales; accent remains in the profile prompt. */
-    val liveSpeechLanguageCode: String? get() = when {
-        preferredLanguageTag.equals("es-CO", ignoreCase = true) -> "es-US"
-        preferredLanguageTag.equals("es-ES", ignoreCase = true) -> "es-ES"
-        preferredLanguageTag.startsWith("es-", ignoreCase = true) -> "es-US"
-        preferredLanguageTag.startsWith("it", ignoreCase = true) -> "it-IT"
-        preferredLanguageTag.startsWith("en", ignoreCase = true) -> "en-US"
-        preferredLanguageTag.startsWith("pt", ignoreCase = true) -> "pt-BR"
-        else -> null
-    }
+
 }
 
 /**
