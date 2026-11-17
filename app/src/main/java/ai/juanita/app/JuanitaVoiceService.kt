@@ -30,6 +30,7 @@ import ai.juanita.app.memory.AutomaticMemoryEngine
 import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.profile.PersonalProfile
 import ai.juanita.app.profile.PersonalProfileStore
+import ai.juanita.app.presence.BackgroundLiveSafetyPolicy
 import ai.juanita.app.presence.VoiceSessionCommandMatcher
 import ai.juanita.app.presence.ConversationalPresenceContext
 import ai.juanita.app.presence.ConversationalPresencePolicy
