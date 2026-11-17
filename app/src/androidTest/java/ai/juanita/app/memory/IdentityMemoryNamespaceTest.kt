@@ -375,6 +375,41 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun automaticallyCuratedFactsAreSavedToAndRecalledOnlyWithinTheirCharacterGroup() {
+        val store = EncryptedMemoryStore(isolatedContext())
+        val feminineFact = "Fatto automatico femminile ${UUID.randomUUID()}"
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val saved = store.addAutomaticMemory(
+                feminineFact,
+                "project",
+                0.96f,
+                confirmedByUser = true,
+                memoryScopeId = "shared:feminine"
+            ) ?: throw AssertionError("Expected the automatic memory to be persisted")
+
+            assertEquals("shared:feminine", saved.personaId)
+            val canary = store.buildAssistantContext(
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombian = store.buildAssistantContext(
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val jose = store.buildAssistantContext(
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+            assertTrue(canary.contains(feminineFact))
+            assertTrue(colombian.contains(feminineFact))
+            assertFalse(jose.contains(feminineFact))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
     fun pendingAutomaticMemoryBatchesAreIsolatedAndCanBeClearedIndependently() {
         val store = EncryptedMemoryStore(isolatedContext())
         try {
