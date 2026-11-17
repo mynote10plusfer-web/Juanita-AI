@@ -72,7 +72,6 @@ class GeminiLiveAssistant {
     suspend fun start(
         systemInstruction: String,
         voiceName: String = DEFAULT_VOICE,
-        languageCode: String? = null,
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
         onProfileUpdate: (fields: Map<String, String>) -> String = { "Profile update unavailable." },
@@ -146,7 +145,7 @@ class GeminiLiveAssistant {
                 responseModality = ResponseModality.AUDIO
                 inputAudioTranscription = AudioTranscriptionConfig()
                 outputAudioTranscription = AudioTranscriptionConfig()
-                speechConfig = SpeechConfig(voice = Voice(voiceName.ifBlank { DEFAULT_VOICE }), languageCode = languageCode)
+                speechConfig = SpeechConfig(voice = Voice(voiceName.ifBlank { DEFAULT_VOICE }))
 
                 // Server-side VAD tuned to reject faint room noise and tolerate natural pauses.
                 realtimeInputConfig = realtimeInputConfig {
