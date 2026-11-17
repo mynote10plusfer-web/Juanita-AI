@@ -147,7 +147,8 @@ class AutomaticMemoryEngine(
                         ranked.candidate.category,
                         ranked.candidate.confidence,
                         batchVersion,
-                        confirmedByUser = !ranked.requiresUserConfirmation
+                        confirmedByUser = !ranked.requiresUserConfirmation,
+                        memoryScopeId = memoryScopeId
                     ) != null
                 ) savedCount++
             }
