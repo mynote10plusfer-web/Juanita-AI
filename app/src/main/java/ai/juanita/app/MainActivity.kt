@@ -192,6 +192,9 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (keepScreenOnForCall) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        runCatching {
+            startService(Intent(this, JuanitaVoiceService::class.java).setAction(JuanitaVoiceService.ACTION_ACTIVITY_FOREGROUND))
+        }.onFailure { Log.w("MainActivity", "Unable to notify voice service that UI returned to foreground", it) }
     }
 
     override fun onPause() {
