@@ -131,7 +131,7 @@ class EncryptedMemoryStore(context: Context) {
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "pending_memory_batch" || (memoryScopeId != null && record.optString("memoryScopeId", "shared") != memoryScopeId)) kept.put(record)
+            if (record.optString("kind") != "pending_memory_batch" || record.optString("memoryScopeId", "shared") != memoryScopeId)
         }
         kept.put(JSONObject().apply {
             put("kind", "pending_memory_batch")
@@ -220,7 +220,7 @@ class EncryptedMemoryStore(context: Context) {
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "pending_memory_batch" || record.optString("memoryScopeId", "shared") != memoryScopeId) kept.put(record)
+            if (record.optString("kind") != "pending_memory_batch" || (memoryScopeId != null && record.optString("memoryScopeId", "shared") != memoryScopeId)) kept.put(record)
         }
         writeRecords(kept, synchronous = true)
     }
