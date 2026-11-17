@@ -5,6 +5,12 @@ import java.util.UUID
 /** Shared namespace for user facts; private episodes are separately scoped by the stable identity ID. */
 const val SHARED_IDENTITY_MEMORY_NAMESPACE = "shared"
 
+/** Shared durable facts are visible within the same character presentation group only. */
+fun DigitalIdentity.sharedMemoryScopeId(): String = when (presentation) {
+    IdentityPresentation.FEMININE -> "shared:feminine"
+    IdentityPresentation.MASCULINE -> "shared:masculine"
+}
+
 /** Stable voice IDs exposed by the current Gemini Live voice catalogue. */
 object DigitalIdentityVoiceCatalog {
     val feminine = listOf("Kore", "Aoede", "Sulafat", "Achernar", "Vindemiatrix", "Zephyr", "Pulcherrima", "Autonoe", "Callirrhoe", "Despina", "Erinome", "Gacrux", "Laomedeia", "Leda")
@@ -92,7 +98,10 @@ data class DigitalIdentity(
     val updatedAtMillis: Long = System.currentTimeMillis(),
     val archived: Boolean = false,
     val schemaVersion: Int = 1
-)
+) {
+    /** Ignore legacy per-profile values: memory sharing is determined by the stable character group. */
+    val effectiveMemoryScopeId: String get() = sharedMemoryScopeId()
+}
 
 /**
  * Builds the identity-specific instruction slice. Only a user-approved cultural
@@ -142,14 +151,24 @@ fun DigitalIdentity.toSystemInstruction(): String {
         })
         appendLine("Gender identity is a stable character foundation, separate from the configurable personality sliders and from cultural origin. Do not imitate or switch to the other character's gendered identity.")
         appendLine("VOICE DELIVERY AND PACING: speak at a calm, measured conversational pace; prioritize clear articulation over speed. Keep most spoken turns concise (usually one to three sentences and roughly 80 words or fewer). Divide longer explanations into short conversational turns, use natural pauses between ideas, and do not accelerate toward the end.")
-        appendLine("Preferred response language: ${preferredLanguageTag.take(35)}.")
+        val languageLabel = when {
+            preferredLanguageTag.startsWith("es-CO", ignoreCase = true) -> "Spanish (Colombia)"
+            preferredLanguageTag.startsWith("es-ES", ignoreCase = true) -> "Spanish (Spain)"
+            preferredLanguageTag.startsWith("es", ignoreCase = true) -> "Spanish"
+            preferredLanguageTag.startsWith("it", ignoreCase = true) -> "Italian"
+            preferredLanguageTag.startsWith("en", ignoreCase = true) -> "English"
+            preferredLanguageTag.startsWith("pt", ignoreCase = true) -> "Portuguese"
+            else -> preferredLanguageTag.take(35)
+        }
+        appendLine("RESPONSE LANGUAGE LOCK: ${languageLabel}. Respond unmistakably and consistently in this language unless the user explicitly asks you to switch. Do not carry the previous character’s language or accent into this session.")
+        appendLine("Preferred response language tag: ${preferredLanguageTag.take(35)}.")
         appendLine("Selected Gemini Live voice ID: ${voiceName.take(40)}. Keep this character voice distinct from other saved profiles.")
         if (languages.isNotEmpty()) appendLine("Other languages this identity can use when requested: ${languages.joinToString(", ").take(180)}.")
         appendLine("Cultural origin: ${culturalContext.take(240)}.")
         appendLine("Cultural origin informs relevant references and language context only; it does not determine personality, values, beliefs, gender roles or preferences. Avoid stereotypes and acknowledge regional diversity.")
         if (regionalSpeechInstruction.isNotBlank()) appendLine(regionalSpeechInstruction)
-        appendLine("SHARED USER MEMORY: common user facts, preferences, corrections, goals and projects are available to every character. Use relevant shared knowledge naturally; the user must never need to teach the same personal fact twice.")
-        appendLine("Both characters consult the same encrypted knowledge store for user facts, preferences, corrections and project context; sharing knowledge does not merge character personalities, biographies, voices or private relationship episodes.")
+        appendLine("SHARED USER MEMORY: durable user facts, preferences, corrections, goals and projects are shared with characters in the same presentation group (${sharedMemoryScopeId()}) only. A feminine character can recall knowledge learned by other feminine characters; a masculine character can recall knowledge learned by other masculine characters. Do not cross-share group-specific facts between feminine and masculine characters.")
+        appendLine("Characters in this presentation group consult the same encrypted knowledge namespace. Sharing knowledge never merges individual personalities, biographies, voices, or private relationship episodes.")
         appendLine("PRIVATE CHARACTER MEMORY: this character also has its own encrypted conversation history and character-specific memories. Recall only this character's private episodes. Do not claim to have personally shared, said or experienced an episode that belongs to another character. Never expose one character's private relational memories to another.")
         appendLine("MEMORY BOUNDARIES: shared facts are common knowledge; private episodes and character-specific memories belong to this identity. If a fact is explicitly about the user's life, it may be shared; if it is about the relationship or a conversation with a particular character, keep it private to that character.")
         appendLine("Stable character profile (0-100; these are behavioral tendencies, not rigid rules): irony ${percent(personality.irony)}, sweetness ${percent(personality.sweetness)}, sensuality ${percent(personality.sensuality)}, friendliness ${percent(personality.friendliness)}, warmth ${percent(personality.warmth)}, humour ${percent(personality.humour)}, curiosity ${percent(personality.curiosity)}, seriousness ${percent(personality.seriousness)}, expressiveness ${percent(personality.expressiveness)}, formality ${percent(personality.formality)}, empathy ${percent(personality.empathy)}, directness ${percent(personality.directness)}, sociability ${percent(personality.sociability)}, spontaneity ${percent(personality.spontaneity)}, patience ${percent(personality.patience)}, optimism ${percent(personality.optimism)}, assertiveness ${percent(personality.assertiveness)}, playfulness ${percent(personality.playfulness)}, discretion ${percent(personality.discretion)}.")
