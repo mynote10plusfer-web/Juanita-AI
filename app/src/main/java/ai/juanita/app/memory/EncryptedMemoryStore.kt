@@ -28,7 +28,7 @@ data class MemoryItem(
     val confidence: Float,
     val confirmedByUser: Boolean,
     val sensitive: Boolean,
-    /** Null is shared user knowledge; a non-null ID belongs to one character only. */
+    /** Null is legacy/global user knowledge; non-null values may be a presentation-group scope or a private character ID. */
     val personaId: String? = null,
     /** Shared subject index; legacy records default to a derived topic at read time. */
     val topic: String = "general",
