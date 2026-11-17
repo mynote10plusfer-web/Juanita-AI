@@ -45,6 +45,8 @@ class DigitalIdentityMemoryScopeTest {
         val colombianPrompt = colombian.toSystemInstruction()
         val canaryPrompt = canary.toSystemInstruction()
 
+        assertEquals("es-US", colombian.liveSpeechLanguageCode)
+        assertEquals("es-ES", canary.liveSpeechLanguageCode)
         assertTrue(colombianPrompt.contains("Spanish (Colombia)"))
         assertTrue(colombianPrompt.contains("CONTEMPORARY PAISA / MEDELLÍN"))
         assertTrue(canaryPrompt.contains("Spanish (Spain)"))
