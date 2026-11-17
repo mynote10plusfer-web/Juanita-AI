@@ -14,7 +14,10 @@ import org.json.JSONArray
  * request. A crash, process kill, or temporary quota/network error therefore does
  * not silently discard the only copy of an unprocessed batch.
  */
-class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
+class AutomaticMemoryEngine(
+    private val store: EncryptedMemoryStore,
+    private val memoryScopeId: String = "shared"
+) {
     private val mutex = Mutex()
     private val memoryCurator = MemoryCurator()
 
@@ -31,7 +34,8 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
         val version = store.memoryClearVersion
         return store.enqueuePendingAutomaticMemoryTurn(
             "USER: ${text.take(MAX_TURN_CHARS)}",
-            version
+            version,
+            memoryScopeId
         )
     }
 
@@ -39,7 +43,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
     suspend fun processReadyBatch(): Int = mutex.withLock {
         if (!store.isAutomaticMemoryEnabled) return@withLock 0
         val version = store.memoryClearVersion
-        val pending = store.readPendingAutomaticMemoryTurns(version)
+        val pending = store.readPendingAutomaticMemoryTurns(version, memoryScopeId)
         if (pending.size < BATCH_TURNS) return@withLock 0
         extractPendingLocked(version)
     }
@@ -61,11 +65,11 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
 
     private suspend fun extractPendingLocked(batchVersion: Long): Int {
         if (!store.isAutomaticMemoryEnabled || store.memoryClearVersion != batchVersion) {
-            store.clearPendingAutomaticMemoryTurns(batchVersion)
+            store.clearPendingAutomaticMemoryTurns(batchVersion, memoryScopeId)
             return 0
         }
 
-        val batchTurns = store.readPendingAutomaticMemoryTurns(batchVersion)
+        val batchTurns = store.readPendingAutomaticMemoryTurns(batchVersion, memoryScopeId)
         if (batchTurns.isEmpty()) return 0
         val batch = batchTurns.joinToString("\n")
 
@@ -150,7 +154,7 @@ class AutomaticMemoryEngine(private val store: EncryptedMemoryStore) {
 
             // Clear only after a valid model response has been processed. If the
             // process dies before this point, the encrypted queue remains for retry.
-            store.removeProcessedAutomaticMemoryTurns(batchTurns, batchVersion)
+            store.removeProcessedAutomaticMemoryTurns(batchTurns, batchVersion, memoryScopeId)
             savedCount
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
