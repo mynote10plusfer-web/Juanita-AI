@@ -10,8 +10,10 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.BatteryManager
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
@@ -89,6 +91,9 @@ class JuanitaVoiceService : Service() {
     private var activeAlarmId: String? = null
     /** Consent is captured when the user explicitly starts this Live session. */
     private var backgroundContinuationAuthorized = false
+    private var appInForeground = true
+    private var backgroundIdleTimeoutJob: Job? = null
+    private var lastBackgroundUserActivityAtElapsedRealtime = 0L
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
     private var wakeLockRenewalJob: Job? = null
@@ -189,6 +194,8 @@ class JuanitaVoiceService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_ACTIVITY_BACKGROUND -> {
+                appInForeground = false
+                logPowerSnapshot("activity_background")
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
                     stopSelf(startId)
                 } else if (activeAlarmId == null) {
@@ -213,8 +220,11 @@ class JuanitaVoiceService : Service() {
                         )
                     )
                     when (decision) {
-                        PresenceDecision.AllowListening ->
-                            updateNotification("Conversazione in background · consenso attivo")
+                        PresenceDecision.AllowListening -> {
+                            lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
+                            updateNotification("Conversazione in background · pausa dopo 15 min senza voce")
+                            armBackgroundIdleTimeout()
+                        }
                         is PresenceDecision.BlockListening -> {
                             _state.value = "App in background · microfono in chiusura (" + decision.reason.name + ")"
                             requestStop(preserveContinuitySnapshot = true)
@@ -225,6 +235,16 @@ class JuanitaVoiceService : Service() {
                         }
                     }
                 }
+                return START_NOT_STICKY
+            }
+            ACTION_ACTIVITY_FOREGROUND -> {
+                appInForeground = true
+                backgroundIdleTimeoutJob?.cancel()
+                backgroundIdleTimeoutJob = null
+                voiceDiagnostics.event("background.idle_guard.cancelled", "reason=activity_foreground")
+                logPowerSnapshot("activity_foreground")
+                if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
+                else updateNotification("Conversazione vocale attiva · app in primo piano")
                 return START_NOT_STICKY
             }
             ACTION_STOP -> {
@@ -313,6 +333,10 @@ class JuanitaVoiceService : Service() {
                     activeIdentityId = identityId
                     activeAlarmId = alarmId
                     backgroundContinuationAuthorized = requestedBackgroundContinuation && alarmId == null
+                    appInForeground = true
+                    backgroundIdleTimeoutJob?.cancel()
+                    backgroundIdleTimeoutJob = null
+                    lastBackgroundUserActivityAtElapsedRealtime = 0L
                     acquireCpuWakeLock()
                     startRequested = true
                     sessionJob = serviceScope.launch {
@@ -476,6 +500,15 @@ class JuanitaVoiceService : Service() {
                                 ttsLanguageCode = ttsLanguage,
                                 onTranscript = { role, text ->
                                     voiceDiagnostics.event("transcript.callback", "role=$role; characters=${text.length}")
+                                    if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true)) {
+                                        serviceScope.launch {
+                                            if (!appInForeground && backgroundContinuationAuthorized && activeAlarmId == null) {
+                                                lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
+                                                voiceDiagnostics.event("background.user_activity", "idle timer refreshed")
+                                                armBackgroundIdleTimeout()
+                                            }
+                                        }
+                                    }
                                     if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true) &&
                                         !spokenCommandHandled.get()
                                     ) {
@@ -713,6 +746,8 @@ class JuanitaVoiceService : Service() {
     ) {
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
+        backgroundIdleTimeoutJob?.cancel()
+        backgroundIdleTimeoutJob = null
         if (stopJob?.isActive == true) {
             // The first stop owns teardown and snapshot cleanup. A duplicate Stop must
             // never launch a second archive rewrite that can race the next conversation.
@@ -922,6 +957,37 @@ class JuanitaVoiceService : Service() {
         super.onTaskRemoved(rootIntent)
     }
 
+    /** Stop an unattended authorized background Live session after 15 minutes without user speech. */
+    private fun armBackgroundIdleTimeout() {
+        backgroundIdleTimeoutJob?.cancel()
+        if (appInForeground || !backgroundContinuationAuthorized || activeAlarmId != null || lifecycleState != VoiceLifecycleState.ACTIVE) return
+        val lastActivity = lastBackgroundUserActivityAtElapsedRealtime.takeIf { it > 0L }
+            ?: SystemClock.elapsedRealtime().also { lastBackgroundUserActivityAtElapsedRealtime = it }
+        val remaining = BackgroundLiveSafetyPolicy.remainingIdleMillis(lastActivity, SystemClock.elapsedRealtime())
+        voiceDiagnostics.event("background.idle_guard.armed", "remainingMs=$remaining")
+        backgroundIdleTimeoutJob = serviceScope.launch {
+            delay(remaining)
+            val idleFor = SystemClock.elapsedRealtime() - lastBackgroundUserActivityAtElapsedRealtime
+            if (BackgroundLiveSafetyPolicy.shouldStop(appInForeground, backgroundContinuationAuthorized, activeAlarmId != null, idleFor) && lifecycleState == VoiceLifecycleState.ACTIVE) {
+                voiceDiagnostics.event("background.idle_guard.timeout", "idleMs=$idleFor; action=orderly_stop")
+                logPowerSnapshot("background_idle_timeout")
+                updateNotification("Sessione sospesa per inattività · riapri Juanita per riprendere")
+                requestStop(preserveContinuitySnapshot = true, finalMessage = "Sessione Live sospesa dopo 15 minuti senza interventi in background. Il contesto è conservato.")
+            } else if (!appInForeground && lifecycleState == VoiceLifecycleState.ACTIVE) armBackgroundIdleTimeout()
+        }
+    }
+
+    /** Sparse battery snapshot; no transcript or audio is recorded. */
+    private fun logPowerSnapshot(reason: String) {
+        val battery = runCatching { registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }.getOrNull()
+        val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+        val status = battery?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+        val plugged = battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
+        val temperature = battery?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
+        val interactive = runCatching { (getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive }.getOrDefault(false)
+        voiceDiagnostics.event("power.snapshot", "reason=$reason; levelPct=$level; status=$status; plugged=$plugged; batteryTempTenthsC=$temperature; interactive=$interactive; wakeLockHeld=${cpuWakeLock?.isHeld == true}")
+    }
+
     /**
      * Observe Android's own active-recording registry while Gemini Live is running.
      * This does not open a second microphone or change audio routing. It lets diagnostics
@@ -1021,6 +1087,8 @@ class JuanitaVoiceService : Service() {
             // The timeout is a final safety net if the service is wedged and cannot run cleanup.
             acquire(CPU_WAKELOCK_TIMEOUT_MS)
         }
+        voiceDiagnostics.event("power.wakelock.acquired", "timeoutMs=$CPU_WAKELOCK_TIMEOUT_MS")
+        logPowerSnapshot("wakelock_acquired")
         wakeLockRenewalJob?.cancel()
         wakeLockRenewalJob = serviceScope.launch {
             while (true) {
@@ -1048,6 +1116,7 @@ class JuanitaVoiceService : Service() {
         val lock = cpuWakeLock ?: return
         if (lock.isHeld) runCatching { lock.release() }
         cpuWakeLock = null
+        voiceDiagnostics.event("power.wakelock.released")
     }
 
     private fun createNotificationChannel() {
@@ -1096,6 +1165,8 @@ class JuanitaVoiceService : Service() {
 
     override fun onDestroy() {
         voiceDiagnostics.event("service.destroyed", "lifecycle=$lifecycleState")
+        backgroundIdleTimeoutJob?.cancel()
+        backgroundIdleTimeoutJob = null
         // Normal destruction is reached only after requestStop() has awaited SDK
         // microphone and Live-session shutdown. Never launch detached cleanup here:
         // Android could destroy this Service while that unowned coroutine is still running.
@@ -1134,6 +1205,7 @@ class JuanitaVoiceService : Service() {
         const val ACTION_STOP = "ai.juanita.app.action.STOP_VOICE"
         const val ACTION_STOP_ALARM = "ai.juanita.app.action.STOP_ALARM_VOICE"
         const val ACTION_ACTIVITY_BACKGROUND = "ai.juanita.app.action.ACTIVITY_BACKGROUND"
+        const val ACTION_ACTIVITY_FOREGROUND = "ai.juanita.app.action.ACTIVITY_FOREGROUND"
         const val ACTION_UPDATE_BACKGROUND_CONSENT = "ai.juanita.app.action.UPDATE_BACKGROUND_CONSENT"
         const val EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED = "extra_background_continuation_authorized"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
