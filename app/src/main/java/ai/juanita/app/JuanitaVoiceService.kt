@@ -436,7 +436,6 @@ class JuanitaVoiceService : Service() {
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
-                                languageCode = selectedIdentity?.liveSpeechLanguageCode,
                                 onTranscript = { role, text ->
                                     if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true) &&
                                         !spokenCommandHandled.get()
