@@ -139,7 +139,7 @@ class JuanitaVoiceService : Service() {
     override fun onCreate() {
         super.onCreate()
         memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
-        automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
+        automaticMemoryEngine = AutomaticMemoryEngine(memoryStore, selectedIdentity?.effectiveMemoryScopeId ?: "shared")
         personalProfileStore = PersonalProfileStore(applicationContext)
         createNotificationChannel()
     }
@@ -308,7 +308,7 @@ class JuanitaVoiceService : Service() {
                             // Restore relevant local memories and recent turns before opening
                             // the new Live session. Nothing is uploaded to a separate memory store.
                             val localContext = withContext(Dispatchers.IO) {
-                                memoryStore.buildAssistantContext(personaId = selectedIdentity?.id)
+                                memoryStore.buildAssistantContext(personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId)
                             }
                             val loadedProfile = withContext(Dispatchers.IO) {
                                 runCatching { personalProfileStore.load() }.getOrElse {
@@ -494,7 +494,7 @@ class JuanitaVoiceService : Service() {
                                     // Include earlier turns from this same conversation as well
                                     // as older sessions. The bounded continuity snapshot is not
                                     // a substitute for searchable full-session history.
-                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id)
+                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId)
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {
