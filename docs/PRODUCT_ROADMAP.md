@@ -1,3 +1,14 @@
+# 2026-11-17 — Background Live idle safety and battery diagnostics
+
+**EXPERIMENTAL IMPLEMENTATION — exact-head CI and physical-device verification required.**
+
+- Explicitly authorized, non-alarm Gemini Live sessions receive a 15-minute no-user-speech safety timeout only after the app enters the background. Each USER transcript event refreshes the inactivity window; returning to foreground cancels it. Foreground calls and alarm-owned sessions are excluded.
+- Timeout uses the existing orderly stop path, preserving the continuity snapshot and closing Live/audio before WakeLock release.
+- Added sparse one-shot power snapshots at app background/foreground transitions, WakeLock acquisition/release and idle timeout. They record battery percentage, charging status/source, battery temperature, screen interactivity and WakeLock state; no transcript/audio content is logged.
+- Added pure unit tests for timeout boundary, foreground/consent/alarm exemptions and remaining time.
+- Gemini Live transport and explicit background-consent setting remain unchanged. No paid service, new permission or stable release modification.
+- Required validation: debug APK build, JVM tests, API 31 instrumentation, then Note10+ Android 12 foreground/background/screen-off/voice-refresh/idle-shutdown/microphone-release/WakeLock-release tests and charging observation. No physical-device result or battery improvement is claimed before measurement.
+
 # 2026-11-16 — User reprioritizes memory reliability and recall
 
 **DECISION: USER REQUESTED.** Improve memory recall and efficiency as the immediate next feature while preserving the existing six-tab layout, shared user knowledge across Juanita/José, separate persona-private episodes, local encryption, free-only services and stable release isolation.
