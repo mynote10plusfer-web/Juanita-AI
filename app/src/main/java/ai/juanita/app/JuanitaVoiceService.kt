@@ -139,7 +139,7 @@ class JuanitaVoiceService : Service() {
     override fun onCreate() {
         super.onCreate()
         memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
-        automaticMemoryEngine = AutomaticMemoryEngine(memoryStore, selectedIdentity?.effectiveMemoryScopeId ?: "shared")
+        automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
         personalProfileStore = PersonalProfileStore(applicationContext)
         createNotificationChannel()
     }
