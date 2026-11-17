@@ -221,6 +221,9 @@ class JuanitaVoiceService : Service() {
                     )
                     when (decision) {
                         PresenceDecision.AllowListening -> {
+                            // A manual partial WakeLock is only needed once the screen is off.
+                            // Foreground interaction already keeps the device awake.
+                            acquireCpuWakeLock()
                             lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
                             updateNotification("Conversazione in background · pausa dopo 15 min senza voce")
                             armBackgroundIdleTimeout()
@@ -242,6 +245,7 @@ class JuanitaVoiceService : Service() {
                 backgroundIdleTimeoutJob?.cancel()
                 backgroundIdleTimeoutJob = null
                 voiceDiagnostics.event("background.idle_guard.cancelled", "reason=activity_foreground")
+                releaseCpuWakeLock()
                 logPowerSnapshot("activity_foreground")
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
                 else updateNotification("Conversazione vocale attiva · app in primo piano")
@@ -337,7 +341,6 @@ class JuanitaVoiceService : Service() {
                     backgroundIdleTimeoutJob?.cancel()
                     backgroundIdleTimeoutJob = null
                     lastBackgroundUserActivityAtElapsedRealtime = 0L
-                    acquireCpuWakeLock()
                     startRequested = true
                     sessionJob = serviceScope.launch {
                         _state.value = "Connessione a Gemini Live…"
