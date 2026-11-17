@@ -294,7 +294,12 @@ class MainActivity : ComponentActivity() {
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
                 onRefreshMemories = { runCatching { memoryStore.listMemories() }.getOrDefault(emptyList()) },
-                onSaveMemory = { memoryStore.addMemory(it) },
+                onSaveMemory = { text ->
+                    val selectedScope = preferences.activeDigitalIdentityId?.let { selectedId ->
+                        runCatching { digitalIdentityStore.get(selectedId)?.effectiveMemoryScopeId }.getOrNull()
+                    }
+                    memoryStore.addMemory(text, personaId = selectedScope)
+                },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onDeleteMemories = { memoryStore.deleteMemories(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
