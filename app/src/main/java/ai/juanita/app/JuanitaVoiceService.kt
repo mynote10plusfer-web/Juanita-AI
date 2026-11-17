@@ -1036,9 +1036,11 @@ class JuanitaVoiceService : Service() {
      */
     private fun startAudioRecordingDiagnostics() {
         stopAudioRecordingDiagnostics()
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        // Periodic device-wide recorder polling is development-only. Release builds
+        // rely on lifecycle callbacks and SDK audio state, avoiding needless wakeups.
+        if (!BuildConfig.DEBUG || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        voiceDiagnostics.event("audio.recording.probe.started", "pollIntervalMs=30000")
+        voiceDiagnostics.event("audio.recording.probe.started", "pollIntervalMs=60000")
         audioRecordingDiagnosticsJob = serviceScope.launch(Dispatchers.IO) {
             var consecutiveEmptySamples = 0
             while (true) {
@@ -1076,7 +1078,7 @@ class JuanitaVoiceService : Service() {
                     voiceDiagnostics.event("audio.recording.probe.error", "error=$error")
                 }
                 // Device-wide recorder diagnostics are advisory; sample sparsely to avoid needless wakeups.
-                delay(30_000L)
+                delay(60_000L)
             }
         }
     }
