@@ -9,6 +9,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
+import android.content.BroadcastReceiver
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
@@ -94,6 +95,27 @@ class JuanitaVoiceService : Service() {
     private var appInForeground = true
     private var backgroundIdleTimeoutJob: Job? = null
     private var lastBackgroundUserActivityAtElapsedRealtime = 0L
+    private var screenPowerReceiverRegistered = false
+    private val screenPowerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    if (!appInForeground && backgroundContinuationAuthorized && activeAlarmId == null &&
+                        lifecycleState == VoiceLifecycleState.ACTIVE
+                    ) {
+                        voiceDiagnostics.event("power.screen_off", "background Live session remains user-authorized")
+                        acquireCpuWakeLock()
+                    }
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    if (!appInForeground) {
+                        voiceDiagnostics.event("power.screen_on", "releasing background partial WakeLock")
+                        releaseCpuWakeLock()
+                    }
+                }
+            }
+        }
+    }
     private var sessionJob: Job? = null
     private var stopJob: Job? = null
     private var wakeLockRenewalJob: Job? = null
@@ -171,6 +193,16 @@ class JuanitaVoiceService : Service() {
         automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
         personalProfileStore = PersonalProfileStore(applicationContext)
         createNotificationChannel()
+        runCatching {
+            registerReceiver(
+                screenPowerReceiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                    addAction(Intent.ACTION_SCREEN_ON)
+                }
+            )
+            screenPowerReceiverRegistered = true
+        }.onFailure { Log.w("JuanitaVoiceService", "Unable to register screen power receiver", it) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -223,7 +255,9 @@ class JuanitaVoiceService : Service() {
                         PresenceDecision.AllowListening -> {
                             // A manual partial WakeLock is only needed once the screen is off.
                             // Foreground interaction already keeps the device awake.
-                            acquireCpuWakeLock()
+                            if (!(getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive) {
+                                acquireCpuWakeLock()
+                            }
                             lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
                             updateNotification("Conversazione in background · pausa dopo 15 min senza voce")
                             armBackgroundIdleTimeout()
@@ -1168,6 +1202,10 @@ class JuanitaVoiceService : Service() {
 
     override fun onDestroy() {
         voiceDiagnostics.event("service.destroyed", "lifecycle=$lifecycleState")
+        if (screenPowerReceiverRegistered) {
+            runCatching { unregisterReceiver(screenPowerReceiver) }
+            screenPowerReceiverRegistered = false
+        }
         backgroundIdleTimeoutJob?.cancel()
         backgroundIdleTimeoutJob = null
         // Normal destruction is reached only after requestStop() has awaited SDK
