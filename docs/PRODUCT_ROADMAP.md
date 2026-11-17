@@ -4,6 +4,7 @@
 
 - Explicitly authorized, non-alarm Gemini Live sessions receive a 15-minute no-user-speech safety timeout only after the app enters the background. Each USER transcript event refreshes the inactivity window; returning to foreground cancels it. Foreground calls and alarm-owned sessions are excluded.
 - Timeout uses the existing orderly stop path, preserving the continuity snapshot and closing Live/audio before WakeLock release.
+- The manual partial WakeLock is no longer acquired for foreground conversations. It is acquired only after an explicitly authorized session actually moves to the background, and released as soon as the app resumes; the existing bounded renewal remains a failsafe during active screen-off use.
 - Added sparse one-shot power snapshots at app background/foreground transitions, WakeLock acquisition/release and idle timeout. They record battery percentage, charging status/source, battery temperature, screen interactivity and WakeLock state; no transcript/audio content is logged.
 - Added pure unit tests for timeout boundary, foreground/consent/alarm exemptions and remaining time.
 - Gemini Live transport and explicit background-consent setting remain unchanged. No paid service, new permission or stable release modification.
