@@ -194,12 +194,14 @@ class JuanitaVoiceService : Service() {
         personalProfileStore = PersonalProfileStore(applicationContext)
         createNotificationChannel()
         runCatching {
-            registerReceiver(
+            androidx.core.content.ContextCompat.registerReceiver(
+                this,
                 screenPowerReceiver,
                 IntentFilter().apply {
                     addAction(Intent.ACTION_SCREEN_OFF)
                     addAction(Intent.ACTION_SCREEN_ON)
-                }
+                },
+                androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
             )
             screenPowerReceiverRegistered = true
         }.onFailure { Log.w("JuanitaVoiceService", "Unable to register screen power receiver", it) }
