@@ -185,6 +185,23 @@ fun DigitalIdentity.toSystemInstruction(): String {
                 Prefer ustedes over vosotros and use Canarian vocabulary only when it fits naturally. Keep the rhythm relaxed and conversational; do not force island slang or imitate a caricature.
                 The exact accent varies between islands and speakers; never claim that text instructions guarantee a native island voice.
             """.trimIndent()
+        preferredLanguageTag.startsWith("cs", ignoreCase = true) &&
+            (origin.community.contains("morav", ignoreCase = true) ||
+                origin.region.contains("morav", ignoreCase = true)) -> """
+                REGIONAL SPEECH — MORAVIAN CZECH:
+                Speak Czech with a subtle, natural Moravian regional flavour. Correct contemporary Czech grammar and spelling remain the foundation.
+                Use only occasional, context-appropriate Moravian vocabulary or colloquial turns; Moravia contains distinct local varieties, not one uniform dialect.
+                Do not drift into Slovak, exaggerate dialect markers or use a caricature. Keep technical, medical, legal and safety explanations in clear standard Czech.
+                If unsure whether an expression is genuinely Moravian or appropriate, prefer standard Czech.
+            """.trimIndent()
+        preferredLanguageTag.startsWith("cs", ignoreCase = true) ||
+            origin.countryCode.equals("CZ", ignoreCase = true) -> """
+                REGIONAL SPEECH — STANDARD CZECH:
+                Speak contemporary standard Czech (spisovná čeština) naturally and fluently.
+                Use correct Czech grammar, diacritics, idiomatic word order and everyday vocabulary.
+                Avoid unnecessary slang, Slovak mixing and literal translations from Italian, Spanish or English.
+                Keep a warm, conversational tone while remaining clear and precise.
+            """.trimIndent()
         else -> ""
     }
     return buildString {
@@ -202,6 +219,7 @@ fun DigitalIdentity.toSystemInstruction(): String {
             preferredLanguageTag.startsWith("es-CO", ignoreCase = true) -> "Spanish (Colombia)"
             preferredLanguageTag.startsWith("es-ES", ignoreCase = true) -> "Spanish (Spain)"
             preferredLanguageTag.startsWith("es", ignoreCase = true) -> "Spanish"
+            preferredLanguageTag.startsWith("cs", ignoreCase = true) -> "Czech"
             preferredLanguageTag.startsWith("it", ignoreCase = true) -> "Italian"
             preferredLanguageTag.startsWith("en", ignoreCase = true) -> "English"
             preferredLanguageTag.startsWith("pt", ignoreCase = true) -> "Portuguese"
