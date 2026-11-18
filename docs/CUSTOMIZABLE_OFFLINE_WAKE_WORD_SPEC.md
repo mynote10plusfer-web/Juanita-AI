@@ -31,11 +31,17 @@ Therefore build an app-owned offline KWS engine as the practical fallback. It mu
 ## Candidate engine
 
 Evaluate sherpa-onnx open-vocabulary keyword spotting on Android. Candidate Spanish model:
-`jguerrisi/sherpa-onnx-kws-zipformer-es-3M-2026-08-08` (Apache-2.0 model card; ~3.3M parameter streaming Zipformer transducer; runtime keyword list can be regenerated without retraining; 16 kHz mono input).
+`jguerrisi/sherpa-onnx-kws-zipformer-es-3M-2026-08-08` (Apache-2.0 model card; ~3.3M parameter streaming Zipformer transducer; runtime keyword list can be regenerated without retraining; 16 kHz mono input). The model card reports about 320 ms latency, but its evaluation is based on five short safety phrases and one 536.7-second clip; int8 parity is not yet evaluated. It explicitly warns that spontaneous, far-field, noisy and strongly accented speech may behave differently. This is a candidate, not a verified production model.
 
-The model card reports ~320 ms latency but its reported evaluation is limited and int8 parity is not yet evaluated. Treat it as an experiment, not as a verified production model. Validate provenance, exact model files, checksums, licensing, APK size, ARM64 performance, and false-accept/false-reject rates before adoption.
+### Critical integration defect found in the current prototype
 
-A phrase is only “supported” after checking tokenization and the acoustic model's language coverage. Initially evaluate Spanish phrases such as “Hola Juanita”, “Juanita”, and user-entered Spanish alternatives. Do not promise every arbitrary language/phrase until a compatible model exists and is tested. Keep the wake phrase configurable and persist it locally.
+`SherpaOfflineWakeWordDetector` currently configures `keywordsFile = ""` and calls `keywordSpotter.createStream(phrase)` with the user's raw phrase. For this BPE model, sherpa-onnx expects BPE pieces separated by spaces (and multiple keywords separated by `/`), not ordinary raw text. The official Kotlin API passes the supplied string directly to the native `CreateStream` call; it does not tokenize the phrase for the app. Therefore the existing isolated detector must not be described as functional even after simply connecting it to the service.
+
+Before activation, implement and test a real SentencePiece BPE encoder against the exact downloaded `bpe.model`, or generate and verify a local `keywords.txt` for a deliberately bounded set of supported phrases. Do not fake tokenization by splitting on spaces. If custom arbitrary phrases remain editable, the app must encode them correctly on-device or clearly reject unsupported phrases. The Spanish model's training/evaluation does not establish recognition quality for “Hola Juanita”, “Hola José”, Canarian Spanish, Colombian Paisa or Italian; collect consented local test samples and measure false accepts/misses on both phones.
+
+Validate provenance, exact model files, per-file SHA-256 checksums, licensing/attributions (including training voice obligations), APK/storage size, ARM64 performance and battery/thermal behavior before adoption.
+
+A phrase is only “supported” after checking both BPE tokenization and acoustic performance for the target language/accents. Initially evaluate “Hola Juanita” and “Hola José”; do not promise every arbitrary language/phrase until a compatible model exists and is tested. Keep the wake phrase configurable and persist it locally.
 
 ## Runtime state machine
 
@@ -95,13 +101,12 @@ Physical:
 
 ## PR history and dependencies to preserve
 
-- PR #31: persistent Gemini Live session / native audio routing and explicit Stop notification. It remains draft/open; do not silently replace its transport behavior.
-- PR #39: C3 fail-closed conversational-presence policy prototype. It deliberately does not open the microphone.
-- PR #40: character collection, one-active-identity lifecycle supervisor, orderly microphone close and safe exit; six tabs preserved.
-- PR #50: later grouped memory scopes and reliable identity switching, built on #40. Exact-head CI passed; physical Samsung validation still required.
-- PRs #44–#49: separate cumulative audio/battery/memory chain (natural voice/diagnostics, automatic-memory recall, continuity storage, reflection cues, thermal/photo timeout, background Live idle timeout and power diagnostics). These are drafts and not all are present in the #50 baseline. Integrate deliberately by dependency and compare, not by merging unrelated branches wholesale.
-- PRs #41–#43: native Gemini Live voice restored, visual understanding/image search and free image research; preserve native Live microphone ownership and no paid TTS.
-- PR #55: temporary CI-only PR, closed unmerged.
+- PR #58 is the sole cumulative lane. It is based on PR #49 head and has exactly 35 commits beyond that baseline (the 710 count against `main` is full historical ancestry, not 710 newly added changes).
+- The PR #49 baseline already carries the relevant advanced voice/audio, memory/archive, reflection, vision, alarms, thermal and background-idle work. Do not copy those older sibling branches over it again.
+- PR #50 grouped memory scopes and reliable identity switching, PR #57's reviewed memory-recall/continuity/reflection slices, PR #34 Czech/Moravian profiles and PR #56's isolated KWS foundation have been ported into #58.
+- PR #41 explicitly records the decision to pause separate Gemini Flash TTS and restore native SDK-managed Gemini Live voice. Preserve that decision: do not re-enable cloud TTS or spend its separate quota.
+- PRs #42–#43 contribute photo understanding and anonymous Commons/Openverse image search. These do not provide general text-web research.
+- Temporary CI-only PRs #51–#55 are not integration bases and must never be merged.
 
 ## Non-goals
 
