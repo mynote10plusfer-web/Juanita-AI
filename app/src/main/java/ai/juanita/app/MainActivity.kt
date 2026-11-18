@@ -565,7 +565,8 @@ private fun JuanitaApp(
             context = context,
             instruction = instruction,
             voiceName = activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
-            identityId = activeDigitalIdentity?.id
+            identityId = activeDigitalIdentity?.id,
+            backgroundContinuationAuthorized = backgroundContinuationAuthorized
         )
     }
 
