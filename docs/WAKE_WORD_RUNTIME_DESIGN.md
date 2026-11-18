@@ -72,12 +72,32 @@ Acceptance tests:
 - Confirmation dismissal: no persistent screen-on flag or WakeLock; keyguard and normal timeout behavior resume.
 - Screen already on: avoid stealing focus unnecessarily; use a lightweight in-app status update instead.
 
+
+## Display and screen-off conversation policy
+
+The display is feedback only; it must never be required for the Live audio session.
+
+- Wake confirmation target: show the localized assistant label and a short listening confirmation for 4 seconds by default (user-adjustable later, sensible range 3–5 seconds). Use the selected app language, not a hard-coded Italian or Spanish string.
+- When the confirmation expires, dismiss only the temporary visual UI and return to the prior keyguard/display state. Do not stop Gemini Live and do not keep the display awake.
+- During the conversation, do not set `FLAG_KEEP_SCREEN_ON`. The user may press the physical power button or allow the normal system timeout to turn the display off; audio continues only under the existing explicit background-continuation consent and foreground microphone-service policy.
+- A screen-off event hides the call/avatar UI but must not be interpreted as a conversation-end event. Do not let UI dismissal invoke the Live stop path.
+- A touch on the sleeping display is handled by Android/Samsung: it wakes the lock screen. It must not restart Live or re-open the microphone. After unlock, tapping Juanita's ongoing-conversation notification or the app icon returns to the active conversation UI without reconnecting or interrupting the audio stream.
+- When the conversation actually ends, stop Live and release its audio resources. Re-arm offline KWS only if the user has explicitly left wake listening enabled and all microphone teardown has been confirmed.
+- No WakeLock is acquired to illuminate or hold the display. The existing bounded/consent-governed partial CPU WakeLock for background audio is a separate concern and must be measured; it must never be a screen-brightness/display WakeLock.
+
+Acceptance tests:
+- Wake confirmation appears in each supported UI language and disappears after the configured short interval without ending Live.
+- Screen turns off during Live: microphone/audio session remains healthy under explicit consent, display remains off, and no screen-on flag is held.
+- Tap/raise-to-wake: Android lock screen appears; the conversation continues. Unlock and open the ongoing Juanita notification/app: the same session UI returns, with no second AudioRecord and no Live reconnect.
+- End Live while screen is off: audio tears down, then KWS re-arms only if opted in.
+- Repeat on Note10+ Android 12 and S22 Ultra Android 15; record display behavior, CPU WakeLock duration, battery, temperature, and audio continuity.
+
 ## Current blockers
 
 1. The existing detector is not started by the app.
 2. The current detector supplies raw phrase text to a BPE keyword spotter; this is not a valid BPE encoding path.
 3. Model files and checksum-pinned provisioning are absent.
 4. There is no opt-in settings control, foreground idle-listener state, or serialized Live handoff yet.
-5. No physical-device battery/thermal/false-trigger validation has been performed.\n6. The wake-feedback Activity/notification path is not implemented or device-validated; immediate forced display-off is not an app capability.
+5. No physical-device battery/thermal/false-trigger validation has been performed.\n6. The wake-feedback Activity/notification path and localized short-lived confirmation are not implemented or device-validated; immediate forced display-off is not an app capability.\n7. Screen-off audio continuation and return-to-conversation behavior need physical-device validation, including the existing consent and CPU WakeLock policy.
 
 This document is a design gate, not a claim that wake activation is implemented.
