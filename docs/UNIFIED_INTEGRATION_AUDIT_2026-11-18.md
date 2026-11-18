@@ -86,3 +86,8 @@ This branch is the single cumulative development lane for the 0.11.12 code line.
 5. Finish C3 visible controls and C4/C5 acceptance; then Personal Organizer/Agenda; Avatar animation remains last.
 
 The six existing tabs remain the product structure. Do not add a seventh tab or split these capabilities into another application.
+
+
+### Additional wake-word model/API finding (2026-11-18)
+- The Spanish sherpa-onnx candidate model card declares Apache-2.0 and approximately 3.3M parameters, but its published evaluation covers only five safety phrases on one 536.7-second clip; it warns about spontaneous, far-field, noisy and strongly accented speech. That does not validate “Hola Juanita” or “Hola José”.
+- Source audit found a concrete defect in the isolated prototype: it sets `keywordsFile = ""` and passes the raw user phrase to `KeywordSpotter.createStream(phrase)`. The sherpa Kotlin API forwards that string directly to native code. For the selected BPE model, the API expects BPE pieces separated by spaces (and multiple phrases separated by `/`), not raw natural-language text. Implement a real SentencePiece BPE encoder or a verified bounded local keyword file before service integration. Never mark the wake phrase functional until this is corrected and acoustically tested.
