@@ -118,39 +118,26 @@ Physical:
 - Do not merge any draft PR or publish a release without explicit user approval.
 
 
-## Personalized speaker enrollment — approved design direction (2026-11-18)
+## Phrase calibration — speaker identity explicitly excluded
 
-The wake phrase and the speaker identity are separate signals and must be evaluated in two stages:
+Wake activation is based only on detecting the user-selected phrase. **It must not identify, authenticate, enroll, or distinguish the person speaking.** No speaker embeddings, voiceprints, speaker-verification model, biometric template, or speaker-specific gate belongs in this feature. Any person whose voice produces a valid detection of the selected phrase may trigger Juanita.
 
-1. **Phrase detector (always-on only while the user explicitly arms wake mode):** open-vocabulary KWS listens locally for the selected phrase. It must not assume a fixed “Hola Juanita” string.
-2. **Speaker check (only after a phrase candidate):** a separate on-device speaker-verification model checks whether the short candidate utterance resembles the enrolled user's voice. Do not run full speaker verification continuously; that would add avoidable CPU and battery cost.
+### Phrase setup and calibration
 
-### Enrollment flow
+- In Settings, the user can edit the activation phrase within the languages and phrase lengths genuinely supported by the installed acoustic model and tokenizer.
+- A foreground-only setup flow may ask for 5–8 repetitions of the selected phrase, spoken naturally with modest variations in intonation, speed and volume. These are phrase samples, not speaker enrollment.
+- Process samples locally in bounded RAM buffers. Do not upload, persist, log, or retain raw audio; discard it promptly after the setup/test step.
+- Do not claim that repetitions train or adapt the acoustic model unless the selected engine explicitly implements a documented adaptation mechanism and tests prove it. If the engine cannot adapt its acoustic model, samples may only be used to test phrase suitability and calibrate a supported detection threshold; explain that limitation honestly.
+- The detector must match the phrase acoustically, not merely search a transcript after Gemini Live has already started.
+- Phrase recognition should tolerate ordinary changes in intonation, pace, volume and distance, but accent/language coverage must be measured rather than promised. Reject or label unsupported phrases clearly.
+- Changing the phrase must regenerate and validate its BPE/token representation before arming. Never silently fall back to a different phrase.
 
-- In Settings, the user selects/edits the phrase and enters a foreground-only enrollment flow.
-- Ask for 5–8 clean repetitions of exactly that phrase, with short pauses and simple guidance to vary natural intonation/volume slightly. Show progress and allow retakes.
-- Process samples on-device. Prefer retaining only normalized speaker embeddings/templates, not the original recordings. Raw PCM exists only in bounded RAM buffers during enrollment and verification and is discarded promptly.
-- Store the enrolled template locally in app-private storage, encrypted using the existing app data-protection approach; never upload voice samples or embeddings.
-- Support explicit re-enrollment and deletion. If no valid template exists, use phrase-only mode only if the user explicitly accepts that weaker protection; otherwise keep personalized activation unavailable.
-- Multiple recordings are combined into a robust template (e.g. normalized mean/centroid with outlier rejection), not treated as a single exact waveform. The system must tolerate ordinary changes in pitch, pace and distance, but must not claim biometric certainty.
-- Speaker verification runs only after KWS candidate detection. If the score is below the calibrated threshold, discard the candidate and return to ARMED without starting Gemini Live.
-- Thresholds must be calibrated against genuine repetitions and impostor/distractor voices; never pick an arbitrary score and call it secure. Measure false accepts and false rejects on both target Samsung devices.
-- Speaker verification is an optional second gate, not a replacement for phrase detection. The current Spanish KWS candidate does not itself prove speaker identity and its phrase recognition has not been validated for the user's accent.
-- Do not retain raw microphone audio, build a general voice-cloning dataset, or use enrollment material for TTS.
+### Acceptance tests
 
-### Battery and lifecycle implications
-
-- No extra speaker model is loaded in the steady-state ARMED loop unless benchmarks prove the memory cost is acceptable; ideally load it only for candidate verification or keep a small model resident if repeated loading is slower/more expensive.
-- Measure cold-load cost versus resident memory and idle CPU on Note10+ first, then S22 Ultra.
-- Keep a strict time limit on candidate capture and verification. On timeout, low confidence, model error, permission loss or thermal pressure, fail closed and do not start Live.
-- The microphone handoff remains serialized: KWS capture ends, candidate verification completes and releases its audio resources, then Gemini Live may start. No concurrent AudioRecord owners.
-
-### Required acceptance tests
-
-- Five-to-eight sample enrollment, retake, cancel, delete and re-enroll.
-- Same speaker at different distances/volumes and normal day-to-day voice variation.
-- Different speaker speaking the same phrase; TV/radio playback; similar-sounding phrases.
-- No raw audio remains on disk or in logs after enrollment.
-- Encrypted template survives process restart and is removed on user-requested reset.
-- Phrase change invalidates/rebuilds the KWS keyword encoding without silently reusing stale enrollment.
-- Verify false accept/reject rates and added energy/thermal cost before enabling personalized activation by default.
+- Setup, retake, cancel and phrase change work without storing raw audio.
+- The same phrase is detected across ordinary variations in pace, intonation, volume and distance.
+- Different people can say the phrase and trigger activation; no identity check is performed.
+- Similar-sounding phrases, TV/radio and ordinary conversation are measured as distractors.
+- No audio, speaker embedding, voiceprint or biometric template is written to disk or logs.
+- False-accept and missed-activation rates, CPU/RAM, battery delta and temperature are measured on Note10+ first, then S22 Ultra.
+- Phrase change invalidates/rebuilds the KWS keyword encoding; unsupported language/phrase or model errors fail closed.
