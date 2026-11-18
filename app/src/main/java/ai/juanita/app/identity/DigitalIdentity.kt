@@ -1,5 +1,7 @@
 package ai.juanita.app.identity
 
+import kotlin.math.roundToInt
+
 import java.util.UUID
 
 /** Shared namespace for user facts; private episodes are separately scoped by the stable identity ID. */
@@ -155,7 +157,7 @@ data class DigitalIdentity(
  * dossier is included; geographic origin never determines personality.
  */
 fun DigitalIdentity.toSystemInstruction(): String {
-    fun percent(value: Float) = (value.coerceIn(0f, 1f) * 100).toInt()
+    fun percent(value: Float) = (value.coerceIn(0f, 1f) * 100).roundToInt()
     val selfReference = if (presentation == IdentityPresentation.MASCULINE) "masculine" else "feminine"
     val culturalContext = buildString {
         append(origin.countryName)
