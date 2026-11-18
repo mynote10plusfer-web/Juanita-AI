@@ -7,7 +7,7 @@ Stable `0.11.12` and all release signing/data remain untouched.
 
 ## User requirement
 
-The user must be able to choose and edit the wake phrase in Settings (the existing field is already persisted as `AssistantPreferences.wakePhrase`). The default remains `Hola Juanita` (or the matching active assistant name). The phrase is a true acoustic trigger, not merely a match against Gemini Live's transcript.
+The user must be able to choose and edit the wake phrase in Settings (the existing field is already persisted as `AssistantPreferences.wakePhrase`). `Hola Juanita` is NOT a required phrase and must not be hard-coded as the activation. The selected phrase is a true acoustic trigger, not merely a match against Gemini Live's transcript. New setup must let the user choose a supported phrase; any suggested example such as `Ehi Juanita` remains editable and is not treated as acoustically validated.
 
 No paid APIs, subscriptions, cloud audio streaming, or mandatory hosted services.
 
@@ -41,7 +41,7 @@ Before activation, implement and test a real SentencePiece BPE encoder against t
 
 Validate provenance, exact model files, per-file SHA-256 checksums, licensing/attributions (including training voice obligations), APK/storage size, ARM64 performance and battery/thermal behavior before adoption.
 
-A phrase is only “supported” after checking both BPE tokenization and acoustic performance for the target language/accents. Initially evaluate “Hola Juanita” and “Hola José”; do not promise every arbitrary language/phrase until a compatible model exists and is tested. Keep the wake phrase configurable and persist it locally.
+A phrase is only “supported” after checking both BPE tokenization and acoustic performance for the target language/accents. Initially evaluate user-selected phrases in the supported language set; do not privilege “Hola Juanita” or promise every arbitrary language/phrase until a compatible model exists and is tested. Keep the wake phrase configurable and persist it locally.
 
 ## Runtime state machine
 
@@ -116,3 +116,41 @@ Physical:
 - Do not run two microphone capture engines simultaneously.
 - Do not change stable release, package ID, signing identity, encrypted data formats, or existing six-tab navigation.
 - Do not merge any draft PR or publish a release without explicit user approval.
+
+
+## Personalized speaker enrollment — approved design direction (2026-11-18)
+
+The wake phrase and the speaker identity are separate signals and must be evaluated in two stages:
+
+1. **Phrase detector (always-on only while the user explicitly arms wake mode):** open-vocabulary KWS listens locally for the selected phrase. It must not assume a fixed “Hola Juanita” string.
+2. **Speaker check (only after a phrase candidate):** a separate on-device speaker-verification model checks whether the short candidate utterance resembles the enrolled user's voice. Do not run full speaker verification continuously; that would add avoidable CPU and battery cost.
+
+### Enrollment flow
+
+- In Settings, the user selects/edits the phrase and enters a foreground-only enrollment flow.
+- Ask for 5–8 clean repetitions of exactly that phrase, with short pauses and simple guidance to vary natural intonation/volume slightly. Show progress and allow retakes.
+- Process samples on-device. Prefer retaining only normalized speaker embeddings/templates, not the original recordings. Raw PCM exists only in bounded RAM buffers during enrollment and verification and is discarded promptly.
+- Store the enrolled template locally in app-private storage, encrypted using the existing app data-protection approach; never upload voice samples or embeddings.
+- Support explicit re-enrollment and deletion. If no valid template exists, use phrase-only mode only if the user explicitly accepts that weaker protection; otherwise keep personalized activation unavailable.
+- Multiple recordings are combined into a robust template (e.g. normalized mean/centroid with outlier rejection), not treated as a single exact waveform. The system must tolerate ordinary changes in pitch, pace and distance, but must not claim biometric certainty.
+- Speaker verification runs only after KWS candidate detection. If the score is below the calibrated threshold, discard the candidate and return to ARMED without starting Gemini Live.
+- Thresholds must be calibrated against genuine repetitions and impostor/distractor voices; never pick an arbitrary score and call it secure. Measure false accepts and false rejects on both target Samsung devices.
+- Speaker verification is an optional second gate, not a replacement for phrase detection. The current Spanish KWS candidate does not itself prove speaker identity and its phrase recognition has not been validated for the user's accent.
+- Do not retain raw microphone audio, build a general voice-cloning dataset, or use enrollment material for TTS.
+
+### Battery and lifecycle implications
+
+- No extra speaker model is loaded in the steady-state ARMED loop unless benchmarks prove the memory cost is acceptable; ideally load it only for candidate verification or keep a small model resident if repeated loading is slower/more expensive.
+- Measure cold-load cost versus resident memory and idle CPU on Note10+ first, then S22 Ultra.
+- Keep a strict time limit on candidate capture and verification. On timeout, low confidence, model error, permission loss or thermal pressure, fail closed and do not start Live.
+- The microphone handoff remains serialized: KWS capture ends, candidate verification completes and releases its audio resources, then Gemini Live may start. No concurrent AudioRecord owners.
+
+### Required acceptance tests
+
+- Five-to-eight sample enrollment, retake, cancel, delete and re-enroll.
+- Same speaker at different distances/volumes and normal day-to-day voice variation.
+- Different speaker speaking the same phrase; TV/radio playback; similar-sounding phrases.
+- No raw audio remains on disk or in logs after enrollment.
+- Encrypted template survives process restart and is removed on user-requested reset.
+- Phrase change invalidates/rebuilds the KWS keyword encoding without silently reusing stale enrollment.
+- Verify false accept/reject rates and added energy/thermal cost before enabling personalized activation by default.
