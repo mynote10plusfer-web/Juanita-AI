@@ -30,6 +30,8 @@ import ai.juanita.app.memory.AutomaticMemoryEngine
 import ai.juanita.app.identity.DigitalIdentityStore
 import ai.juanita.app.profile.PersonalProfile
 import ai.juanita.app.profile.PersonalProfileStore
+import ai.juanita.app.presence.WakeWordModelInstaller
+import ai.juanita.app.presence.SherpaOfflineWakeWordDetector
 import ai.juanita.app.presence.BackgroundLiveSafetyPolicy
 import ai.juanita.app.presence.VoiceSessionCommandMatcher
 import ai.juanita.app.presence.ConversationalPresenceContext
@@ -48,6 +50,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,6 +89,12 @@ class JuanitaVoiceService : Service() {
     private lateinit var automaticMemoryEngine: AutomaticMemoryEngine
     private lateinit var personalProfileStore: PersonalProfileStore
     private var startRequested = false
+    /** Explicit opt-in controls the offline listener; it is never enabled on boot. */
+    private var wakeWordRequested = false
+    private var wakeDetector: SherpaOfflineWakeWordDetector? = null
+    private var wakeSetupJob: Job? = null
+    /** Last user-selected Live configuration, reused only after an explicit wake hit. */
+    private var wakeStartIntent: Intent? = null
     /** Main-thread-confined lifecycle gate: one session can own audio resources at a time. */
     private var lifecycleState = VoiceLifecycleState.IDLE
     private var activeIdentityId: String? = null
@@ -211,6 +220,61 @@ class JuanitaVoiceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         voiceDiagnostics.event("service.command", "action=${intent?.action ?: "null"}; lifecycle=$lifecycleState")
         when (intent?.action) {
+            ACTION_ENABLE_WAKE -> {
+                val instruction = intent.getStringExtra(EXTRA_INSTRUCTION).orEmpty()
+                val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
+                val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
+                if (instruction.isBlank()) {
+                    _wakeWordStatus.value = "Attivazione non riuscita: istruzioni mancanti"
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+                val configuredPhrase = ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase.trim()
+                if (!configuredPhrase.equals(WakeWordModelInstaller.DEFAULT_PHRASE, ignoreCase = true)) {
+                    _wakeWordStatus.value = "Per questa prima prova usa la frase Hola Juanita"
+                    return START_NOT_STICKY
+                }
+                wakeStartIntent = Intent(this, JuanitaVoiceService::class.java).apply {
+                    action = ACTION_START
+                    putExtra(EXTRA_INSTRUCTION, instruction)
+                    putExtra(EXTRA_VOICE, voice)
+                    putExtra(EXTRA_IDENTITY_ID, identityId)
+                    putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, false)
+                }
+                wakeWordRequested = true
+                _wakeWordEnabled.value = true
+                _wakeWordStatus.value = "Preparazione ascolto offline…"
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    buildNotification("Preparazione ascolto offline · Hola Juanita"),
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                    } else 0
+                )
+                if (lifecycleState == VoiceLifecycleState.IDLE && stopJob?.isActive != true) {
+                    startWakeDetector()
+                } else {
+                    updateNotification("Juanita Live attiva · ascolto offline al termine della conversazione")
+                }
+                return START_NOT_STICKY
+            }
+            ACTION_DISABLE_WAKE -> {
+                wakeWordRequested = false
+                _wakeWordEnabled.value = false
+                _wakeWordStatus.value = "Ascolto automatico disattivato"
+                wakeSetupJob?.cancel()
+                if (lifecycleState == VoiceLifecycleState.IDLE && stopJob?.isActive != true) {
+                    serviceScope.launch {
+                        stopWakeDetector()
+                        stopForeground(STOP_FOREGROUND_REMOVE)
+                        stopSelf()
+                    }
+                } else {
+                    updateNotification("Conversazione Gemini Live attiva · wake word disattivata")
+                }
+                return START_NOT_STICKY
+            }
             ACTION_UPDATE_BACKGROUND_CONSENT -> {
                 backgroundContinuationAuthorized =
                     intent.getBooleanExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, false) && activeAlarmId == null
@@ -289,6 +353,11 @@ class JuanitaVoiceService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_STOP -> {
+                // A direct Stop disables both Live and the persistent offline listener.
+                wakeWordRequested = false
+                _wakeWordEnabled.value = false
+                _wakeWordStatus.value = "Ascolto automatico disattivato"
+                wakeSetupJob?.cancel()
                 // An explicit stop/exit always wins over a start queued during teardown.
                 pendingStartIntent = null
                 pendingStartId = 0
@@ -313,6 +382,13 @@ class JuanitaVoiceService : Service() {
                 val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
                 voiceDiagnostics.event("session.start.request", "voice=$voice; alarm=${alarmId != null}; preview=${previewDurationMillis > 0L}")
+                if (alarmId == null && instruction.isNotBlank()) {
+                    wakeStartIntent = Intent(intent).apply {
+                        action = ACTION_START
+                        removeExtra(EXTRA_ALARM_ID)
+                        putExtra(EXTRA_PREVIEW_DURATION_MS, 0L)
+                    }
+                }
                 val requestedBackgroundContinuation = intent.getBooleanExtra(
                     EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED,
                     false
@@ -515,6 +591,9 @@ class JuanitaVoiceService : Service() {
                             }
                             // Acquire audio focus before opening the microphone. Phone calls or
                             // competing communication sessions trigger the same orderly Stop path.
+                            // The offline detector is the sole mic owner while idle. Release
+                            // its AudioRecord and native decoder before Gemini Live opens audio.
+                            stopWakeDetector()
                             val audioFocusGranted = audioRouteController.begin {
                                 requestStop(
                                     preserveContinuitySnapshot = true,
@@ -841,7 +920,9 @@ class JuanitaVoiceService : Service() {
                 // The microphone and Live session are confirmed closed, and transcript
                 // intake has had its bounded chance to persist. Remove the microphone
                 // foreground notification now; do not display a mic service during memory cleanup.
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                if (!wakeWordRequested) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                }
                 // Remove only this completed session's transient continuity snapshot,
                 // and do it off the critical shutdown path. The ID-scoped delete cannot
                 // erase a snapshot written by a later conversation if this worker is delayed.
@@ -899,8 +980,97 @@ class JuanitaVoiceService : Service() {
                     // may still be bound to it, so wait for this hand-off, then let the
                     // Activity finish and unbind; onDestroy follows that unbind.
                     _stopRequestCompleted.value = true
-                    stopSelf()
+                    if (wakeWordRequested) {
+                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                        startWakeDetector()
+                    } else {
+                        stopSelf()
+                    }
                 }
+            }
+        }
+    }
+
+    /** Stop and fully release the offline recognizer before another audio owner starts. */
+    private suspend fun stopWakeDetector() {
+        wakeSetupJob?.cancelAndJoin()
+        wakeSetupJob = null
+        val detector = wakeDetector
+        wakeDetector = null
+        if (detector != null) {
+            withContext(Dispatchers.IO) { detector.close() }
+        }
+    }
+
+    /** Provision once, then keep Sherpa offline as the only microphone owner while idle. */
+    private fun startWakeDetector() {
+        if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE ||
+            wakeDetector != null || wakeSetupJob?.isActive == true
+        ) return
+        wakeSetupJob = serviceScope.launch {
+            try {
+                check(
+                    checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+                        android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) { "Permesso microfono non concesso" }
+                updateNotification("Preparazione modello offline · prima installazione")
+                val modelDirectory = WakeWordModelInstaller.install(applicationContext)
+                if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
+                val detector = withContext(Dispatchers.IO) {
+                    SherpaOfflineWakeWordDetector(
+                        modelDirectory = modelDirectory,
+                        phrase = WakeWordModelInstaller.DEFAULT_PHRASE,
+                        onDetected = { phrase ->
+                            serviceScope.launch {
+                                if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
+                                voiceDiagnostics.event("wake.detected", "phrase=$phrase; source=offline_sherpa")
+                                val completedDetector = wakeDetector
+                                wakeDetector = null
+                                if (completedDetector != null) {
+                                    withContext(Dispatchers.IO) { completedDetector.close() }
+                                }
+                                val savedStart = wakeStartIntent
+                                if (savedStart == null) {
+                                    _wakeWordStatus.value = "Attivazione rilevata ma sessione non configurata"
+                                    updateNotification(_wakeWordStatus.value)
+                                    return@launch
+                                }
+                                _wakeWordStatus.value = "Hola Juanita rilevato · connessione Gemini Live…"
+                                onStartCommand(Intent(savedStart).setAction(ACTION_START), 0, 0)
+                            }
+                        },
+                        onFailure = { error ->
+                            serviceScope.launch {
+                                val failedDetector = wakeDetector
+                                wakeDetector = null
+                                if (failedDetector != null) {
+                                    withContext(Dispatchers.IO) { failedDetector.close() }
+                                }
+                                _wakeWordStatus.value = "Ascolto offline sospeso: ${error.localizedMessage ?: error.javaClass.simpleName}"
+                                voiceDiagnostics.event("wake.failure", _wakeWordStatus.value)
+                                updateNotification(_wakeWordStatus.value)
+                            }
+                        }
+                    )
+                }
+                if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) {
+                    withContext(Dispatchers.IO) { detector.close() }
+                    return@launch
+                }
+                wakeDetector = detector
+                withContext(Dispatchers.IO) { detector.start() }
+                _wakeWordStatus.value = "Ascolto offline attivo · Hola Juanita"
+                updateNotification(_wakeWordStatus.value)
+                voiceDiagnostics.event("wake.armed", "modelRevision=${WakeWordModelInstaller.MODEL_REVISION}")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _wakeWordStatus.value = "Wake word non disponibile: ${error.localizedMessage ?: error.javaClass.simpleName}"
+                voiceDiagnostics.event("wake.setup.failure", _wakeWordStatus.value)
+                updateNotification(_wakeWordStatus.value)
+                Log.e("JuanitaVoiceService", "Unable to arm offline wake-word detector", error)
+            } finally {
+                wakeSetupJob = null
             }
         }
     }
@@ -1251,6 +1421,8 @@ class JuanitaVoiceService : Service() {
 
     companion object {
         const val ACTION_START = "ai.juanita.app.action.START_VOICE"
+        const val ACTION_ENABLE_WAKE = "ai.juanita.app.action.ENABLE_OFFLINE_WAKE"
+        const val ACTION_DISABLE_WAKE = "ai.juanita.app.action.DISABLE_OFFLINE_WAKE"
         const val ACTION_STOP = "ai.juanita.app.action.STOP_VOICE"
         const val ACTION_STOP_ALARM = "ai.juanita.app.action.STOP_ALARM_VOICE"
         const val ACTION_ACTIVITY_BACKGROUND = "ai.juanita.app.action.ACTIVITY_BACKGROUND"
@@ -1283,6 +1455,10 @@ class JuanitaVoiceService : Service() {
 
         private val _state = MutableStateFlow("Non connessa")
         val state: StateFlow<String> = _state.asStateFlow()
+        private val _wakeWordEnabled = MutableStateFlow(false)
+        val wakeWordEnabled: StateFlow<Boolean> = _wakeWordEnabled.asStateFlow()
+        private val _wakeWordStatus = MutableStateFlow("Ascolto automatico disattivato")
+        val wakeWordStatus: StateFlow<String> = _wakeWordStatus.asStateFlow()
 
         // True only after the service has confirmed microphone and Live-session teardown.
         private val _shutdownConfirmed = MutableStateFlow(true)
@@ -1333,6 +1509,21 @@ class JuanitaVoiceService : Service() {
                 if (identityId != null) putExtra(EXTRA_IDENTITY_ID, identityId)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun enableWakeWord(context: Context, instruction: String, voiceName: String, identityId: String?) {
+            val intent = Intent(context, JuanitaVoiceService::class.java).apply {
+                action = ACTION_ENABLE_WAKE
+                putExtra(EXTRA_INSTRUCTION, instruction)
+                putExtra(EXTRA_VOICE, voiceName)
+                if (identityId != null) putExtra(EXTRA_IDENTITY_ID, identityId)
+            }
+            androidx.core.content.ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun disableWakeWord(context: Context) {
+            val intent = Intent(context, JuanitaVoiceService::class.java).setAction(ACTION_DISABLE_WAKE)
+            runCatching { context.startService(intent) }
         }
 
         fun stop(context: Context) {
