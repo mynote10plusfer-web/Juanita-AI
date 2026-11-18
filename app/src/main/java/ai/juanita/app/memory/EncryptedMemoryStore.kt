@@ -579,7 +579,7 @@ class EncryptedMemoryStore(context: Context) {
     /** Shared user knowledge plus memories belonging only to the selected character. */
     @Synchronized
     fun listMemoriesForPersona(personaId: String, memoryScopeId: String? = null): List<MemoryItem> =
-        listMemories().filter { it.confirmedByUser && (it.personaId == null || it.personaId == personaId || (memoryScopeId != null && it.personaId == memoryScopeId)) }
+        listMemories().filter { it.confirmedByUser && (it.personaId == null || it.personaId == "shared" || it.personaId == personaId || (memoryScopeId != null && it.personaId == memoryScopeId)) }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
@@ -867,7 +867,7 @@ class EncryptedMemoryStore(context: Context) {
         listMemories().filter { memory ->
             !memory.sensitive &&
                 (memory.confirmedByUser || memory.source == "automatic") &&
-                (memory.personaId == null || (personaId != null && memory.personaId == personaId) ||
+                (memory.personaId == null || memory.personaId == "shared" || (personaId != null && memory.personaId == personaId) ||
                     (memoryScopeId != null && memory.personaId == memoryScopeId))
         }
 
@@ -896,7 +896,7 @@ class EncryptedMemoryStore(context: Context) {
             .filter { entry ->
                 !entry.sensitive &&
                     (entry.confirmedByUser || entry.source == "automatic") &&
-                    (entry.personaId == null || (personaId != null && entry.personaId == personaId) ||
+                    (entry.personaId == null || entry.personaId == "shared" || (personaId != null && entry.personaId == personaId) ||
                         (memoryScopeId != null && entry.personaId == memoryScopeId))
             }
             .map { entry ->
