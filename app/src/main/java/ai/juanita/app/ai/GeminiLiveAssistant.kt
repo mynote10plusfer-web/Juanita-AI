@@ -1,5 +1,7 @@
 package ai.juanita.app.ai
 
+import ai.juanita.app.voice.GeminiTtsSpeechOutput
+
 import com.google.firebase.ai.type.InlineDataPart
 import com.google.firebase.ai.type.LiveServerContent
 import com.google.firebase.ai.type.LiveServerGoAway
@@ -89,7 +91,7 @@ class GeminiLiveAssistant {
     private val pendingTtsTranscript = StringBuilder()
     private val pendingLivePcm = ByteArrayOutputStream()
     // Separate Gemini TTS is deliberately disabled: normal playback is native Gemini Live only.
-    private val ttsOutput: Nothing? = null
+    private val ttsOutput: GeminiTtsSpeechOutput? = null
     private var ttsReceiverJob: Job? = null
     @Volatile private var microphoneRecord: AudioRecord? = null
     @Volatile private var microphoneJob: Job? = null
