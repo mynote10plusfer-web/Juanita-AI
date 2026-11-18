@@ -624,7 +624,9 @@ private fun JuanitaApp(
                         append(activeDigitalIdentity?.toSystemInstruction() ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label))
                         if (activeDigitalIdentity != null) {
                             val origin = activeDigitalIdentity.origin
-                            val hasIdentityDialect = origin.community.contains("paisa", ignoreCase = true) ||
+                            val hasIdentityDialect = activeDigitalIdentity.preferredLanguageTag.startsWith("cs", ignoreCase = true) ||
+                                origin.countryCode.equals("CZ", ignoreCase = true) ||
+                                origin.community.contains("paisa", ignoreCase = true) ||
                                 origin.community.contains("canario", ignoreCase = true) ||
                                 origin.region.contains("antioquia", ignoreCase = true) ||
                                 origin.region.contains("canarias", ignoreCase = true) ||
