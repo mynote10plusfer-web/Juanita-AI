@@ -424,10 +424,12 @@ class IdentityMemoryNamespaceTest {
         val sharedFeminine = "Fatto del gruppo femminile ${UUID.randomUUID()}"
         val sharedMasculine = "Fatto del gruppo maschile ${UUID.randomUUID()}"
         val privateCanaryEpisode = "Episodio privato canario ${UUID.randomUUID()}"
+        val legacyGlobalFact = "Memoria condivisa legacy ${UUID.randomUUID()}"
         try {
             store.addMemory(sharedFeminine, personaId = "shared:feminine")
             store.addMemory(sharedMasculine, personaId = "shared:masculine")
             store.addMemory(privateCanaryEpisode, personaId = "juanita-canaria")
+            store.addMemory(legacyGlobalFact, personaId = "shared")
 
             val canaryContext = store.buildAssistantContext(
                 personaId = "juanita-canaria",
@@ -450,6 +452,8 @@ class IdentityMemoryNamespaceTest {
             assertTrue(canaryContext.contains(privateCanaryEpisode))
             assertFalse(colombianContext.contains(privateCanaryEpisode))
             assertFalse(joseContext.contains(privateCanaryEpisode))
+            assertTrue(canaryContext.contains(legacyGlobalFact))
+            assertTrue(joseContext.contains(legacyGlobalFact))
 
             val canaryRecall = store.buildRelevantRecallContext(
                 sharedFeminine,
