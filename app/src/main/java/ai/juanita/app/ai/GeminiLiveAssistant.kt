@@ -91,7 +91,8 @@ class GeminiLiveAssistant {
     private val pendingTtsTranscript = StringBuilder()
     private val pendingLivePcm = ByteArrayOutputStream()
     // Separate Gemini TTS is deliberately disabled: normal playback is native Gemini Live only.
-    private val ttsOutput: GeminiTtsSpeechOutput? = null
+    // Deliberately never instantiated: separate cloud TTS remains paused by product decision.
+    @Volatile private var ttsOutput: GeminiTtsSpeechOutput? = null
     private var ttsReceiverJob: Job? = null
     @Volatile private var microphoneRecord: AudioRecord? = null
     @Volatile private var microphoneJob: Job? = null
