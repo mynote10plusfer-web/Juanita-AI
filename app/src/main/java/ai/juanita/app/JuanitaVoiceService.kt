@@ -308,14 +308,11 @@ class JuanitaVoiceService : Service() {
             ACTION_START -> {
                 val instruction = intent.getStringExtra(EXTRA_INSTRUCTION).orEmpty()
                 val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
-                val ttsVoice = intent.getStringExtra(EXTRA_TTS_VOICE)
-                val ttsTarget = intent.getStringExtra(EXTRA_TTS_TARGET)
-                val ttsLanguage = intent.getStringExtra(EXTRA_TTS_LANGUAGE).orEmpty().ifBlank { "es-ES" }
                 val initialPrompt = intent.getStringExtra(EXTRA_INITIAL_PROMPT).orEmpty()
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
-                voiceDiagnostics.event("session.start.request", "voice=$voice; regionalTts=${!ttsVoice.isNullOrBlank()}; alarm=${alarmId != null}; preview=${previewDurationMillis > 0L}")
+                voiceDiagnostics.event("session.start.request", "voice=$voice; alarm=${alarmId != null}; preview=${previewDurationMillis > 0L}")
                 val requestedBackgroundContinuation = intent.getBooleanExtra(
                     EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED,
                     false
@@ -532,13 +529,10 @@ class JuanitaVoiceService : Service() {
                             // Accumulate the current user utterance before matching spoken stop/exit commands.
                             val commandTranscript = VoiceSessionCommandMatcher.TranscriptAccumulator()
                             val spokenCommandHandled = AtomicBoolean(false)
-                            voiceDiagnostics.event("assistant.start.call", "regionalTts=${!ttsVoice.isNullOrBlank()}; ttsLanguage=$ttsLanguage")
+                            voiceDiagnostics.event("assistant.start.call", "audioOutput=native_gemini_live")
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
-                                ttsVoiceName = ttsVoice,
-                                ttsTargetId = ttsTarget,
-                                ttsLanguageCode = ttsLanguage,
                                 onTranscript = { role, text ->
                                     voiceDiagnostics.event("transcript.callback", "role=$role; characters=${text.length}")
                                     if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true)) {
@@ -1261,9 +1255,6 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED = "extra_background_continuation_authorized"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
-        const val EXTRA_TTS_VOICE = "extra_tts_voice_name"
-        const val EXTRA_TTS_TARGET = "extra_tts_target_id"
-        const val EXTRA_TTS_LANGUAGE = "extra_tts_language_code"
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
         const val EXTRA_ALARM_ID = "extra_alarm_id"
         const val EXTRA_PREVIEW_DURATION_MS = "extra_preview_duration_ms"
@@ -1326,15 +1317,11 @@ class JuanitaVoiceService : Service() {
 
         fun start(context: Context, instruction: String, voiceName: String, initialPrompt: String = "",
                   alarmId: String? = null, previewDurationMillis: Long = 0L, identityId: String? = null,
-                  backgroundContinuationAuthorized: Boolean = false, ttsVoiceName: String? = null,
-                  ttsTargetId: String? = null, ttsLanguageCode: String? = null) {
+                  backgroundContinuationAuthorized: Boolean = false) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_INSTRUCTION, instruction)
                 putExtra(EXTRA_VOICE, voiceName)
-                if (!ttsVoiceName.isNullOrBlank()) putExtra(EXTRA_TTS_VOICE, ttsVoiceName)
-                if (!ttsTargetId.isNullOrBlank()) putExtra(EXTRA_TTS_TARGET, ttsTargetId)
-                if (!ttsLanguageCode.isNullOrBlank()) putExtra(EXTRA_TTS_LANGUAGE, ttsLanguageCode)
                 putExtra(EXTRA_INITIAL_PROMPT, initialPrompt)
                 putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, backgroundContinuationAuthorized)
                 if (alarmId != null) putExtra(EXTRA_ALARM_ID, alarmId)
