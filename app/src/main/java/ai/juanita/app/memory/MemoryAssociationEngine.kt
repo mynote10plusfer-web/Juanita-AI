@@ -155,7 +155,7 @@ internal object MemoryAssociationEngine {
         group("microphone", "microfono", "micrófono", "microphone", "mic", "microfono")
         group("offline", "offline", "sinconexion", "sinconexion", "local", "locale", "dispositivo")
         group("context", "contesto", "contexto", "context", "situacion", "situación", "circunstancia", "episode", "episodio", "episodios")
-        group("recall", "recuperar", "recuperacion", "recuperación", "recordar", "recuerdo", "recuerdos", "recall", "retrieval", "ricordare", "recupero")
+        group("recall", "recuperar", "recuperacion", "recuperación", "recordar", "recall", "retrieval", "ricordare", "recupero")
     }
 
     private val STOP_WORDS = setOf(
