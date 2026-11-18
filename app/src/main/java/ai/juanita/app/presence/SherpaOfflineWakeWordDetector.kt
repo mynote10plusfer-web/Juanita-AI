@@ -52,8 +52,13 @@ class SherpaOfflineWakeWordDetector(
         val joiner = modelDirectory.resolve(JOINER_FILE)
         val tokens = modelDirectory.resolve(TOKENS_FILE)
         val bpeModel = modelDirectory.resolve(BPE_FILE)
-        val required = listOf(encoder, decoder, joiner, tokens, bpeModel)
-        require(required.all(File::isFile)) { "Wake-word model files are incomplete" }
+        val keywords = modelDirectory.resolve(KEYWORDS_FILE)
+        val keywordManifest = modelDirectory.resolve(KEYWORD_MANIFEST_FILE)
+        val required = listOf(encoder, decoder, joiner, tokens, bpeModel, keywords, keywordManifest)
+        require(required.all(File::isFile)) { "Wake-word model or generated keyword files are incomplete" }
+        require(keywordManifest.readText().trim() == phrase.trim()) {
+            "Generated keyword file does not match the selected wake phrase"
+        }
 
         val modelConfig = OnlineModelConfig(
             transducer = OnlineTransducerModelConfig(
@@ -74,7 +79,7 @@ class SherpaOfflineWakeWordDetector(
                 featConfig = FeatureConfig(sampleRate = SAMPLE_RATE, featureDim = FEATURE_DIM),
                 modelConfig = modelConfig,
                 maxActivePaths = 4,
-                keywordsFile = "",
+                keywordsFile = keywords.absolutePath,
                 keywordsScore = KEYWORD_SCORE,
                 keywordsThreshold = KEYWORD_THRESHOLD,
                 numTrailingBlanks = 2
@@ -137,7 +142,10 @@ class SherpaOfflineWakeWordDetector(
                 "Unable to initialize microphone for offline wake-word detection"
             }
 
-            val activeStream = keywordSpotter.createStream(phrase)
+            // BPE text must be encoded with this model's SentencePiece vocabulary before
+            // it reaches Sherpa. The provisioner creates keywords.txt with the canonical
+            // text2token/SentencePiece implementation; never pass raw user text here.
+            val activeStream = keywordSpotter.createStream()
             stream = activeStream
             val activeRecorder = audioRecord
             synchronized(recorderLock) {
@@ -217,5 +225,7 @@ class SherpaOfflineWakeWordDetector(
         const val JOINER_FILE = "joiner-epoch-20-avg-2-chunk-16-left-64.onnx"
         const val TOKENS_FILE = "tokens.txt"
         const val BPE_FILE = "bpe.model"
+        const val KEYWORDS_FILE = "keywords.txt"
+        const val KEYWORD_MANIFEST_FILE = "keywords.phrase"
     }
 }
