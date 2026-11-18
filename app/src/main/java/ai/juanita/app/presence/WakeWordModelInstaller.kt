@@ -90,10 +90,10 @@ object WakeWordModelInstaller {
                 if (backup.exists()) backup.renameTo(destination)
                 error("Unable to atomically activate the verified wake-model bundle")
             }
-            backup.deleteRecursively()
             check(isValidDirectory(destination)) {
                 "Installed wake-model bundle failed its final integrity check"
             }
+            backup.deleteRecursively()
             return destination
         } catch (error: Throwable) {
             staging.deleteRecursively()
