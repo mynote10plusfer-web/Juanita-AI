@@ -28,7 +28,7 @@ data class MemoryItem(
     val confidence: Float,
     val confirmedByUser: Boolean,
     val sensitive: Boolean,
-    /** Null is shared user knowledge; a non-null ID belongs to one character only. */
+    /** Null is legacy/global user knowledge; non-null values may be a presentation-group scope or a private character ID. */
     val personaId: String? = null,
     /** Shared subject index; legacy records default to a derived topic at read time. */
     val topic: String = "general",
@@ -80,13 +80,13 @@ class EncryptedMemoryStore(context: Context) {
      * They share the AES-GCM encrypted record file and are never exposed in logs.
      */
     @Synchronized
-    fun readPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion): List<String> {
+    fun readPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion, memoryScopeId: String = "shared"): List<String> {
         if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion) return emptyList()
         val records = readRecords()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") == "pending_memory_batch" &&
-                record.optLong("clearVersion", -1L) == expectedClearVersion
+                record.optLong("clearVersion", -1L) == expectedClearVersion && record.optString("memoryScopeId", "shared") == memoryScopeId
             ) {
                 val turns = record.optJSONArray("turns") ?: return emptyList()
                 return buildList {
@@ -108,7 +108,8 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun enqueuePendingAutomaticMemoryTurn(
         turn: String,
-        expectedClearVersion: Long = memoryClearVersion
+        expectedClearVersion: Long = memoryClearVersion,
+        memoryScopeId: String = "shared"
     ): Int {
         if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion || turn.isBlank()) return 0
         val records = readRecords()
@@ -116,7 +117,7 @@ class EncryptedMemoryStore(context: Context) {
             .mapNotNull { records.optJSONObject(it) }
             .firstOrNull {
                 it.optString("kind") == "pending_memory_batch" &&
-                    it.optLong("clearVersion", -1L) == expectedClearVersion
+                    it.optLong("clearVersion", -1L) == expectedClearVersion && it.optString("memoryScopeId", "shared") == memoryScopeId
             }
         val current = buildList {
             val turns = pendingRecord?.optJSONArray("turns") ?: JSONArray()
@@ -130,12 +131,13 @@ class EncryptedMemoryStore(context: Context) {
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+            if (record.optString("kind") != "pending_memory_batch" || record.optString("memoryScopeId", "shared") != memoryScopeId) kept.put(record)
         }
         kept.put(JSONObject().apply {
             put("kind", "pending_memory_batch")
             put("id", "automatic")
             put("clearVersion", expectedClearVersion)
+            put("memoryScopeId", memoryScopeId)
             put("updatedAt", System.currentTimeMillis())
             put("turns", JSONArray(updated))
         })
@@ -144,13 +146,13 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     @Synchronized
-    fun savePendingAutomaticMemoryTurns(turns: List<String>, expectedClearVersion: Long = memoryClearVersion) {
+    fun savePendingAutomaticMemoryTurns(turns: List<String>, expectedClearVersion: Long = memoryClearVersion, memoryScopeId: String = "shared") {
         if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion) return
         val records = readRecords()
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+            if (record.optString("kind") != "pending_memory_batch" || record.optString("memoryScopeId", "shared") != memoryScopeId) kept.put(record)
         }
         val bounded = turns.filter { it.isNotBlank() }.takeLast(8).map { it.take(1800) }
         if (bounded.isNotEmpty()) {
@@ -158,6 +160,7 @@ class EncryptedMemoryStore(context: Context) {
                 put("kind", "pending_memory_batch")
                 put("id", "automatic")
                 put("clearVersion", expectedClearVersion)
+                put("memoryScopeId", memoryScopeId)
                 put("updatedAt", System.currentTimeMillis())
                 put("turns", JSONArray(bounded))
             })
@@ -172,7 +175,8 @@ class EncryptedMemoryStore(context: Context) {
     @Synchronized
     fun removeProcessedAutomaticMemoryTurns(
         processedTurns: List<String>,
-        expectedClearVersion: Long = memoryClearVersion
+        expectedClearVersion: Long = memoryClearVersion,
+        memoryScopeId: String = "shared"
     ) {
         if (processedTurns.isEmpty() || memoryClearVersion != expectedClearVersion) return
         val records = readRecords()
@@ -180,7 +184,7 @@ class EncryptedMemoryStore(context: Context) {
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
             if (record.optString("kind") != "pending_memory_batch" ||
-                record.optLong("clearVersion", -1L) != expectedClearVersion
+                record.optLong("clearVersion", -1L) != expectedClearVersion || record.optString("memoryScopeId", "shared") != memoryScopeId
             ) {
                 kept.put(record)
                 continue
@@ -210,13 +214,13 @@ class EncryptedMemoryStore(context: Context) {
     }
 
     @Synchronized
-    fun clearPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion) {
+    fun clearPendingAutomaticMemoryTurns(expectedClearVersion: Long = memoryClearVersion, memoryScopeId: String? = null) {
         if (memoryClearVersion != expectedClearVersion) return
         val records = readRecords()
         val kept = JSONArray()
         for (index in 0 until records.length()) {
             val record = records.optJSONObject(index) ?: continue
-            if (record.optString("kind") != "pending_memory_batch") kept.put(record)
+            if (record.optString("kind") != "pending_memory_batch" || (memoryScopeId != null && record.optString("memoryScopeId", "shared") != memoryScopeId)) kept.put(record)
         }
         writeRecords(kept, synchronous = true)
     }
@@ -403,7 +407,8 @@ class EncryptedMemoryStore(context: Context) {
         category: String,
         confidence: Float,
         expectedClearVersion: Long = memoryClearVersion,
-        confirmedByUser: Boolean = false
+        confirmedByUser: Boolean = false,
+        memoryScopeId: String = "shared"
     ): MemoryItem? {
         if (!isAutomaticMemoryEnabled || memoryClearVersion != expectedClearVersion || text.isBlank()) return null
         val normalized = normalizeMemoryText(text)
@@ -413,7 +418,7 @@ class EncryptedMemoryStore(context: Context) {
             if (record.optString("kind") == "memory" &&
                 record.optString("supersededBy").isBlank() &&
                 record.optString("category") == category &&
-                normalizeMemoryText(record.optString("text")) == normalized
+                normalizeMemoryText(record.optString("text")) == normalized && record.optString("personaId").ifBlank { "shared" } == memoryScopeId
             ) {
                 record.put("confidence", maxOf(record.optDouble("confidence", 0.0), confidence.toDouble()))
                 if (confirmedByUser) {
@@ -434,7 +439,8 @@ class EncryptedMemoryStore(context: Context) {
             confidence = confidence.coerceIn(0f, 1f),
             confirmedByUser = confirmedByUser,
             sensitive = false,
-            topic = MemoryTopicClassifier.classify(text)
+            topic = MemoryTopicClassifier.classify(text),
+            personaId = memoryScopeId.takeIf { it != "shared" }
         )
         records.put(memoryToJson(item))
         // Persist the curated fact before the pending transcript batch is acknowledged.
@@ -572,8 +578,8 @@ class EncryptedMemoryStore(context: Context) {
 
     /** Shared user knowledge plus memories belonging only to the selected character. */
     @Synchronized
-    fun listMemoriesForPersona(personaId: String): List<MemoryItem> =
-        listMemories().filter { it.confirmedByUser && (it.personaId == null || it.personaId == personaId) }
+    fun listMemoriesForPersona(personaId: String, memoryScopeId: String? = null): List<MemoryItem> =
+        listMemories().filter { it.confirmedByUser && (it.personaId == null || it.personaId == personaId || (memoryScopeId != null && it.personaId == memoryScopeId)) }
 
     @Synchronized
     fun deleteMemory(id: String) = deleteMemories(setOf(id))
@@ -751,12 +757,12 @@ class EncryptedMemoryStore(context: Context) {
      * this bounded excerpt is sent to the Live model. Stored text is never instructions.
      */
     @Synchronized
-    fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000, personaId: String? = null): String {
+    fun buildAssistantContext(maxTurns: Int = 60, maxCharacters: Int = 12000, personaId: String? = null, memoryScopeId: String? = null): String {
         // Read-only context assembly: do not rewrite the complete encrypted store at session start.
         // Automatically curated memories remain provisional until user confirmation,
         // but they are still useful evidence for continuity. Excluding them here made
         // the assistant appear to forget information it had already learned.
-        val durableMemories = recallableMemories(personaId).take(60)
+        val durableMemories = recallableMemories(personaId, memoryScopeId).take(60)
         val memoryLines = durableMemories
             .take(40)
             .map { item ->
@@ -857,11 +863,12 @@ class EncryptedMemoryStore(context: Context) {
      * provisional evidence, never as user-verified truth. Sensitive facts are excluded.
      */
     @Synchronized
-    private fun recallableMemories(personaId: String?): List<MemoryItem> =
+    private fun recallableMemories(personaId: String?, memoryScopeId: String? = null): List<MemoryItem> =
         listMemories().filter { memory ->
             !memory.sensitive &&
                 (memory.confirmedByUser || memory.source == "automatic") &&
-                (memory.personaId == null || (personaId != null && memory.personaId == personaId))
+                (memory.personaId == null || (personaId != null && memory.personaId == personaId) ||
+                    (memoryScopeId != null && memory.personaId == memoryScopeId))
         }
 
     /**
@@ -883,13 +890,14 @@ class EncryptedMemoryStore(context: Context) {
     )
 
     @Synchronized
-    private fun indexedRecallableMemories(personaId: String?): List<MemoryItem> {
+    private fun indexedRecallableMemories(personaId: String?, memoryScopeId: String? = null): List<MemoryItem> {
         val entries = readRecallIndex() ?: rebuildRecallIndex()
         return entries.asSequence()
             .filter { entry ->
                 !entry.sensitive &&
                     (entry.confirmedByUser || entry.source == "automatic") &&
-                    (entry.personaId == null || (personaId != null && entry.personaId == personaId))
+                    (entry.personaId == null || (personaId != null && entry.personaId == personaId) ||
+                        (memoryScopeId != null && entry.personaId == memoryScopeId))
             }
             .map { entry ->
                 // The index contains concepts, not plaintext memory. The full source text
@@ -1028,7 +1036,7 @@ class EncryptedMemoryStore(context: Context) {
 
     /** Search both curated facts and full episodic history for a live conversational cue. */
     @Synchronized
-    fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null, personaId: String? = null): String {
+    fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null, personaId: String? = null, memoryScopeId: String? = null): String {
         if (query.isBlank()) return ""
         val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
         if (terms.isEmpty()) return ""
@@ -1038,7 +1046,7 @@ class EncryptedMemoryStore(context: Context) {
         // is modified and weak single-word coincidences are rejected by the engine.
         val relevantMemories = MemoryAssociationEngine.rank(
             query = query,
-            memories = indexedRecallableMemories(personaId),
+            memories = indexedRecallableMemories(personaId, memoryScopeId),
             routedTopic = routedTopic,
             limit = 10
         ).mapNotNull { ranked ->
