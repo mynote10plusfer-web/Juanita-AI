@@ -1180,7 +1180,11 @@ class JuanitaVoiceService : Service() {
             this, 2, stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val openIntent = Intent(this, MainActivity::class.java)
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            // Restore the existing Juanita task after the user unlocks the phone.
+            // Reuse its Activity instead of creating a duplicate voice UI/session.
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
         val openPendingIntent = PendingIntent.getActivity(
             this, 1, openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
