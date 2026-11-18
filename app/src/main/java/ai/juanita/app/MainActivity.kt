@@ -506,7 +506,6 @@ private fun JuanitaApp(
     var memories by remember { mutableStateOf(initialMemories) }
     var memoryLoadError by remember { mutableStateOf(initialMemoryLoadError) }
     var improvementReports by remember { mutableStateOf(initialImprovementReports) }
-    val context = LocalContext.current
     val profileStore = remember(context) { DigitalIdentityStore(context.applicationContext) }
     val profileScope = rememberCoroutineScope()
     val lifecycleOwner = LocalLifecycleOwner.current
