@@ -327,6 +327,7 @@ class JuanitaVoiceService : Service() {
                     return START_NOT_STICKY
                 }
                 _shutdownConfirmed.value = false
+                _stopRequestCompleted.value = false
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
@@ -390,7 +391,7 @@ class JuanitaVoiceService : Service() {
                                 } ?: throw IllegalStateException("L'identità selezionata non esiste più. Selezionala di nuovo nelle impostazioni.")
                             }
                             memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
-                            automaticMemoryEngine = AutomaticMemoryEngine(memoryStore)
+                            automaticMemoryEngine = AutomaticMemoryEngine(memoryStore, selectedIdentity?.effectiveMemoryScopeId ?: "shared")
 
                             val conversationId = UUID.randomUUID().toString()
                             activeConversationId = conversationId
@@ -405,7 +406,7 @@ class JuanitaVoiceService : Service() {
                             // Restore relevant local memories and recent turns before opening
                             // the new Live session. Nothing is uploaded to a separate memory store.
                             val localContext = withContext(Dispatchers.IO) {
-                                memoryStore.buildAssistantContext(personaId = selectedIdentity?.id)
+                                memoryStore.buildAssistantContext(personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId)
                             }
                             val loadedProfile = withContext(Dispatchers.IO) {
                                 runCatching { personalProfileStore.load() }.getOrElse {
@@ -606,7 +607,7 @@ class JuanitaVoiceService : Service() {
                                     // Include earlier turns from this same conversation as well
                                     // as older sessions. The bounded continuity snapshot is not
                                     // a substitute for searchable full-session history.
-                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id)
+                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId)
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {
@@ -900,6 +901,10 @@ class JuanitaVoiceService : Service() {
                 } else {
                     _shutdownConfirmed.value = true
                     stopJob = null
+                    // The service is now idle and has requested its own stop. The Activity
+                    // may still be bound to it, so wait for this hand-off, then let the
+                    // Activity finish and unbind; onDestroy follows that unbind.
+                    _stopRequestCompleted.value = true
                     stopSelf()
                 }
             }
@@ -1286,16 +1291,21 @@ class JuanitaVoiceService : Service() {
 
         // True only after the service has confirmed microphone and Live-session teardown.
         private val _shutdownConfirmed = MutableStateFlow(true)
-        // Separate from microphone shutdown: true only after successful service destruction.
+        // True when teardown is complete and stopSelf() has been requested. The bound
+        // Activity must then finish/unbind; waiting for onDestroy here would deadlock.
+        private val _stopRequestCompleted = MutableStateFlow(true)
+        // Diagnostic signal set only by onDestroy after the Activity releases its binding.
         private val _serviceStoppedConfirmed = MutableStateFlow(true)
 
         /**
-         * Requests an orderly stop and waits for both confirmed audio teardown and the
-         * service's onDestroy callback. The Activity must remain until this returns true.
+         * Waits for confirmed microphone/Live teardown and the service's stopSelf hand-off.
+         * The Activity then finishes, its Compose binding is released, and Android destroys
+         * the now-idle service. Never wait for onDestroy while this Activity is still bound.
          */
         suspend fun stopAndAwait(context: Context, timeoutMillis: Long = 35_000L): Boolean {
             require(timeoutMillis > 0L)
             _shutdownConfirmed.value = false
+            _stopRequestCompleted.value = false
             _serviceStoppedConfirmed.value = false
             return try {
                 context.applicationContext.startService(
@@ -1303,7 +1313,7 @@ class JuanitaVoiceService : Service() {
                 )
                 withTimeoutOrNull(timeoutMillis) {
                     _shutdownConfirmed.first { it }
-                    _serviceStoppedConfirmed.first { it }
+                    _stopRequestCompleted.first { it }
                 } == true
             } catch (error: Exception) {
                 Log.e("JuanitaVoiceService", "Unable to confirm complete app voice-service shutdown", error)
