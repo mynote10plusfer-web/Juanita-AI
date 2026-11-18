@@ -50,4 +50,24 @@ class DigitalIdentityMemoryScopeTest {
         assertTrue(canaryPrompt.contains("Spanish (Spain)"))
         assertTrue(canaryPrompt.contains("CANARY ISLANDS"))
     }
+
+    @Test
+    fun standardCzechIdentityReceivesContemporaryCzechLanguageLock() {
+        val czech = identity("Juanita", IdentityPresentation.FEMININE, "cs-CZ")
+            .copy(origin = CulturalOrigin("CZ", "Czech Republic", "Prague", "Prague", ""))
+        val prompt = czech.toSystemInstruction()
+        assertTrue(prompt.contains("Czech"))
+        assertTrue(prompt.contains("STANDARD CZECH"))
+        assertTrue(prompt.contains("correct Czech grammar, diacritics"))
+    }
+
+    @Test
+    fun MoravianIdentityUsesSubtleRegionalGuidanceWithoutSlovakMixing() {
+        val moravian = identity("Juanita", IdentityPresentation.FEMININE, "cs-CZ")
+            .copy(origin = CulturalOrigin("CZ", "Czech Republic", "Moravia", "Brno", "Moravian"))
+        val prompt = moravian.toSystemInstruction()
+        assertTrue(prompt.contains("MORAVIAN CZECH"))
+        assertTrue(prompt.contains("distinct local varieties"))
+        assertTrue(prompt.contains("Do not drift into Slovak"))
+    }
 }
