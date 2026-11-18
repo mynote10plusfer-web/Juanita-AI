@@ -2,7 +2,7 @@
 
 **Current code state:** PR #58 head at this update contains the offline runtime connection in `JuanitaVoiceService`, explicit opt-in UI, pinned model installer, serialized KWS-to-Live microphone handoff and Live-to-KWS rearm after confirmed shutdown. A verified local phrase catalog now supports `Hola Juanita` and `Hola José`; the selected phrase follows the assistant identity. Canonical SentencePiece CI checks both phrases and the exact generated keyword hashes.
 
-**Validation state:** commit `0b020db6df51453238f2efc10e2e66238f517cb5` passed APK build, JVM tests and model/tokenizer validation; API 31 instrumentation was cancelled during the subsequent source update. Newer head `83789b1d012144b966b11f89265f0c61aacc6287` has not yet completed exact-head CI. Physical Samsung testing remains outstanding. Do not publish an APK as tested or claim battery/recognition quality until those gates pass.
+**Validation state:** commit `0b020db6df51453238f2efc10e2e66238f517cb5` passed APK build, JVM tests and model/tokenizer validation; API 31 instrumentation was cancelled during the subsequent source update. The latest code head before the documentation-only reconciliation is `0c735ebe687422156ac5a17fac082afde2a8be68`; workflow run `44413621021` was cancelled during subsequent updates. No completed exact-head CI result exists yet. PR head after the documentation updates is recorded in the PR metadata. Physical Samsung testing remains outstanding. Do not publish an APK as tested or claim battery/recognition quality until those gates pass.
 
 # 2026-11-18 — Cumulative integration decisions and missing-feature register
 
