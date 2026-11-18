@@ -224,6 +224,7 @@ class JuanitaVoiceService : Service() {
                 val instruction = intent.getStringExtra(EXTRA_INSTRUCTION).orEmpty()
                 val voice = intent.getStringExtra(EXTRA_VOICE).orEmpty().ifBlank { GeminiLiveAssistant.DEFAULT_VOICE }
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
+                val backgroundAuthorized = intent.getBooleanExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, false)
                 if (instruction.isBlank()) {
                     _wakeWordStatus.value = "Attivazione non riuscita: istruzioni mancanti"
                     if (lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
@@ -240,7 +241,7 @@ class JuanitaVoiceService : Service() {
                     putExtra(EXTRA_INSTRUCTION, instruction)
                     putExtra(EXTRA_VOICE, voice)
                     putExtra(EXTRA_IDENTITY_ID, identityId)
-                    putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, false)
+                    putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, backgroundAuthorized)
                 }
                 wakeWordRequested = true
                 _wakeWordEnabled.value = true
@@ -1570,11 +1571,18 @@ class JuanitaVoiceService : Service() {
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
         }
 
-        fun enableWakeWord(context: Context, instruction: String, voiceName: String, identityId: String?) {
+        fun enableWakeWord(
+            context: Context,
+            instruction: String,
+            voiceName: String,
+            identityId: String?,
+            backgroundContinuationAuthorized: Boolean = false
+        ) {
             val intent = Intent(context, JuanitaVoiceService::class.java).apply {
                 action = ACTION_ENABLE_WAKE
                 putExtra(EXTRA_INSTRUCTION, instruction)
                 putExtra(EXTRA_VOICE, voiceName)
+                putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, backgroundContinuationAuthorized)
                 if (identityId != null) putExtra(EXTRA_IDENTITY_ID, identityId)
             }
             androidx.core.content.ContextCompat.startForegroundService(context, intent)
