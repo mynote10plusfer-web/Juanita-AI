@@ -1,6 +1,5 @@
 package ai.juanita.app.ai
 
-import ai.juanita.app.voice.GeminiTtsSpeechOutput
 import com.google.firebase.ai.type.InlineDataPart
 import com.google.firebase.ai.type.LiveServerContent
 import com.google.firebase.ai.type.LiveServerGoAway
@@ -89,7 +88,8 @@ class GeminiLiveAssistant {
     private val ttsBufferLock = Any()
     private val pendingTtsTranscript = StringBuilder()
     private val pendingLivePcm = ByteArrayOutputStream()
-    @Volatile private var ttsOutput: GeminiTtsSpeechOutput? = null
+    // Separate Gemini TTS is deliberately disabled: normal playback is native Gemini Live only.
+    private val ttsOutput: Nothing? = null
     private var ttsReceiverJob: Job? = null
     @Volatile private var microphoneRecord: AudioRecord? = null
     @Volatile private var microphoneJob: Job? = null
@@ -102,9 +102,6 @@ class GeminiLiveAssistant {
     suspend fun start(
         systemInstruction: String,
         voiceName: String = DEFAULT_VOICE,
-        ttsVoiceName: String? = null,
-        ttsTargetId: String? = null,
-        ttsLanguageCode: String = "es-ES",
         onTranscript: (role: String, text: String) -> Unit = { _, _ -> },
         onArchiveSearch: (query: String) -> String = { "" },
         onImageSearch: suspend (query: String) -> String = { "La ricerca di immagini non è disponibile in questa sessione." },
@@ -119,10 +116,7 @@ class GeminiLiveAssistant {
         this.onDiagnosticEvent = onDiagnosticEvent
         lastInputTranscriptionAtElapsedMs = 0L
         lastOutputTranscriptionAtElapsedMs = 0L
-        onDiagnosticEvent("assistant.start", "voice=$voiceName; regionalTts=${!ttsVoiceName.isNullOrBlank()}; ttsTarget=${ttsTargetId ?: "none"}")
-        ttsOutput = ttsVoiceName?.takeIf { it.isNotBlank() }?.let { voice ->
-            GeminiTtsSpeechOutput(voice, ttsTargetId, ttsLanguageCode, onDiagnosticEvent)
-        }
+        onDiagnosticEvent("assistant.start", "voice=$voiceName; audioOutput=native_gemini_live")
         automaticRecoveryCount = 0
         synchronized(recentTranscript) { recentTranscript.clear() }
         val model = Firebase.ai(backend = GenerativeBackend.googleAI()).liveModel(
