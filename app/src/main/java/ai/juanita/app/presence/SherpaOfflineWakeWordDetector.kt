@@ -17,13 +17,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
- * Isolated offline KWS microphone owner.
+ * Offline KWS microphone owner, started only by JuanitaVoiceService after explicit opt-in.
  *
- * This class is deliberately NOT started by the application yet. The foreground
- * service integration must serialize it against JuanitaVoiceService/Gemini Live.
- * onDetected is invoked only after AudioRecord and OnlineStream have been released.
- *
- * Model files are provisioned outside the APK. No audio is sent to a network service.
+ * The service serializes this detector against Gemini Live. onDetected is invoked
+ * only after AudioRecord and OnlineStream have been released. Model files and the
+ * identity-specific keyword file are provisioned in app-private storage.
+ * No audio is sent to a network service.
  */
 class SherpaOfflineWakeWordDetector(
     private val modelDirectory: File,
