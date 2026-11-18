@@ -91,3 +91,16 @@ The six existing tabs remain the product structure. Do not add a seventh tab or 
 ### Additional wake-word model/API finding (2026-11-18)
 - The Spanish sherpa-onnx candidate model card declares Apache-2.0 and approximately 3.3M parameters, but its published evaluation covers only five safety phrases on one 536.7-second clip; it warns about spontaneous, far-field, noisy and strongly accented speech. That does not validate “Hola Juanita” or “Hola José”.
 - Source audit found a concrete defect in the isolated prototype: it sets `keywordsFile = ""` and passes the raw user phrase to `KeywordSpotter.createStream(phrase)`. The sherpa Kotlin API forwards that string directly to native code. For the selected BPE model, the API expects BPE pieces separated by spaces (and multiple phrases separated by `/`), not raw natural-language text. Implement a real SentencePiece BPE encoder or a verified bounded local keyword file before service integration. Never mark the wake phrase functional until this is corrected and acoustically tested.
+
+
+## 2026-11-18 22:37 — Runtime source reconciliation after wake integration
+
+This entry supersedes earlier statements in this audit that the wake detector is not connected to the service.
+
+- Current PR #58 source now wires `ACTION_ENABLE_WAKE` and `ACTION_DISABLE_WAKE` into `JuanitaVoiceService`. The service starts the foreground microphone service only after the explicit user action and runtime microphone permission, provisions the pinned model, starts Sherpa while idle, and stops the detector before Gemini Live owns the microphone.
+- After Gemini Live has confirmed both microphone capture teardown and session shutdown, the service re-arms Sherpa only if the opt-in is still enabled. Explicit OFF clears the saved wake start configuration and stops the idle detector. A failed detector setup disables wake listening and reports the error rather than silently retrying.
+- The installer downloads the five pinned model/tokenizer assets and verifies byte size plus SHA-256, then writes a local phrase-specific keyword file. The canonical SentencePiece output for `Hola Juanita` and `Hola José` is pinned in `WakeWordPhraseCatalog`; the workflow regenerates both and checks their exact hashes and vocabulary coverage.
+- Settings currently exposes only those two supported phrases; arbitrary custom phrases are not yet supported. Changing the phrase while listening first disables the existing detector so a stale keyword stream is not left active.
+- CI evidence from prior head `0b020db6df51453238f2efc10e2e66238f517cb5`: debug APK build passed, JVM tests passed, wake model/tokenizer validation passed; API 31 instrumentation was cancelled when newer commits superseded that run. Current code head at this audit update is newer and has no completed exact-head CI result yet.
+- No APK from the prior run is being offered as a test build. No physical Note10+ Android 12 or S22 Ultra Android 15 tests have been run; background/screen-off behavior, false accepts/misses, audio ownership, idle CPU/RAM, battery and thermal performance remain unverified.
+- The Sherpa model's published evaluation is not evidence of accuracy for either user phrase in real environments. Do not claim a low-power DSP path, guaranteed screen wake, or reliable recognition before measured acceptance.
