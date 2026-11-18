@@ -1069,7 +1069,20 @@ class JuanitaVoiceService : Service() {
                         android.content.pm.PackageManager.PERMISSION_GRANTED
                 ) { "Permesso microfono non concesso" }
                 updateNotification("Preparazione modello offline · prima installazione")
-                val modelDirectory = WakeWordModelInstaller.install(applicationContext, configuredPhrase)
+                var lastReportedProgressBytes = 0L
+                val modelDirectory = WakeWordModelInstaller.install(applicationContext, configuredPhrase) { _, downloadedBytes, totalBytes ->
+                    if (downloadedBytes - lastReportedProgressBytes >= 1_048_576L || downloadedBytes == totalBytes) {
+                        lastReportedProgressBytes = downloadedBytes
+                        val percent = if (totalBytes > 0L) (downloadedBytes * 100L / totalBytes).toInt() else 0
+                        serviceScope.launch {
+                            if (wakeWordRequested && lifecycleState == VoiceLifecycleState.IDLE) {
+                                val progress = "Scaricamento modello offline · $percent%"
+                                _wakeWordStatus.value = progress
+                                updateNotification(progress)
+                            }
+                        }
+                    }
+                }
                 if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
                 val detector = withContext(Dispatchers.IO) {
                     SherpaOfflineWakeWordDetector(
