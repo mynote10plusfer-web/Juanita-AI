@@ -248,9 +248,10 @@ class DigitalIdentityStoreTest {
     @Test
     fun systemInstructionTurnsCharacterTraitsIntoBehaviorAndRejectsStereotypes() {
         val profile = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
-            .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f))
+            .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f, warmth = 0.91f))
         val instruction = profile.toSystemInstruction()
         assertTrue(instruction.contains("directness 90"))
+        assertTrue(instruction.contains("warmth 91"))
         assertTrue(instruction.contains("irony 50"))
         assertTrue(instruction.contains("sweetness 70"))
         assertTrue(instruction.contains("sensuality 50"))
