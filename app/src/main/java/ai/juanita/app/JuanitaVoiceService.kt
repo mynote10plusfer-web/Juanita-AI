@@ -359,8 +359,13 @@ class JuanitaVoiceService : Service() {
                 voiceDiagnostics.event("background.idle_guard.cancelled", "reason=activity_foreground")
                 releaseCpuWakeLock()
                 logPowerSnapshot("activity_foreground")
-                if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
-                else updateNotification("Conversazione vocale attiva · app in primo piano")
+                if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
+                    if (wakeWordRequested) {
+                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                    } else {
+                        stopSelf(startId)
+                    }
+                } else updateNotification("Conversazione vocale attiva · app in primo piano")
                 return START_NOT_STICKY
             }
             ACTION_STOP -> {
@@ -1189,15 +1194,23 @@ class JuanitaVoiceService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        // Removing the app from Recents is an explicit app-close gesture. Stop the
-        // foreground voice session through the same awaited teardown path; do not touch
-        // AlarmManager schedules or the encrypted shared memory store.
+        // Removing the app from Recents is an explicit app-close gesture. It disables
+        // the always-on listener too; only screen-off/backgrounding keeps it armed.
+        wakeWordRequested = false
+        wakeStartIntent = null
+        _wakeWordEnabled.value = false
+        _wakeWordStatus.value = "Ascolto automatico disattivato"
+        wakeSetupJob?.cancel()
         if (lifecycleState != VoiceLifecycleState.IDLE || startRequested || stopJob?.isActive == true) {
             pendingStartIntent = null
             pendingStartId = 0
             requestStop(preserveContinuitySnapshot = true, finalMessage = "App chiusa · sessione vocale terminata")
         } else {
-            stopSelf()
+            serviceScope.launch {
+                stopWakeDetector()
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
         }
         super.onTaskRemoved(rootIntent)
     }
