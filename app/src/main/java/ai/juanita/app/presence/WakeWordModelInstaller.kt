@@ -1,6 +1,7 @@
 package ai.juanita.app.presence
 
 import android.content.Context
+import android.os.StatFs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -23,6 +24,7 @@ object WakeWordModelInstaller {
     private const val CONNECT_TIMEOUT_MS = 20_000
     private const val READ_TIMEOUT_MS = 120_000
     private const val BUFFER_SIZE = 64 * 1024
+    private const val MIN_STAGING_RESERVE_BYTES = 2L * 1024L * 1024L
     private val installMutex = Mutex()
 
     private data class Asset(val name: String, val bytes: Long, val sha256: String)
@@ -67,6 +69,11 @@ object WakeWordModelInstaller {
             return destination
         }
 
+        val requiredFreeBytes = assets.sumOf { it.bytes } + MIN_STAGING_RESERVE_BYTES
+        val availableFreeBytes = StatFs(context.filesDir.absolutePath).availableBytes
+        check(availableFreeBytes >= requiredFreeBytes) {
+            "Spazio insufficiente per installare il modello offline: servono circa ${requiredFreeBytes / (1024 * 1024)} MB liberi"
+        }
         val staging = File(context.filesDir, "wake-models/.staging-$MODEL_REVISION")
         val backup = File(context.filesDir, "wake-models/.previous-$MODEL_REVISION")
         staging.deleteRecursively()
