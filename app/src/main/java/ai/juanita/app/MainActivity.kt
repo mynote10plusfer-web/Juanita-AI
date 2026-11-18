@@ -555,6 +555,29 @@ private fun JuanitaApp(
     var locationContext by remember { mutableStateOf("") }
     var locationStatus by remember { mutableStateOf("Posizione non ancora letta") }
     val uiScope = rememberCoroutineScope()
+    val wakeWordListeningEnabled by JuanitaVoiceService.wakeWordEnabled.collectAsState()
+    val wakeWordStatus by JuanitaVoiceService.wakeWordStatus.collectAsState()
+
+    fun startOfflineWakeWord() {
+        val instruction = activeDigitalIdentity?.toSystemInstruction()
+            ?: persona.toSystemInstruction(selectedLanguage.label, selectedDialect.label)
+        JuanitaVoiceService.enableWakeWord(
+            context = context,
+            instruction = instruction,
+            voiceName = activeDigitalIdentity?.voiceName ?: selectedLiveVoice.id,
+            identityId = activeDigitalIdentity?.id
+        )
+    }
+
+    val wakeWordPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            startOfflineWakeWord()
+        } else {
+            status = "Per attivare Hola Juanita serve il permesso microfono."
+        }
+    }
 
     fun performSafeExit() {
         if (exitInProgress) return
@@ -888,13 +911,50 @@ private fun JuanitaApp(
                             wakePhrase = it
                             onWakePhraseChanged(it)
                         },
-                        label = { Text("Parola/frase di attivazione") },
-                        supportingText = { Text("Esempio: Hola ${assistantName.ifBlank { "Juanita" }}. Il riconoscimento automatico non è ancora implementato.") },
+                        label = { Text("Frase di attivazione") },
+                        supportingText = { Text("Per questa build il modello acustico verificato riconosce «Hola Juanita».") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Text("Il nome e la frase vengono salvati sul telefono. La wake word sarà collegata al motore di ascolto in una fase successiva.",
-                        color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Attivazione vocale offline", color = Color.White)
+                            Text(
+                                if (wakeWordListeningEnabled) "Microfono in ascolto locale" else "Disattivata · nessun ascolto in standby",
+                                color = Color(0xFF9A9DA4), fontSize = 12.sp
+                            )
+                        }
+                        Switch(
+                            checked = wakeWordListeningEnabled,
+                            onCheckedChange = { enabled ->
+                                if (!enabled) {
+                                    JuanitaVoiceService.disableWakeWord(context)
+                                } else if (!wakePhrase.trim().equals("Hola Juanita", ignoreCase = true)) {
+                                    status = "Per questa prova imposta esattamente «Hola Juanita»."
+                                } else if (
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    startOfflineWakeWord()
+                                } else {
+                                    wakeWordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            }
+                        )
+                    }
+                    Text(
+                        wakeWordStatus,
+                        color = if (wakeWordListeningEnabled) gold else Color(0xFF9A9DA4),
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Quando è attiva, Sherpa ascolta offline. Dopo il rilevamento rilascia il microfono e avvia Gemini Live. Disattivala qui o con Termina.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp
+                    )
                 }
 
                 DigitalIdentitySection(
