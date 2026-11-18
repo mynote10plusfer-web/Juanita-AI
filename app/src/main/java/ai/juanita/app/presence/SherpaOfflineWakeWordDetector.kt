@@ -33,6 +33,8 @@ class SherpaOfflineWakeWordDetector(
 ) : Closeable {
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
+    // A user stop/disable must win over a detection callback racing with teardown.
+    private val stopRequested = AtomicBoolean(false)
     private val recorderLock = Any()
 
     @Volatile
@@ -92,6 +94,7 @@ class SherpaOfflineWakeWordDetector(
     fun start() {
         check(!closed.get()) { "Detector is closed" }
         if (!running.compareAndSet(false, true)) return
+        stopRequested.set(false)
         worker = thread(name = "JuanitaOfflineKws", isDaemon = true) {
             Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
             runCapture()
@@ -104,6 +107,7 @@ class SherpaOfflineWakeWordDetector(
      */
     @Synchronized
     fun stop() {
+        stopRequested.set(true)
         running.set(false)
         synchronized(recorderLock) {
             runCatching { recorder?.stop() }
@@ -195,8 +199,10 @@ class SherpaOfflineWakeWordDetector(
             if (failure != null) {
                 Log.e(TAG, "Offline wake-word capture failed", failure)
                 onFailure(failure!!)
-            } else if (detectedPhrase != null) {
+            } else if (detectedPhrase != null && !stopRequested.get()) {
                 // The callback may now hand microphone ownership to Gemini Live.
+                // Re-check after releasing AudioRecord: an explicit user stop can race
+                // with the final decoder frame and must always take precedence.
                 onDetected(detectedPhrase!!)
             }
         }
