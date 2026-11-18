@@ -112,3 +112,6 @@ class WakeWordRuntimePolicyTest {
         assertNull(WakePhraseValidator.validate("Ciao Juanita"))
     }
 }
+
+
+// Additional invariants for the serialized microphone hand-off.
