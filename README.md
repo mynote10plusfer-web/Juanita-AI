@@ -2,9 +2,9 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current development candidate: 0.11.11 (versionCode 50) — PR #31, draft
+## Current cumulative integration candidate: 0.11.12 (versionCode 51) — PR #58, draft
 
-The cumulative 0.11.11 candidate includes the local multi-alarm manager, Gemini Live morning greeting, progressive personal profile, 30 gender-grouped Live voices, Juanita/José identity choice, background power cleanup and session-continuity recovery. The 0.11.11 audio test candidate retains low-sensitivity server VAD and user interruptions, requests `VOICE_COMMUNICATION` capture, tags assistant playback as `USAGE_VOICE_COMMUNICATION`, and scopes `MODE_IN_COMMUNICATION` plus communication-device routing to the Live session with restoration at teardown. The route controller prefers an available headset, otherwise the built-in speaker. These changes aim to put both capture and playback on Android's communication path so supported platform echo processing can reference the assistant playback. The user must validate speakerphone stability and intentional barge-in on both Samsung phones; AEC attachment remains device/SDK-dependent and is not claimed as proven. PR #31 remains draft/unmerged. Signed Release verification and physical tests are still required. Never install a debug APK as an in-place production update.
+The unified candidate is based on the most advanced 0.11.12 battery/thermal and voice line, then adds identity-group memory isolation, scoped automatic learning, and the offline Sherpa-ONNX wake-word foundation. It retains the existing six-tab layout, encrypted archive and memory system, regional voice/TTS paths, alarms, image search, and battery/thermal safeguards. The wake-word detector is not yet connected to the Live service: model provisioning, explicit opt-in, serialized microphone handoff and physical-device tests remain pending. PR #58 is draft/unmerged; CI and physical Note10+ / S22 Ultra verification are required before an APK is offered. Version 0.11.12 / code 51 is candidate metadata, not a claim of release readiness. Never install a debug APK as an in-place production update.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
