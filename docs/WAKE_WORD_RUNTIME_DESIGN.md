@@ -46,12 +46,38 @@ The idle listener requires a visible foreground-service notification and runtime
 - Measure idle CPU, RAM/GC, battery drain, device temperature, microphone restarts, and wake latency. Repeat on S22 Ultra after Note10+.
 - Add regression tests for phrase changes, stale token files, corrupted model assets, permission loss, rapid start/stop, detector-to-Live handoff, Live-to-detector re-arm, and explicit opt-out.
 
+
+## Wake feedback on a sleeping display
+
+Desired interaction after a confirmed acoustic hit:
+
+1. Release the KWS stream and microphone first; only then request visual feedback and hand off to Gemini Live.
+2. Show a minimal dark confirmation screen using the configured assistant name, e.g. `JUANITA ON` and `Ti ascolto…`. The phrase detector must not open Gemini Live until microphone ownership is confirmed.
+3. Keep the visual confirmation brief (target about 2 seconds) and do not acquire a CPU WakeLock merely to keep the display visible.
+4. If a Live conversation begins, hand over to the normal call/conversation UI and its existing screen policy. If no conversation starts, dismiss the confirmation and let Android's keyguard/display timeout resume.
+
+Platform constraints:
+- A normal app cannot reliably launch an Activity from the background on every Android version. Android 10+ background-activity-launch restrictions apply even to many foreground-service scenarios. Do not assume that running a foreground service grants permission to pop an Activity over the lock screen.
+- Do not use a full-screen notification intent for wake-word feedback. Android 14+ reserves automatic full-screen-intent access for qualifying alarm/calling core use cases; wake-word feedback is not to be misrepresented as an alarm or call.
+- `Activity.setTurnScreenOn(true)` and `setShowWhenLocked(true)` are the preferred Activity-window mechanisms once an Activity launch is legitimately allowed. They do not grant a background-launch exemption.
+- An ordinary app cannot force the physical display to turn off after an arbitrary two-second delay. Closing the temporary Activity returns to the keyguard/previous task; the actual display-off moment remains governed by system/OEM policy and the user's screen timeout. Never claim otherwise.
+- The deprecated `ACQUIRE_CAUSES_WAKEUP` flag is not the default implementation path. Any device-specific experiment must be isolated, time-bounded, opt-in, and tested against Android 12 and 15 before consideration.
+
+Fallback when the OS refuses a background Activity launch: update the already-visible foreground-service notification with “Juanita attiva”; do not retry-launch repeatedly, acquire a long WakeLock, or bypass Android policy. Record whether the screen was off, whether the activity/notification appeared, and the device/OS version in local diagnostics without recording audio.
+
+Acceptance tests:
+- Screen off + valid phrase on Note10+ Android 12: determine whether the permitted wake-feedback path can light the display and show the confirmation.
+- Screen off + valid phrase on S22 Ultra Android 15: confirm graceful fallback if background launch is blocked.
+- Invalid phrase/distractor: no display wake, no Live connection.
+- Confirmation dismissal: no persistent screen-on flag or WakeLock; keyguard and normal timeout behavior resume.
+- Screen already on: avoid stealing focus unnecessarily; use a lightweight in-app status update instead.
+
 ## Current blockers
 
 1. The existing detector is not started by the app.
 2. The current detector supplies raw phrase text to a BPE keyword spotter; this is not a valid BPE encoding path.
 3. Model files and checksum-pinned provisioning are absent.
 4. There is no opt-in settings control, foreground idle-listener state, or serialized Live handoff yet.
-5. No physical-device battery/thermal/false-trigger validation has been performed.
+5. No physical-device battery/thermal/false-trigger validation has been performed.\n6. The wake-feedback Activity/notification path is not implemented or device-validated; immediate forced display-off is not an app capability.
 
 This document is a design gate, not a claim that wake activation is implemented.
