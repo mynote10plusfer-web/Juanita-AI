@@ -244,19 +244,19 @@ jobs:
               if missing:
                   raise SystemExit(f"BPE pieces absent from sherpa tokens.txt for {phrase}: {missing!r}")
               tag = normalized.replace(" ", "_").replace("é", "e")
-              keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\\n"
+              keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\n"
               actual_hash = hashlib.sha256(keyword_line.encode("utf-8")).hexdigest()
               if actual_hash != expected_hash:
                   raise SystemExit(f"Canonical keyword bytes changed for {phrase}: {actual_hash}")
               (root / keyword_name).write_text(keyword_line, encoding="utf-8")
-              (root / phrase_name).write_text(phrase + "\\n", encoding="utf-8")
+              (root / phrase_name).write_text(phrase + "\n", encoding="utf-8")
               phrase_manifests.append({
                   "phrase": phrase,
                   "normalized_phrase": normalized,
                   "bpe_pieces": pieces,
                   "keyword_file": keyword_name,
                   "keyword_sha256": actual_hash,
-                  "keyword_line": keyword_line.rstrip("\\n"),
+                  "keyword_line": keyword_line.rstrip("\n"),
               })
 
           files = {}
@@ -277,7 +277,7 @@ jobs:
               "files": files,
           }
           (root / "integrity.json").write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n",
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",
           )
           print(json.dumps(manifest, ensure_ascii=False, indent=2))
