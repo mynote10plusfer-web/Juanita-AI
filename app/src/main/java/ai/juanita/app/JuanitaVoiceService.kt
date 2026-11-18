@@ -231,8 +231,8 @@ class JuanitaVoiceService : Service() {
                     return START_NOT_STICKY
                 }
                 val configuredPhrase = ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase.trim()
-                if (!configuredPhrase.equals(WakeWordModelInstaller.DEFAULT_PHRASE, ignoreCase = true)) {
-                    _wakeWordStatus.value = "Per questa prima prova usa la frase Hola Juanita"
+                if (!ai.juanita.app.presence.WakeWordPhraseCatalog.isSupported(configuredPhrase)) {
+                    _wakeWordStatus.value = "Frase non supportata: usa Hola Juanita oppure Hola José"
                     if (lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
                     return START_NOT_STICKY
                 }
@@ -249,7 +249,7 @@ class JuanitaVoiceService : Service() {
                 ServiceCompat.startForeground(
                     this,
                     NOTIFICATION_ID,
-                    buildNotification("Preparazione ascolto offline · Hola Juanita"),
+                    buildNotification("Preparazione ascolto offline · $configuredPhrase"),
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
                             ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
@@ -287,7 +287,7 @@ class JuanitaVoiceService : Service() {
                 // the preference is owned by MainActivity and is passed on the next start.
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
                     if (wakeWordRequested) {
-                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                        updateNotification("Ascolto offline attivo · pronuncia ${ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase}")
                     } else {
                         stopSelf(startId)
                     }
@@ -305,7 +305,7 @@ class JuanitaVoiceService : Service() {
                 logPowerSnapshot("activity_background")
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
                     if (wakeWordRequested) {
-                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                        updateNotification("Ascolto offline attivo · pronuncia ${ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase}")
                     } else {
                         stopSelf(startId)
                     }
@@ -362,7 +362,7 @@ class JuanitaVoiceService : Service() {
                 logPowerSnapshot("activity_foreground")
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
                     if (wakeWordRequested) {
-                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                        updateNotification("Ascolto offline attivo · pronuncia ${ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase}")
                     } else {
                         stopSelf(startId)
                     }
@@ -1033,7 +1033,7 @@ class JuanitaVoiceService : Service() {
                     // Activity finish and unbind; onDestroy follows that unbind.
                     _stopRequestCompleted.value = true
                     if (wakeWordRequested) {
-                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                        updateNotification("Ascolto offline attivo · pronuncia ${ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase}")
                         startWakeDetector()
                     } else {
                         stopSelf()
@@ -1061,17 +1061,21 @@ class JuanitaVoiceService : Service() {
         ) return
         wakeSetupJob = serviceScope.launch {
             try {
+                val configuredPhrase = ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase.trim()
+                check(ai.juanita.app.presence.WakeWordPhraseCatalog.isSupported(configuredPhrase)) {
+                    "Frase di attivazione non supportata dal modello offline"
+                }
                 check(
                     checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
                         android.content.pm.PackageManager.PERMISSION_GRANTED
                 ) { "Permesso microfono non concesso" }
                 updateNotification("Preparazione modello offline · prima installazione")
-                val modelDirectory = WakeWordModelInstaller.install(applicationContext)
+                val modelDirectory = WakeWordModelInstaller.install(applicationContext, configuredPhrase)
                 if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
                 val detector = withContext(Dispatchers.IO) {
                     SherpaOfflineWakeWordDetector(
                         modelDirectory = modelDirectory,
-                        phrase = WakeWordModelInstaller.DEFAULT_PHRASE,
+                        phrase = configuredPhrase,
                         onDetected = { phrase ->
                             serviceScope.launch {
                                 if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
@@ -1097,7 +1101,7 @@ class JuanitaVoiceService : Service() {
                                     startWakeDetector()
                                     return@launch
                                 }
-                                _wakeWordStatus.value = "Hola Juanita rilevato · connessione Gemini Live…"
+                                _wakeWordStatus.value = "$configuredPhrase rilevato · connessione Gemini Live…"
                                 onStartCommand(
                                     Intent(savedStart).apply {
                                         action = ACTION_START
@@ -1132,7 +1136,7 @@ class JuanitaVoiceService : Service() {
                 }
                 wakeDetector = detector
                 withContext(Dispatchers.IO) { detector.start() }
-                _wakeWordStatus.value = "Ascolto offline attivo · Hola Juanita"
+                _wakeWordStatus.value = "Ascolto offline attivo · $configuredPhrase"
                 updateNotification(_wakeWordStatus.value)
                 voiceDiagnostics.event("wake.armed", "modelRevision=${WakeWordModelInstaller.MODEL_REVISION}")
             } catch (cancelled: CancellationException) {
