@@ -287,4 +287,26 @@ class ConversationArchiveFidelityTest {
     }
 
 
+
+    @Test
+    fun continuityWritesDoNotEnumerateOrDecryptIndependentMemoryFiles() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "continuity-isolation-" + UUID.randomUUID()
+        val memoryDirectory = File(context.filesDir, "encrypted_memories").apply { mkdirs() }
+        val unrelatedMemoryFile = File(memoryDirectory, "continuity-probe-" + UUID.randomUUID() + ".mem")
+        val store = EncryptedMemoryStore(context)
+        try {
+            // A damaged unrelated memory file must not block short-lived continuity updates.
+            // Full memory reads should still detect the damaged file through their normal path.
+            unrelatedMemoryFile.writeBytes(byteArrayOf(1, 2, 3, 4))
+            store.appendContinuityTurn(sessionId, "USER", "Continuità isolata dalle memorie permanenti.")
+            val restored = EncryptedMemoryStore(context).buildContinuityContext(sessionId)
+            assertTrue(restored.contains("Continuità isolata"))
+            assertTrue("Continuity persistence must leave unrelated memory ciphertext untouched",
+                unrelatedMemoryFile.isFile && unrelatedMemoryFile.readBytes().contentEquals(byteArrayOf(1, 2, 3, 4)))
+        } finally {
+            unrelatedMemoryFile.delete()
+            store.clearContinuitySnapshot(sessionId)
+        }
+    }
 }
