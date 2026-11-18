@@ -1222,7 +1222,9 @@ private fun JuanitaApp(
                           }
                       },
                       dismissButton = {
-                          TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
+                          if (!exitInProgress) {
+                              TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
+                          }
                       },
                       containerColor = panel,
                       titleContentColor = Color.White,
