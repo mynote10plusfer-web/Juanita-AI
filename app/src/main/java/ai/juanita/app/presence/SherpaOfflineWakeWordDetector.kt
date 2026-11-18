@@ -137,27 +137,29 @@ class SherpaOfflineWakeWordDetector(
                 "Unable to initialize microphone for offline wake-word detection"
             }
 
-            stream = keywordSpotter.createStream(phrase)
+            val activeStream = keywordSpotter.createStream(phrase)
+            stream = activeStream
+            val activeRecorder = audioRecord
             synchronized(recorderLock) {
                 if (!running.get()) return
-                recorder = audioRecord
-                audioRecord.startRecording()
+                recorder = activeRecorder
+                activeRecorder.startRecording()
             }
 
             val pcm = ShortArray(SAMPLE_BUFFER_SIZE)
             while (running.get()) {
-                val count = audioRecord.read(pcm, 0, pcm.size, AudioRecord.READ_BLOCKING)
+                val count = activeRecorder.read(pcm, 0, pcm.size, AudioRecord.READ_BLOCKING)
                 if (count == AudioRecord.ERROR_DEAD_OBJECT) {
                     error("Microphone audio device was lost")
                 }
                 if (count <= 0) continue
 
                 val samples = FloatArray(count) { index -> pcm[index] / PCM_SCALE }
-                stream.acceptWaveform(samples, SAMPLE_RATE)
+                activeStream.acceptWaveform(samples, SAMPLE_RATE)
 
-                while (keywordSpotter.isReady(stream)) {
-                    keywordSpotter.decode(stream)
-                    val result = keywordSpotter.getResult(stream).keyword
+                while (keywordSpotter.isReady(activeStream)) {
+                    keywordSpotter.decode(activeStream)
+                    val result = keywordSpotter.getResult(activeStream).keyword
                     if (result.isNotBlank()) {
                         detectedPhrase = result.replace('_', ' ')
                         running.set(false)
@@ -171,15 +173,16 @@ class SherpaOfflineWakeWordDetector(
             running.set(false)
             runCatching { stream?.release() }
             synchronized(recorderLock) {
-                if (audioRecord != null) {
+                val ownedRecorder = audioRecord
+                if (ownedRecorder != null) {
                     runCatching {
-                        if (audioRecord.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                            audioRecord.stop()
+                        if (ownedRecorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                            ownedRecorder.stop()
                         }
                     }
-                    runCatching { audioRecord.release() }
+                    runCatching { ownedRecorder.release() }
                 }
-                if (recorder === audioRecord) recorder = null
+                if (recorder === ownedRecorder) recorder = null
             }
             if (failure != null) {
                 Log.e(TAG, "Offline wake-word capture failed", failure)
