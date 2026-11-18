@@ -1061,10 +1061,9 @@ class JuanitaVoiceService : Service() {
         ) return
         wakeSetupJob = serviceScope.launch {
             try {
-                val configuredPhrase = ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase.trim()
-                check(ai.juanita.app.presence.WakeWordPhraseCatalog.isSupported(configuredPhrase)) {
-                    "Frase di attivazione non supportata dal modello offline"
-                }
+                val requestedPhrase = ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase.trim()
+                val configuredPhrase = ai.juanita.app.presence.WakeWordPhraseCatalog.definition(requestedPhrase)?.phrase
+                    ?: error("Frase di attivazione non supportata dal modello offline")
                 check(
                     checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
                         android.content.pm.PackageManager.PERMISSION_GRANTED
