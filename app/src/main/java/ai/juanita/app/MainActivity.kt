@@ -456,6 +456,9 @@ private fun JuanitaApp(
             val nextName = if (nextGender == "MASCHILE") "José" else "Juanita"
             val nextDefaultWakePhrase = "Hola $nextName"
             if (wakePhrase.trim().equals(oldDefaultWakePhrase, ignoreCase = true)) {
+                if (JuanitaVoiceService.wakeWordEnabled.value) {
+                    JuanitaVoiceService.disableWakeWord(context)
+                }
                 wakePhrase = nextDefaultWakePhrase
                 onWakePhraseChanged(nextDefaultWakePhrase)
             }
@@ -909,11 +912,14 @@ private fun JuanitaApp(
                     OutlinedTextField(
                         value = wakePhrase,
                         onValueChange = {
+                            if (JuanitaVoiceService.wakeWordEnabled.value) {
+                                JuanitaVoiceService.disableWakeWord(context)
+                            }
                             wakePhrase = it
                             onWakePhraseChanged(it)
                         },
                         label = { Text("Frase di attivazione") },
-                        supportingText = { Text("Per questa build il modello acustico verificato riconosce «Hola Juanita».") },
+                        supportingText = { Text("Frasi verificate: «Hola Juanita» e «Hola José», in base all'identità selezionata.") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -934,8 +940,8 @@ private fun JuanitaApp(
                             onCheckedChange = { enabled ->
                                 if (!enabled) {
                                     JuanitaVoiceService.disableWakeWord(context)
-                                } else if (!wakePhrase.trim().equals("Hola Juanita", ignoreCase = true)) {
-                                    status = "Per questa prova imposta esattamente «Hola Juanita»."
+                                } else if (!ai.juanita.app.presence.WakeWordPhraseCatalog.isSupported(wakePhrase)) {
+                                    status = "Usa una delle frasi supportate: «Hola Juanita» oppure «Hola José»."
                                 } else if (
                                     ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                                     android.content.pm.PackageManager.PERMISSION_GRANTED
