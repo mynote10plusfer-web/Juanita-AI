@@ -99,6 +99,28 @@ class MemoryAssociationEngineTest {
         assertTrue(result.any { it.memory.id == linked.id && !it.direct })
     }
 
+    @Test
+    fun keepsUnconfirmedAutomaticMemoryAvailableAsEvidence() {
+        val provisional = MemoryItem(
+            id = "provisional",
+            text = "Juanita AI project uses offline voice activation",
+            category = "project",
+            source = "automatic",
+            createdAtMillis = 2L,
+            confidence = 0.86f,
+            confirmedByUser = false,
+            sensitive = false,
+            topic = "projects_technology"
+        )
+        val result = MemoryAssociationEngine.rank(
+            query = "How is the Juanita AI project progressing?",
+            memories = listOf(provisional),
+            routedTopic = "projects_technology"
+        )
+        assertEquals("provisional", result.single().memory.id)
+        assertFalse(result.single().memory.confirmedByUser)
+    }
+
     private fun memory(
         text: String,
         topic: String = "general",
