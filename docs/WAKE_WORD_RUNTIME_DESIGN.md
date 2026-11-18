@@ -53,7 +53,7 @@ Desired interaction after a confirmed acoustic hit:
 
 1. Release the KWS stream and microphone first; only then request visual feedback and hand off to Gemini Live.
 2. Show a minimal dark confirmation screen using the configured assistant name, e.g. `JUANITA ON` and `Ti ascolto…`. The phrase detector must not open Gemini Live until microphone ownership is confirmed.
-3. Keep the visual confirmation brief (target about 2 seconds) and do not acquire a CPU WakeLock merely to keep the display visible.
+3. Keep the visual confirmation brief (target 4 seconds by default, adjustable within 3–5 seconds) and do not acquire a CPU WakeLock merely to keep the display visible.
 4. If a Live conversation begins, hand over to the normal call/conversation UI and its existing screen policy. If no conversation starts, dismiss the confirmation and let Android's keyguard/display timeout resume.
 
 Platform constraints:
@@ -95,9 +95,11 @@ Acceptance tests:
 ## Current blockers
 
 1. The existing detector is not started by the app.
-2. The current detector supplies raw phrase text to a BPE keyword spotter; this is not a valid BPE encoding path.
+2. The detector has been corrected to read a pre-generated `keywords.txt` through `KeywordSpotterConfig` and the no-argument `createStream()` path. However, the app still has no canonical BPE `text2token` generation/provisioning path, so a user-selected phrase cannot yet be installed end to end.
 3. Model files and checksum-pinned provisioning are absent.
 4. There is no opt-in settings control, foreground idle-listener state, or serialized Live handoff yet.
-5. No physical-device battery/thermal/false-trigger validation has been performed.\n6. The wake-feedback Activity/notification path and localized short-lived confirmation are not implemented or device-validated; immediate forced display-off is not an app capability.\n7. Screen-off audio continuation and return-to-conversation behavior need physical-device validation, including the existing consent and CPU WakeLock policy.
+5. No physical-device battery/thermal/false-trigger validation has been performed.
+6. The wake-feedback Activity/notification path and localized short-lived confirmation are not implemented or device-validated; immediate forced display-off is not an app capability.
+7. Screen-off audio continuation and return-to-conversation behavior need physical-device validation, including the existing consent and CPU WakeLock policy.
 
 This document is a design gate, not a claim that wake activation is implemented.
