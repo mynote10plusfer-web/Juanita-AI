@@ -83,6 +83,47 @@ class MemoryAssociationEngineTest {
     }
 
     @Test
+    fun recallsWakeActivationAcrossItalianSpanishAndEnglishParaphrases() {
+        val stored = memory(
+            "Offline wake phrase lets the voice assistant activate without touching the phone",
+            topic = "projects_technology"
+        )
+        val result = MemoryAssociationEngine.rank(
+            query = "Come posso llamar a mi asistente para attivare la voce sin conexion?",
+            memories = listOf(stored),
+            routedTopic = "projects_technology"
+        )
+
+        assertEquals(1, result.size)
+        assertTrue(result.single().direct)
+        assertTrue(result.single().score >= 20)
+    }
+
+    @Test
+    fun recallsConversationContextWithoutReclassifyingPersonalMemoryAsAConfirmedFact() {
+        val provisional = MemoryItem(
+            id = "contextual",
+            text = "Juanita can retrieve prior conversation episodes and connect their context",
+            category = "project",
+            source = "automatic",
+            createdAtMillis = 3L,
+            confidence = 0.72f,
+            confirmedByUser = false,
+            sensitive = false,
+            topic = "projects_technology"
+        )
+        val result = MemoryAssociationEngine.rank(
+            query = "recuperar el contexto de episodios anteriores",
+            memories = listOf(provisional),
+            routedTopic = "projects_technology"
+        )
+
+        assertEquals("contextual", result.single().memory.id)
+        assertTrue(result.single().direct)
+        assertFalse(result.single().memory.confirmedByUser)
+    }
+
+    @Test
     fun directEvidenceAlwaysRanksBeforeAssociativeEvidence() {
         val anchor = memory("Juanita project voice engine")
         val linked = memory("Juanita project battery optimization")
