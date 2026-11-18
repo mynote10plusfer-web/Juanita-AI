@@ -305,7 +305,12 @@ class MainActivity : ComponentActivity() {
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
                 onRefreshMemories = { runCatching { memoryStore.listMemories() }.getOrDefault(emptyList()) },
-                onSaveMemory = { memoryStore.addMemory(it) },
+                onSaveMemory = { text ->
+                    val selectedScope = preferences.activeDigitalIdentityId?.let { selectedId ->
+                        runCatching { digitalIdentityStore.get(selectedId)?.effectiveMemoryScopeId }.getOrNull()
+                    }
+                    memoryStore.addMemory(text, personaId = selectedScope)
+                },
                 onDeleteMemory = { memoryStore.deleteMemory(it) },
                 onDeleteMemories = { memoryStore.deleteMemories(it) },
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
@@ -899,7 +904,7 @@ private fun JuanitaApp(
                             // Stop it immediately when the selected identity changes; the next
                             // explicit Parla action will start a fresh session with the new profile.
                             JuanitaVoiceService.stop(context)
-                            liveStartError = "Personaggio cambiato: chiusura della conversazione precedente in corso. Premi Parla per usare il nuovo profilo."
+                            liveStartError = "Personaggio cambiato: sto chiudendo la vecchia sessione Gemini Live. Quando premi Parla si aprirà una nuova connessione con lingua, accento e voce del profilo selezionato."
                         }
                         activeDigitalIdentityId = id
                         onActiveDigitalIdentityChanged(id)
@@ -1296,7 +1301,9 @@ private fun JuanitaApp(
                           }
                       },
                       dismissButton = {
-                          TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
+                          if (!exitInProgress) {
+                              TextButton(onClick = { showExitConfirmation = false }) { Text("Annulla", color = gold) }
+                          }
                       },
                       containerColor = panel,
                       titleContentColor = Color.White,
