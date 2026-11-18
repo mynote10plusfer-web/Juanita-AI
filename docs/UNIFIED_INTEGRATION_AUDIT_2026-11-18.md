@@ -104,3 +104,14 @@ This entry supersedes earlier statements in this audit that the wake detector is
 - CI evidence from prior head `0b020db6df51453238f2efc10e2e66238f517cb5`: debug APK build passed, JVM tests passed, wake model/tokenizer validation passed; API 31 instrumentation was cancelled when newer commits superseded that run. Current code head at this audit update is newer and has no completed exact-head CI result yet.
 - No APK from the prior run is being offered as a test build. No physical Note10+ Android 12 or S22 Ultra Android 15 tests have been run; background/screen-off behavior, false accepts/misses, audio ownership, idle CPU/RAM, battery and thermal performance remain unverified.
 - The Sherpa model's published evaluation is not evidence of accuracy for either user phrase in real environments. Do not claim a low-power DSP path, guaranteed screen wake, or reliable recognition before measured acceptance.
+
+
+## 2026-11-18 22:41 — Identity-aware phrase and installer hardening
+
+- Added canonical phrase catalog for `Hola Juanita` and `Hola José`, with exact BPE keyword-line SHA-256 values verified against the downloaded pinned model using SentencePiece 0.2.1.
+- The active character's presentation now selects the default wake phrase. Editing the phrase or switching between the two supported defaults disables an already armed detector before the new phrase is selected.
+- The installer no longer downloads a single hard-coded keyword file. It downloads the five model/tokenizer assets, verifies their pinned sizes and SHA-256 values, checks free storage before staging, then atomically writes the selected phrase's locally generated and hash-verified keyword/manifest files.
+- The foreground notification now reports download progress; Settings displays the approximate first-install download size (14.5 MB).
+- Added JVM tests for supported phrases, canonical BPE lines and hashes.
+- Current code head before the documentation-only updates: `0c735ebe687422156ac5a17fac082afde2a8be68`. The associated run `44413621021` was cancelled during subsequent branch updates; no complete CI result exists for the current code. Do not offer an APK yet.
+- Remaining: exact-head CI, acoustic false-accept/miss testing, microphone handoff and screen-off/background validation, 5–8 sample suitability flow, physical battery/thermal measurements on both Samsung devices, and localized wake feedback acceptance.
