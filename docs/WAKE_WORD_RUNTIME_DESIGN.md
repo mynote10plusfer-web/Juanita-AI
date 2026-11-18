@@ -92,14 +92,28 @@ Acceptance tests:
 - End Live while screen is off: audio tears down, then KWS re-arms only if opted in.
 - Repeat on Note10+ Android 12 and S22 Ultra Android 15; record display behavior, CPU WakeLock duration, battery, temperature, and audio continuity.
 
+## Implementation status — 2026-11-18 22:40
+
+**Runtime integration is present in PR #58 source; it is not yet release-accepted.**
+
+- `JuanitaVoiceService` now handles explicit enable/disable, starts the microphone foreground service, provisions the pinned model, creates the detector, and owns the handoff to Gemini Live.
+- Sherpa closes its stream and AudioRecord before invoking the detection callback. The service closes the detector before starting Live. When Live shutdown confirms microphone capture and session teardown, the service re-arms the detector only if opt-in remains enabled.
+- The Settings control is default OFF, requires RECORD_AUDIO, displays the supported phrases, and stops the current listener if the phrase is edited or the selected identity changes.
+- Supported phrases are currently limited to `Hola Juanita` and `Hola José`. Canonical SentencePiece output is validated in CI and pinned by SHA-256; arbitrary user-entered phrases are not supported.
+- The model is downloaded only after explicit opt-in. Five model/tokenizer assets are pinned by revision, size and SHA-256. The installer checks free storage, atomically installs the model and writes the selected keyword file. The foreground notification reports download progress.
+- The current wake feedback is a notification update. Do not assume Android will launch an Activity over the lock screen or illuminate the display from the background. The 4-second visual confirmation remains a target for a permitted foreground UI path, not a guaranteed display behavior.
+- The current exact head must pass CI. A prior head passed APK build, JVM tests and model/tokenizer validation, but its API 31 instrumentation job was cancelled when newer commits superseded it.
+- No physical acceptance has been completed on Note10+ Android 12 or S22 Ultra Android 15.
+
 ## Current blockers
 
-1. The existing detector is not started by the app.
-2. The detector has been corrected to read a pre-generated `keywords.txt` through `KeywordSpotterConfig` and the no-argument `createStream()` path. However, the app still has no canonical BPE `text2token` generation/provisioning path, so a user-selected phrase cannot yet be installed end to end.
-3. Model files and checksum-pinned provisioning are absent.
-4. There is no opt-in settings control, foreground idle-listener state, or serialized Live handoff yet.
-5. No physical-device battery/thermal/false-trigger validation has been performed.
-6. The wake-feedback Activity/notification path and localized short-lived confirmation are not implemented or device-validated; immediate forced display-off is not an app capability.
-7. Screen-off audio continuation and return-to-conversation behavior need physical-device validation, including the existing consent and CPU WakeLock policy.
+1. **Exact-head CI:** run and pass debug build, JVM tests, instrumentation compilation, API 31 instrumentation, package identity checks and both tokenizer validations on the latest PR #58 head.
+2. **Physical microphone ownership:** test repeated enable/disable, rapid stop, permission revocation, wake detection, KWS-to-Live handoff and Live-to-KWS re-arm on both Samsung devices. Confirm no simultaneous AudioRecord owners and no stuck microphone.
+3. **Background and screen-off:** test Home/background and display-off operation, notification visibility, Android 12/15 restrictions, removal from recents, return from notification, and the existing explicit background-continuation consent. Task removal is not equivalent to pressing Home.
+4. **Acoustic quality:** measure false accepts and misses for both supported phrases across speakers, distances, speeds, room noise and distractor phrases. The model card's published benchmark does not validate these two phrases.
+5. **Power and thermal acceptance:** measure idle CPU, RAM/GC, wake latency, battery percentage/temperature and overnight drain with wake OFF versus ON. Do not claim low-power DSP behavior or improved battery life before measurements.
+6. **Phrase enrollment:** the optional 5–8 repetition suitability check, sample discard verification and threshold guidance are not yet implemented. No raw recording may be retained or uploaded.
+7. **Visual confirmation:** a localized, short-lived foreground confirmation screen is not yet accepted. When Android blocks background Activity launch, update the existing notification and do not retry-launch, use a full-screen intent, or hold a screen WakeLock.
+8. **General custom phrases:** only `Hola Juanita` and `Hola José` are supported in this build. Extending to arbitrary phrases requires canonical SentencePiece generation, vocabulary checks and new acoustic validation before exposing them as selectable.
 
-This document is a design gate, not a claim that wake activation is implemented.
+These are acceptance gates, not a claim that the feature is already reliable on physical hardware.
