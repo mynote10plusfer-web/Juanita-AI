@@ -449,6 +449,30 @@ private fun JuanitaApp(
     var wakePhrase by remember { mutableStateOf(initialWakePhrase) }
     var persona by remember { mutableStateOf(initialPersona.copy(name = initialName, gender = assistantGender)) }
 
+    fun syncWakePhraseForIdentity(identityId: String?) {
+        val selectedIdentity = digitalIdentities.firstOrNull { it.id == identityId }
+        val nextPhrase = when {
+            selectedIdentity?.presentation == ai.juanita.app.identity.IdentityPresentation.MASCULINE -> "Hola José"
+            selectedIdentity?.presentation == ai.juanita.app.identity.IdentityPresentation.FEMININE -> "Hola Juanita"
+            assistantGender == "MASCHILE" -> "Hola José"
+            else -> "Hola Juanita"
+        }
+        val currentPhrase = wakePhrase.trim()
+        if (currentPhrase.equals("Hola Juanita", ignoreCase = true) ||
+            currentPhrase.equals("Hola José", ignoreCase = true)
+        ) {
+            if (!currentPhrase.equals(nextPhrase, ignoreCase = true) &&
+                JuanitaVoiceService.wakeWordEnabled.value
+            ) {
+                JuanitaVoiceService.disableWakeWord(context)
+            }
+            if (!currentPhrase.equals(nextPhrase, ignoreCase = true)) {
+                wakePhrase = nextPhrase
+                onWakePhraseChanged(nextPhrase)
+            }
+        }
+    }
+
     val applyAssistantIdentity: (String) -> Unit = { requestedGender ->
         val nextGender = if (requestedGender == "MASCHILE") "MASCHILE" else "FEMMINILE"
         if (nextGender != assistantGender) {
@@ -807,12 +831,14 @@ private fun JuanitaApp(
                         refreshSignal = identityRefreshSignal,
                         firstRunMode = true,
                         onFirstIdentityCreated = { id ->
+                            syncWakePhraseForIdentity(id)
                             activeDigitalIdentityId = id
                             onActiveDigitalIdentityChanged(id)
                             onCompleteInitialSetup(id)
                             showFirstMeeting = false
                         },
                         onActiveIdentityChanged = { id ->
+                            syncWakePhraseForIdentity(id)
                             activeDigitalIdentityId = id
                             onActiveDigitalIdentityChanged(id)
                         },
@@ -970,6 +996,7 @@ private fun JuanitaApp(
                     activeIdentityId = activeDigitalIdentityId,
                     refreshSignal = identityRefreshSignal,
                     onActiveIdentityChanged = { id ->
+                        syncWakePhraseForIdentity(id)
                         val previousId = activeDigitalIdentityId
                         val voiceMayBeRunning = listOf(
                             "in ascolto", "connessione", "rinnovando", "anteprima",
