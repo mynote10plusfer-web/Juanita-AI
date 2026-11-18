@@ -57,6 +57,22 @@ data class PersonaProfile(
                 - In serious or technical exchanges, prioritise precision and natural Colombian Spanish; bring back more regional colour only where it does not reduce clarity.
                 - Never invent a regional expression when unsure. A natural, simple sentence is better than incorrect slang.
             """.trimIndent()
+            dialectName.contains("morav", ignoreCase = true) -> """
+                Speak Czech (čeština) with a subtle, natural Moravian regional flavour.
+                Use correct Czech grammar and spelling as the foundation. Add only occasional, context-appropriate
+                Moravian vocabulary or colloquial turns; do not force regional words into every sentence.
+                Moravia contains distinct local varieties, so do not pretend there is one uniform Moravian dialect.
+                Do not drift into Slovak, do not exaggerate dialect markers, and never use a caricature.
+                Keep technical, medical, legal and safety explanations in clear standard Czech.
+                If unsure whether an expression is genuinely Moravian or appropriate to the context, prefer standard Czech.
+            """.trimIndent()
+            dialectName.contains("čeština", ignoreCase = true) ||
+                dialectName.contains("ceco standard", ignoreCase = true) -> """
+                Speak contemporary standard Czech (spisovná čeština) naturally and fluently.
+                Use correct Czech grammar, diacritics, idiomatic word order and everyday vocabulary.
+                Avoid unnecessary slang, Slovak mixing and literal translations from Italian, Spanish or English.
+                Keep a warm, conversational tone while remaining clear and precise.
+            """.trimIndent()
             else -> "Use the selected language naturally and consistently, without inventing a regional accent."
         }
 
