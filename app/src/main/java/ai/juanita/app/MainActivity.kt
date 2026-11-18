@@ -945,7 +945,7 @@ private fun JuanitaApp(
                             onWakePhraseChanged(it)
                         },
                         label = { Text("Frase di attivazione") },
-                        supportingText = { Text("Frasi verificate: «Hola Juanita» e «Hola José», in base all'identità selezionata.") },
+                        supportingText = { Text("Frasi verificate: «Hola Juanita» e «Hola José», in base all'identità selezionata. Prima installazione: circa 14,5 MB.") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
