@@ -1352,7 +1352,7 @@ private fun JuanitaApp(
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                    Text("Gemini Live è integrato per le prove vocali. La memoria automatica è attiva quando abilitata nelle impostazioni; la wake word e le voci regionali native sono ancora in sviluppo.",
+                    Text("Gemini Live è integrato per le prove vocali. La wake word offline è collegata nel candidato cumulativo ma attende CI e prove sui dispositivi; la voce regionale cloud separata resta sospesa.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
