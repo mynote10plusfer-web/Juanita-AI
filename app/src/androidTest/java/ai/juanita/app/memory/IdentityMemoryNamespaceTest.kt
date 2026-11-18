@@ -417,6 +417,123 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun feminineCharactersShareDurableFactsButMasculineCharactersAndPrivateEpisodesStaySeparate() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sharedFeminine = "Fatto del gruppo femminile ${UUID.randomUUID()}"
+        val sharedMasculine = "Fatto del gruppo maschile ${UUID.randomUUID()}"
+        val privateCanaryEpisode = "Episodio privato canario ${UUID.randomUUID()}"
+        try {
+            store.addMemory(sharedFeminine, personaId = "shared:feminine")
+            store.addMemory(sharedMasculine, personaId = "shared:masculine")
+            store.addMemory(privateCanaryEpisode, personaId = "juanita-canaria")
+
+            val canaryContext = store.buildAssistantContext(
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombianContext = store.buildAssistantContext(
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val joseContext = store.buildAssistantContext(
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+
+            assertTrue(canaryContext.contains(sharedFeminine))
+            assertTrue(colombianContext.contains(sharedFeminine))
+            assertFalse(joseContext.contains(sharedFeminine))
+            assertTrue(joseContext.contains(sharedMasculine))
+            assertFalse(canaryContext.contains(sharedMasculine))
+            assertTrue(canaryContext.contains(privateCanaryEpisode))
+            assertFalse(colombianContext.contains(privateCanaryEpisode))
+            assertFalse(joseContext.contains(privateCanaryEpisode))
+
+            val canaryRecall = store.buildRelevantRecallContext(
+                sharedFeminine,
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombianRecall = store.buildRelevantRecallContext(
+                sharedFeminine,
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val joseRecall = store.buildRelevantRecallContext(
+                sharedFeminine,
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+            assertTrue(canaryRecall.contains(sharedFeminine))
+            assertTrue(colombianRecall.contains(sharedFeminine))
+            assertFalse(joseRecall.contains(sharedFeminine))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun automaticallyCuratedFactsAreSavedToAndRecalledOnlyWithinTheirCharacterGroup() {
+        val store = EncryptedMemoryStore(isolatedContext())
+        val feminineFact = "Fatto automatico femminile ${UUID.randomUUID()}"
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val saved = store.addAutomaticMemory(
+                feminineFact,
+                "project",
+                0.96f,
+                confirmedByUser = true,
+                memoryScopeId = "shared:feminine"
+            ) ?: throw AssertionError("Expected the automatic memory to be persisted")
+
+            assertEquals("shared:feminine", saved.personaId)
+            val canary = store.buildAssistantContext(
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombian = store.buildAssistantContext(
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val jose = store.buildAssistantContext(
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+            assertTrue(canary.contains(feminineFact))
+            assertTrue(colombian.contains(feminineFact))
+            assertFalse(jose.contains(feminineFact))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun pendingAutomaticMemoryBatchesAreIsolatedAndCanBeClearedIndependently() {
+        val store = EncryptedMemoryStore(isolatedContext())
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val version = store.memoryClearVersion
+            val feminineTurn = "USER: coda femminile ${UUID.randomUUID()}"
+            val masculineTurn = "USER: coda maschile ${UUID.randomUUID()}"
+
+            assertEquals(1, store.enqueuePendingAutomaticMemoryTurn(feminineTurn, version, "shared:feminine"))
+            assertEquals(1, store.enqueuePendingAutomaticMemoryTurn(masculineTurn, version, "shared:masculine"))
+            assertEquals(listOf(feminineTurn), store.readPendingAutomaticMemoryTurns(version, "shared:feminine"))
+            assertEquals(listOf(masculineTurn), store.readPendingAutomaticMemoryTurns(version, "shared:masculine"))
+
+            store.removeProcessedAutomaticMemoryTurns(listOf(feminineTurn), version, "shared:feminine")
+            assertTrue(store.readPendingAutomaticMemoryTurns(version, "shared:feminine").isEmpty())
+            assertEquals(listOf(masculineTurn), store.readPendingAutomaticMemoryTurns(version, "shared:masculine"))
+
+            store.clearPendingAutomaticMemoryTurns(version, "shared:masculine")
+            assertTrue(store.readPendingAutomaticMemoryTurns(version, "shared:masculine").isEmpty())
+        } finally {
+            store.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
