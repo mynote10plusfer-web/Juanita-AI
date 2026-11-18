@@ -226,12 +226,13 @@ class JuanitaVoiceService : Service() {
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
                 if (instruction.isBlank()) {
                     _wakeWordStatus.value = "Attivazione non riuscita: istruzioni mancanti"
-                    stopSelf(startId)
+                    if (lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
                     return START_NOT_STICKY
                 }
                 val configuredPhrase = ai.juanita.app.data.AssistantPreferences(applicationContext).wakePhrase.trim()
                 if (!configuredPhrase.equals(WakeWordModelInstaller.DEFAULT_PHRASE, ignoreCase = true)) {
                     _wakeWordStatus.value = "Per questa prima prova usa la frase Hola Juanita"
+                    if (lifecycleState == VoiceLifecycleState.IDLE) stopSelf(startId)
                     return START_NOT_STICKY
                 }
                 wakeStartIntent = Intent(this, JuanitaVoiceService::class.java).apply {
@@ -249,7 +250,8 @@ class JuanitaVoiceService : Service() {
                     NOTIFICATION_ID,
                     buildNotification("Preparazione ascolto offline · Hola Juanita"),
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
                     } else 0
                 )
                 if (lifecycleState == VoiceLifecycleState.IDLE && stopJob?.isActive != true) {
@@ -282,7 +284,11 @@ class JuanitaVoiceService : Service() {
                 // Do not leave an idle started Service behind just to persist a UI setting;
                 // the preference is owned by MainActivity and is passed on the next start.
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
-                    stopSelf(startId)
+                    if (wakeWordRequested) {
+                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                    } else {
+                        stopSelf(startId)
+                    }
                     return START_NOT_STICKY
                 }
                 if (!backgroundContinuationAuthorized) {
@@ -296,7 +302,11 @@ class JuanitaVoiceService : Service() {
                 appInForeground = false
                 logPowerSnapshot("activity_background")
                 if (!startRequested || lifecycleState == VoiceLifecycleState.IDLE) {
-                    stopSelf(startId)
+                    if (wakeWordRequested) {
+                        updateNotification("Ascolto offline attivo · pronuncia Hola Juanita")
+                    } else {
+                        stopSelf(startId)
+                    }
                 } else if (activeAlarmId == null) {
                     // Apply the same fail-closed presence policy used by the C3 tests
                     // at the actual audio owner. Background continuation is allowed only
@@ -368,7 +378,7 @@ class JuanitaVoiceService : Service() {
                 val requestedAlarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 if (!requestedAlarmId.isNullOrBlank() && activeAlarmId == requestedAlarmId) {
                     requestStop()
-                } else if (!startRequested && stopJob?.isActive != true) {
+                } else if (!startRequested && stopJob?.isActive != true && !wakeWordRequested) {
                     // A stop request must not leave behind a newly-created, idle Service.
                     stopSelf(startId)
                 }
