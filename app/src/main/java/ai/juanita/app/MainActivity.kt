@@ -708,6 +708,7 @@ private fun JuanitaApp(
             context = context,
             instruction = instruction,
             voiceName = identity.voiceName,
+            identityId = identity.id,
             initialPrompt = sample,
             previewDurationMillis = 25_000L,
         )
