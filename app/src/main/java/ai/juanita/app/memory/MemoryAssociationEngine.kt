@@ -150,6 +150,12 @@ internal object MemoryAssociationEngine {
         group("food", "cibo", "comida", "food", "cucina", "cocina", "cooking")
         group("problem", "problema", "problemi", "problemas", "problem", "problems", "issue", "issues")
         group("decision", "decisione", "decisioni", "decision", "decisions", "decisión", "decisiones")
+        group("activation", "attivazione", "attivare", "attiva", "attivo", "activar", "activacion", "activación", "despertar", "llamar", "invocar", "wake", "wakeup", "hotword", "keyword")
+        group("assistant", "assistente", "asistente", "assistant", "ayudante", "companion", "compañera", "compañero")
+        group("microphone", "microfono", "micrófono", "microphone", "mic", "microfono")
+        group("offline", "offline", "sinconexion", "sinconexion", "local", "locale", "dispositivo")
+        group("context", "contesto", "contexto", "context", "situacion", "situación", "circunstancia", "episode", "episodio", "episodios")
+        group("recall", "recuperar", "recuperacion", "recuperación", "recordar", "recuerdo", "recuerdos", "recall", "retrieval", "ricordare", "recupero")
     }
 
     private val STOP_WORDS = setOf(
