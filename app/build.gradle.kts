@@ -64,7 +64,7 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     implementation("androidx.core:core-ktx:1.15.0")
-    // Offline keyword spotting prototype; model weights are provisioned separately, never bundled.
+    // Offline keyword spotting; verified model weights are provisioned separately, never bundled.
     implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.8")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.camera:camera-core:1.4.1")
