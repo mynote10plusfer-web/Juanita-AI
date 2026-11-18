@@ -407,6 +407,7 @@ private fun JuanitaApp(
     onWakePhraseChanged: (String) -> Unit,
     onPersonaChanged: (PersonaProfile) -> Unit,
 ) {
+    val context = LocalContext.current
     val background = Color(0xFF090A0C)
     val panel = Color(0xFF17191D)
     val gold = Color(0xFFE4BD69)
