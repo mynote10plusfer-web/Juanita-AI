@@ -41,4 +41,21 @@ class PersonaProfileTest {
         assertTrue(instruction.contains("natural Canary Islands style"))
         assertTrue(instruction.contains("Canarian vocabulary"))
     }
+
+    @Test
+    fun moravianProfileUsesSubtleCzechGuidanceWithoutCaricature() {
+        val instruction = PersonaProfile().regionalDialectInstruction("Moravská čeština · moravo")
+        assertTrue(instruction.contains("natural Moravian regional flavour"))
+        assertTrue(instruction.contains("do not drift into Slovak"))
+        assertTrue(instruction.contains("do not pretend there is one uniform Moravian dialect"))
+        assertTrue(instruction.contains("prefer standard Czech"))
+    }
+
+    @Test
+    fun standardCzechProfilePreservesCorrectContemporaryCzech() {
+        val instruction = PersonaProfile().regionalDialectInstruction("Čeština · ceco standard")
+        assertTrue(instruction.contains("contemporary standard Czech"))
+        assertTrue(instruction.contains("correct Czech grammar, diacritics"))
+        assertTrue(instruction.contains("Avoid unnecessary slang, Slovak mixing"))
+    }
 }
