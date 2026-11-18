@@ -399,6 +399,7 @@ class JuanitaVoiceService : Service() {
                 val alarmId = intent.getStringExtra(EXTRA_ALARM_ID)
                 val previewDurationMillis = intent.getLongExtra(EXTRA_PREVIEW_DURATION_MS, 0L).coerceIn(0L, 30_000L)
                 val identityId = intent.getStringExtra(EXTRA_IDENTITY_ID)?.takeIf { it.isNotBlank() }
+                val startedFromWake = intent.getBooleanExtra(EXTRA_STARTED_FROM_WAKE, false)
                 voiceDiagnostics.event("session.start.request", "voice=$voice; alarm=${alarmId != null}; preview=${previewDurationMillis > 0L}")
                 if (alarmId == null && instruction.isNotBlank()) {
                     wakeStartIntent = Intent(intent).apply {
@@ -466,7 +467,7 @@ class JuanitaVoiceService : Service() {
                     activeIdentityId = identityId
                     activeAlarmId = alarmId
                     backgroundContinuationAuthorized = requestedBackgroundContinuation && alarmId == null
-                    appInForeground = true
+                    if (!startedFromWake) appInForeground = true
                     backgroundIdleTimeoutJob?.cancel()
                     backgroundIdleTimeoutJob = null
                     lastBackgroundUserActivityAtElapsedRealtime = 0L
@@ -766,6 +767,15 @@ class JuanitaVoiceService : Service() {
                                     .putBoolean(profilePromptKey, true).apply()
                             }
                             lifecycleState = VoiceLifecycleState.ACTIVE
+                            if (!appInForeground && backgroundContinuationAuthorized && activeAlarmId == null) {
+                                acquireCpuWakeLock()
+                                lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
+                                armBackgroundIdleTimeout()
+                                updateNotification("Conversazione in background · pausa dopo 15 min senza voce")
+                            }
+                            if (wakeWordRequested) {
+                                _wakeWordStatus.value = "Conversazione Gemini Live attiva · ascolto offline in pausa"
+                            }
                             voiceDiagnostics.event("session.active", "service lifecycle ACTIVE")
                             startAudioRecordingDiagnostics()
                             startThermalMonitoring()
@@ -1077,8 +1087,25 @@ class JuanitaVoiceService : Service() {
                                     updateNotification(_wakeWordStatus.value)
                                     return@launch
                                 }
+                                val backgroundAuthorized = savedStart.getBooleanExtra(
+                                    EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED,
+                                    false
+                                )
+                                if (!appInForeground && !backgroundAuthorized) {
+                                    _wakeWordStatus.value = "Rilevamento in background ignorato: autorizza prima la continuazione in background"
+                                    updateNotification(_wakeWordStatus.value)
+                                    startWakeDetector()
+                                    return@launch
+                                }
                                 _wakeWordStatus.value = "Hola Juanita rilevato · connessione Gemini Live…"
-                                onStartCommand(Intent(savedStart).setAction(ACTION_START), 0, 0)
+                                onStartCommand(
+                                    Intent(savedStart).apply {
+                                        action = ACTION_START
+                                        putExtra(EXTRA_STARTED_FROM_WAKE, true)
+                                    },
+                                    0,
+                                    0
+                                )
                             }
                         },
                         onFailure = { error ->
@@ -1489,6 +1516,7 @@ class JuanitaVoiceService : Service() {
         const val ACTION_ACTIVITY_FOREGROUND = "ai.juanita.app.action.ACTIVITY_FOREGROUND"
         const val ACTION_UPDATE_BACKGROUND_CONSENT = "ai.juanita.app.action.UPDATE_BACKGROUND_CONSENT"
         const val EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED = "extra_background_continuation_authorized"
+        private const val EXTRA_STARTED_FROM_WAKE = "extra_started_from_offline_wake"
         const val EXTRA_INSTRUCTION = "extra_system_instruction"
         const val EXTRA_VOICE = "extra_voice_name"
         const val EXTRA_INITIAL_PROMPT = "extra_initial_prompt"
