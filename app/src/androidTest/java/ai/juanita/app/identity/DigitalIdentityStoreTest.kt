@@ -274,7 +274,7 @@ class DigitalIdentityStoreTest {
         assertTrue("Missing system-instruction fragment: CONTEXTUAL SOCIAL AND PSYCHOLOGICAL REASONING", instruction.contains("CONTEXTUAL SOCIAL AND PSYCHOLOGICAL REASONING"))
         assertTrue("Missing system-instruction fragment: separate: what was directly reported", instruction.contains("separate: what was directly reported"))
         assertTrue("Missing system-instruction fragment: Do not automatically take sides", instruction.contains("Do not automatically take sides"))
-        assertTrue("Missing system-instruction fragment: honest, respectful communication", instruction.contains("honest, respectful communication"))
+        assertTrue("Missing system-instruction fragment: honest, respectful communication", instruction.replace(Regex("\\s+"), " ").contains("honest, respectful communication"))
         assertTrue("Missing system-instruction fragment: ordinary chat stays ordinary", instruction.contains("ordinary chat stays ordinary"))
         assertTrue("Missing system-instruction fragment: Never store an inferred mood", instruction.contains("Never store an inferred mood"))
         assertTrue("Missing system-instruction fragment: intellectually humble", instruction.contains("intellectually humble"))
