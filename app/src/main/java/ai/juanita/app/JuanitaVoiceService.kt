@@ -1087,9 +1087,13 @@ class JuanitaVoiceService : Service() {
                                 if (failedDetector != null) {
                                     withContext(Dispatchers.IO) { failedDetector.close() }
                                 }
+                                wakeWordRequested = false
+                                wakeStartIntent = null
+                                _wakeWordEnabled.value = false
                                 _wakeWordStatus.value = "Ascolto offline sospeso: ${error.localizedMessage ?: error.javaClass.simpleName}"
                                 voiceDiagnostics.event("wake.failure", _wakeWordStatus.value)
-                                updateNotification(_wakeWordStatus.value)
+                                stopForeground(STOP_FOREGROUND_REMOVE)
+                                stopSelf()
                             }
                         }
                     )
@@ -1106,9 +1110,13 @@ class JuanitaVoiceService : Service() {
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                wakeWordRequested = false
+                wakeStartIntent = null
+                _wakeWordEnabled.value = false
                 _wakeWordStatus.value = "Wake word non disponibile: ${error.localizedMessage ?: error.javaClass.simpleName}"
                 voiceDiagnostics.event("wake.setup.failure", _wakeWordStatus.value)
-                updateNotification(_wakeWordStatus.value)
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
                 Log.e("JuanitaVoiceService", "Unable to arm offline wake-word detector", error)
             } finally {
                 wakeSetupJob = null
