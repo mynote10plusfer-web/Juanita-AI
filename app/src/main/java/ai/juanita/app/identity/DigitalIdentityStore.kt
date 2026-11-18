@@ -20,7 +20,7 @@ import javax.crypto.spec.GCMParameterSpec
 /**
  * Encrypted storage for a user-managed collection of Juanita and José profiles.
  * The collection has no product-imposed profile-count limit. Only one non-archived
- * profile can be selected for a session; every profile uses the same shared memory.
+ * profile can be selected for a session; durable knowledge is shared within feminine or masculine groups, while conversation episodes remain profile-specific.
  */
 class DigitalIdentityStore(context: Context) {
     private val appContext = context.applicationContext
