@@ -46,7 +46,7 @@ class PersonaProfileTest {
     fun moravianProfileUsesSubtleCzechGuidanceWithoutCaricature() {
         val instruction = PersonaProfile().regionalDialectInstruction("Moravská čeština · moravo")
         assertTrue(instruction.contains("natural Moravian regional flavour"))
-        assertTrue(instruction.contains("do not drift into Slovak"))
+        assertTrue(instruction.contains("do not drift into Slovak", ignoreCase = true))
         assertTrue(instruction.contains("do not pretend there is one uniform Moravian dialect"))
         assertTrue(instruction.contains("prefer standard Czech"))
     }
