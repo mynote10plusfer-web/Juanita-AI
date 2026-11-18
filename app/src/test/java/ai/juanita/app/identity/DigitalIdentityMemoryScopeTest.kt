@@ -62,7 +62,7 @@ class DigitalIdentityMemoryScopeTest {
     }
 
     @Test
-    fun MoravianIdentityUsesSubtleRegionalGuidanceWithoutSlovakMixing() {
+    fun moravianIdentityUsesSubtleRegionalGuidanceWithoutSlovakMixing() {
         val moravian = identity("Juanita", IdentityPresentation.FEMININE, "cs-CZ")
             .copy(origin = CulturalOrigin("CZ", "Czech Republic", "Moravia", "Brno", "Moravian"))
         val prompt = moravian.toSystemInstruction()
