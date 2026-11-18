@@ -263,6 +263,7 @@ class JuanitaVoiceService : Service() {
             }
             ACTION_DISABLE_WAKE -> {
                 wakeWordRequested = false
+                wakeStartIntent = null
                 _wakeWordEnabled.value = false
                 _wakeWordStatus.value = "Ascolto automatico disattivato"
                 wakeSetupJob?.cancel()
@@ -365,6 +366,7 @@ class JuanitaVoiceService : Service() {
             ACTION_STOP -> {
                 // A direct Stop disables both Live and the persistent offline listener.
                 wakeWordRequested = false
+                wakeStartIntent = null
                 _wakeWordEnabled.value = false
                 _wakeWordStatus.value = "Ascolto automatico disattivato"
                 wakeSetupJob?.cancel()
@@ -868,6 +870,30 @@ class JuanitaVoiceService : Service() {
         preserveContinuitySnapshot: Boolean = false,
         finalMessage: String? = null
     ) {
+        if (!startRequested && lifecycleState == VoiceLifecycleState.IDLE) {
+            if (stopJob?.isActive == true) return
+            lifecycleState = VoiceLifecycleState.STOPPING
+            stopJob = serviceScope.launch {
+                try {
+                    stopWakeDetector()
+                } catch (error: Exception) {
+                    Log.e("JuanitaVoiceService", "Unable to stop idle wake detector cleanly", error)
+                    lifecycleState = VoiceLifecycleState.ERROR
+                    _shutdownConfirmed.value = false
+                    _stopRequestCompleted.value = false
+                    updateNotification("Arresto microfono offline non confermato")
+                    stopJob = null
+                    return@launch
+                }
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                lifecycleState = VoiceLifecycleState.IDLE
+                _shutdownConfirmed.value = true
+                _stopRequestCompleted.value = true
+                stopJob = null
+                stopSelf()
+            }
+            return
+        }
         sessionJob?.cancel()
         voicePreviewJob?.cancel()
         backgroundIdleTimeoutJob?.cancel()
@@ -1390,6 +1416,8 @@ class JuanitaVoiceService : Service() {
 
     override fun onDestroy() {
         voiceDiagnostics.event("service.destroyed", "lifecycle=$lifecycleState")
+        wakeWordRequested = false
+        _wakeWordEnabled.value = false
         if (screenPowerReceiverRegistered) {
             runCatching { unregisterReceiver(screenPowerReceiver) }
             screenPowerReceiverRegistered = false
