@@ -176,7 +176,7 @@ jobs:
           fi
 
   wake-model:
-    name: Validate offline wake model and Hola Juanita tokenizer
+    name: Validate offline wake model and Juanita/José tokenizers
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -214,7 +214,7 @@ jobs:
           printf '%s\n' "${REVISION}" > wake-model/model-revision.txt
           echo "21661e7892f33bd7495bea5f319f6edf45eed681c1f5afbc0a275b5d30625838  wake-model/bpe.model" | sha256sum --check -
 
-      - name: Generate and validate Hola Juanita BPE keyword
+      - name: Generate and validate Juanita and José BPE keywords
         shell: bash
         run: |
           set -euo pipefail
@@ -225,22 +225,39 @@ jobs:
           import sentencepiece as spm
 
           root = Path("wake-model")
-          phrase = "Hola Juanita"
-          normalized = phrase.casefold()
           processor = spm.SentencePieceProcessor(model_file=str(root / "bpe.model"))
-          pieces = processor.encode(normalized, out_type=str)
-          if not pieces or any(piece == "<unk>" for piece in pieces):
-              raise SystemExit("Selected wake phrase is not covered by the pinned SentencePiece vocabulary")
           tokens = (root / "tokens.txt").read_text(encoding="utf-8").splitlines()
           vocabulary = {line.split()[0] for line in tokens if line.strip()}
-          missing = [piece for piece in pieces if piece not in vocabulary]
-          if missing:
-              raise SystemExit("BPE pieces absent from sherpa tokens.txt: " + repr(missing))
-
-          tag = normalized.replace(" ", "_")
-          keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\n"
-          (root / "keywords.txt").write_text(keyword_line, encoding="utf-8")
-          (root / "keywords.phrase").write_text(phrase + "\n", encoding="utf-8")
+          phrase_specs = [
+              ("Hola Juanita", "keywords.txt", "keywords.phrase",
+               "c659a6266b71b069bad7e04ec3b7d12c895c54b83a98317da581c39448a54e9d"),
+              ("Hola José", "keywords-jose.txt", "keywords-jose.phrase",
+               "0e98af9cae972913f790ade9066049251c764e7303359c77c119966d6f48bb64"),
+          ]
+          phrase_manifests = []
+          for phrase, keyword_name, phrase_name, expected_hash in phrase_specs:
+              normalized = phrase.casefold()
+              pieces = processor.encode(normalized, out_type=str)
+              if not pieces or any(piece == "<unk>" for piece in pieces):
+                  raise SystemExit(f"Unsupported SentencePiece phrase: {phrase}")
+              missing = [piece for piece in pieces if piece not in vocabulary]
+              if missing:
+                  raise SystemExit(f"BPE pieces absent from sherpa tokens.txt for {phrase}: {missing!r}")
+              tag = normalized.replace(" ", "_").replace("é", "e")
+              keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\\n"
+              actual_hash = hashlib.sha256(keyword_line.encode("utf-8")).hexdigest()
+              if actual_hash != expected_hash:
+                  raise SystemExit(f"Canonical keyword bytes changed for {phrase}: {actual_hash}")
+              (root / keyword_name).write_text(keyword_line, encoding="utf-8")
+              (root / phrase_name).write_text(phrase + "\\n", encoding="utf-8")
+              phrase_manifests.append({
+                  "phrase": phrase,
+                  "normalized_phrase": normalized,
+                  "bpe_pieces": pieces,
+                  "keyword_file": keyword_name,
+                  "keyword_sha256": actual_hash,
+                  "keyword_line": keyword_line.rstrip("\\n"),
+              })
 
           files = {}
           for path in sorted(root.iterdir()):
@@ -255,14 +272,12 @@ jobs:
               "license": "Apache-2.0",
               "sample_rate_hz": 16000,
               "feature_dim": 80,
-              "phrase": phrase,
-              "normalized_phrase": normalized,
-              "bpe_pieces": pieces,
-              "keyword_line": keyword_line.rstrip("\n"),
+              "phrase": "Hola Juanita",
+              "phrases": phrase_manifests,
               "files": files,
           }
           (root / "integrity.json").write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n",
               encoding="utf-8",
           )
           print(json.dumps(manifest, ensure_ascii=False, indent=2))
