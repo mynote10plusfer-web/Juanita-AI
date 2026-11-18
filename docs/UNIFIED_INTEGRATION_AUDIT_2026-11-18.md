@@ -21,6 +21,7 @@ This branch is the single cumulative development lane for the 0.11.12 code line.
   - session context and live recall receive the selected identity's group scope;
   - manually saved memories and voice previews bind to the selected identity;
   - identity language instructions and orderly service-stop handoff are retained.
+- Standard Czech and a restrained Moravian Czech profile are restored in the language selector, global dialect guidance and digital-identity instructions; unit tests cover both without Slovak mixing or dialect caricature.
 - PR #57 incremental memory work:
   - existing baseline already contains the continuity metadata-only write optimization, provisional automatic-memory recall, association engine and reflection cues;
   - added the provisional-memory association regression test and retained the richer scoped retrieval path without replacing the more complete encrypted archive/journal implementation.
@@ -41,3 +42,4 @@ This branch is the single cumulative development lane for the 0.11.12 code line.
 - No destructive memory migration or data deletion.
 - Six existing tabs remain unchanged; no new tab.
 - No paid APIs, subscriptions or hosted audio processing are introduced.
+- The photoreal avatar feasibility architecture is retained as documentation only; its free-only audit concludes no current option meets photorealism, exact live-audio synchronization and zero recurring cost together. Avatar animation remains deferred; the existing static portrait and voice path are preserved.
