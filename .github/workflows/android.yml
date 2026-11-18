@@ -210,8 +210,8 @@ jobs:
               "${BASE}/${file}" -o "wake-model/${file}"
             test -s "wake-model/${file}"
           done
-          printf '%s\\n' "${MODEL_ID}" > wake-model/model-id.txt
-          printf '%s\\n' "${REVISION}" > wake-model/model-revision.txt
+          printf '%s\n' "${MODEL_ID}" > wake-model/model-id.txt
+          printf '%s\n' "${REVISION}" > wake-model/model-revision.txt
           echo "21661e7892f33bd7495bea5f319f6edf45eed681c1f5afbc0a275b5d30625838  wake-model/bpe.model" | sha256sum --check -
 
       - name: Generate and validate Hola Juanita BPE keyword
@@ -238,9 +238,9 @@ jobs:
               raise SystemExit("BPE pieces absent from sherpa tokens.txt: " + repr(missing))
 
           tag = normalized.replace(" ", "_")
-          keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\\n"
+          keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\n"
           (root / "keywords.txt").write_text(keyword_line, encoding="utf-8")
-          (root / "keywords.phrase").write_text(phrase + "\\n", encoding="utf-8")
+          (root / "keywords.phrase").write_text(phrase + "\n", encoding="utf-8")
 
           files = {}
           for path in sorted(root.iterdir()):
@@ -258,11 +258,11 @@ jobs:
               "phrase": phrase,
               "normalized_phrase": normalized,
               "bpe_pieces": pieces,
-              "keyword_line": keyword_line.rstrip("\\n"),
+              "keyword_line": keyword_line.rstrip("\n"),
               "files": files,
           }
           (root / "integrity.json").write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n",
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
               encoding="utf-8",
           )
           print(json.dumps(manifest, ensure_ascii=False, indent=2))
