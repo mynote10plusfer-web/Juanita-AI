@@ -1302,7 +1302,7 @@ private fun JuanitaApp(
                     serviceBound = cameraServiceBinder != null,
                     serviceLifecycle = cameraServiceBinder?.diagnosticLifecycleState() ?: "NON COLLEGATO",
                     wakeLockHeld = cameraServiceBinder?.isCpuWakeLockHeld() ?: false,
-                    liveSessionDurationMillis = cameraServiceBinder?.diagnosticSessionDurationMillis() ?: 0L
+                    liveSessionDurationMillis = { cameraServiceBinder?.diagnosticSessionDurationMillis() ?: 0L }
                 )
                 SettingsCard(panel, gold, "DIAGNOSTICA VOCALE") {
                     Text(
