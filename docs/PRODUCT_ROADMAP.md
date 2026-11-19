@@ -15,7 +15,7 @@
 
 ### Fase 1 — Affidabilità, prestazioni e sicurezza (IN CORSO)
 1. Spostare ogni lettura/scrittura dell'archivio cifrato fuori dal Main Thread, inclusi caricamento iniziale, salvataggi, conferme, cancellazioni e report.
-2. Eliminare la scansione/decrittazione integrale dello storico ad ogni costruzione del contesto; recuperare solo i turni recenti necessari, mantenendo ordine e isolamento per identità. La prima migrazione/ricostruzione legacy può essere costosa ma deve essere esplicita, una tantum e misurabile.
+2. Eliminare la scansione/decrittazione integrale dello storico ad ogni costruzione del contesto; recuperare solo i turni recenti necessari, mantenendo ordine e isolamento per identità. Gli archivi legacy compattati possono ancora richiedere la decifratura completa della singola sessione; quantificare questo costo e pianificare una migrazione compatibile prima di dichiarare il percorso completamente bounded.
 3. Rendere asincrona la diagnostica vocale con coda limitata, scrittura serializzata, rotazione e conteggio esplicito degli eventi diagnostici scartati. Nessun transcript/audio/prompt nei log.
 4. Stabilizzare lifecycle audio: stop confermato, ownership microfono unica, handoff Sherpa/Live, routing, reconnect e fail-closed.
 5. Aggiungere diagnostica locale in Altro per CPU, RAM, wake lock, batteria, temperatura, durata sessione e stato audio, senza polling aggressivo.
