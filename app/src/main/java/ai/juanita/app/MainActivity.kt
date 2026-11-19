@@ -1301,7 +1301,8 @@ private fun JuanitaApp(
                     wakeWordStatus = wakeWordStatus,
                     serviceBound = cameraServiceBinder != null,
                     serviceLifecycle = cameraServiceBinder?.diagnosticLifecycleState() ?: "NON COLLEGATO",
-                    wakeLockHeld = cameraServiceBinder?.isCpuWakeLockHeld() ?: false
+                    wakeLockHeld = cameraServiceBinder?.isCpuWakeLockHeld() ?: false,
+                    liveSessionDurationMillis = cameraServiceBinder?.diagnosticSessionDurationMillis() ?: 0L
                 )
                 SettingsCard(panel, gold, "DIAGNOSTICA VOCALE") {
                     Text(
@@ -1357,7 +1358,7 @@ private fun JuanitaApp(
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                    Text("Gemini Live è integrato per le prove vocali. La wake word offline è collegata nel candidato cumulativo ma attende CI e prove sui dispositivi; la voce regionale cloud separata resta sospesa.",
+                    Text("Gemini Live e la wake word offline sono integrati nel candidato cumulativo. Build, test JVM, compilazione dei test strumentali, test strumentali API 31 e verifica del modello/tokenizer sono superati sull'HEAD corrente; restano le prove fisiche su Note10+ e S22 Ultra. La voce regionale cloud separata resta sospesa.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
