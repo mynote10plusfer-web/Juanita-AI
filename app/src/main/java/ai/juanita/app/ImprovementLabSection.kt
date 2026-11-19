@@ -60,8 +60,8 @@ private val capabilityRows = listOf(
     CapabilityRow("Profili visivi e riconoscimento del volto", "RICERCA / NON IMPLEMENTATO", "La foto di un profilo non equivale al riconoscimento live. Un eventuale confronto video richiederà consenso biometrico separato, verifica legale UE e test locali."),
     CapabilityRow("Ritratto animato e sincronizzazione labiale", "NON IMPLEMENTATA", "Il ritratto attuale ha solo un movimento leggero. Non esistono ancora animazione facciale reale e lip-sync."),
     CapabilityRow("Creazione automatica di nuovi ritratti", "NON IMPLEMENTATA", "Avatar Studio salva profili e descrizioni, ma non genera ancora immagini."),
-    CapabilityRow("Riconoscimento della parola di attivazione", "NON IMPLEMENTATO", "La frase è configurabile ma non è collegata a un motore wake-word."),
-    CapabilityRow("Voce e riconoscimento completamente offline", "PIANIFICATA", "Servono modelli locali compatibili con italiano, spagnolo, ceco e inglese e prove di prestazioni."),
+    CapabilityRow("Riconoscimento della parola di attivazione", "INTEGRATO NEL CODICE · DA VALIDARE", "Sherpa-ONNX riconosce offline le frasi supportate e passa il microfono a Gemini Live. Accuratezza, falsi positivi, background e consumi richiedono prove sui telefoni reali."),
+    CapabilityRow("Voce e conversazione completamente offline", "NON IMPLEMENTATA", "La parola di attivazione è locale; la conversazione Gemini Live richiede rete. Non va presentata come assistente vocale interamente offline."),
     CapabilityRow("Filtro intelligente delle chiamate cellulari", "RICERCA / NON IMPLEMENTATO", "Android consente screening limitato dei metadati; la conversazione audio bidirezionale non è garantita dalle API di screening."),
     CapabilityRow("Modalità LIFE e notifiche", "PIANIFICATA", "Promemoria e integrazioni con notifiche, calendario e messaggi richiedono moduli e permessi separati."),
     CapabilityRow("Ricerca web e archivio di conoscenze", "NON IMPLEMENTATA NELL'APP", "La ricerca mirata e le note con fonti sono una fase futura; non va dichiarato che Juanita abbia studiato qualcosa senza una ricerca effettiva.")
