@@ -161,9 +161,8 @@ class SherpaOfflineWakeWordDetector(
             }
 
             val pcm = ShortArray(SAMPLE_BUFFER_SIZE)
-            // Reuse the common 100 ms float buffer. The old per-read FloatArray allocation
-            // created continuous short-lived objects and avoidable GC work while armed.
-            var samples = FloatArray(SAMPLE_BUFFER_SIZE)
+            val frameAccumulator = PcmFrameAccumulator(SAMPLE_BUFFER_SIZE)
+            var consecutiveEmptyReads = 0
             var lastPowerLogAtMs = SystemClock.elapsedRealtime()
             var lastThreadCpuNs = Debug.threadCpuTimeNanos()
             var decodeCpuWallNs = 0L
@@ -175,26 +174,38 @@ class SherpaOfflineWakeWordDetector(
                 if (count == AudioRecord.ERROR_DEAD_OBJECT) {
                     error("Microphone audio device was lost")
                 }
-                if (count <= 0) continue
-
-                if (samples.size < count) samples = FloatArray(count)
-                for (index in 0 until count) {
-                    samples[index] = pcm[index] / PCM_SCALE
+                if (count < 0) {
+                    error("AudioRecord.read failed with code $count")
                 }
-                val acceptedSamples = if (count == samples.size) samples else samples.copyOf(count)
-                activeStream.acceptWaveform(acceptedSamples, SAMPLE_RATE)
-                audioBlocks++
+                if (count == 0) {
+                    consecutiveEmptyReads++
+                    if (consecutiveEmptyReads >= MAX_EMPTY_READS) {
+                        error("AudioRecord repeatedly returned empty reads")
+                    }
+                    // READ_BLOCKING should normally return samples. Bound transient zero
+                    // reads with a short backoff instead of spinning at full CPU speed.
+                    Thread.sleep((consecutiveEmptyReads * EMPTY_READ_BACKOFF_MS).coerceAtMost(MAX_EMPTY_READ_BACKOFF_MS))
+                    continue
+                }
+                consecutiveEmptyReads = 0
 
-                while (keywordSpotter.isReady(activeStream)) {
-                    val decodeStartedNs = SystemClock.elapsedRealtimeNanos()
-                    keywordSpotter.decode(activeStream)
-                    decodeCpuWallNs += SystemClock.elapsedRealtimeNanos() - decodeStartedNs
-                    decodedFrames++
-                    val result = keywordSpotter.getResult(activeStream).keyword
-                    if (result.isNotBlank()) {
-                        detectedPhrase = result.replace('_', ' ')
-                        running.set(false)
-                        break
+                // Accumulate short reads into fixed 100 ms frames. This avoids copyOf()
+                // allocations for every partial AudioRecord.read() result.
+                if (frameAccumulator.append(pcm, count)) {
+                    activeStream.acceptWaveform(frameAccumulator.floatFrame, SAMPLE_RATE)
+                    audioBlocks++
+
+                    while (keywordSpotter.isReady(activeStream)) {
+                        val decodeStartedNs = SystemClock.elapsedRealtimeNanos()
+                        keywordSpotter.decode(activeStream)
+                        decodeCpuWallNs += SystemClock.elapsedRealtimeNanos() - decodeStartedNs
+                        decodedFrames++
+                        val result = keywordSpotter.getResult(activeStream).keyword
+                        if (result.isNotBlank()) {
+                            detectedPhrase = result.replace('_', ' ')
+                            running.set(false)
+                            break
+                        }
                     }
                 }
 
@@ -253,9 +264,13 @@ class SherpaOfflineWakeWordDetector(
 
     @Synchronized
     override fun close() {
-        if (!closed.compareAndSet(false, true)) return
+        if (closed.get()) return
+        // Do not mark closed until the worker has definitely released its stream and
+        // recorder. If stop times out, a later close() can retry safely.
         stop()
-        keywordSpotter.release()
+        if (closed.compareAndSet(false, true)) {
+            keywordSpotter.release()
+        }
     }
 
     companion object {
@@ -268,6 +283,9 @@ class SherpaOfflineWakeWordDetector(
         private const val KEYWORD_SCORE = 1.0f
         private const val KEYWORD_THRESHOLD = 0.20f
         private const val STOP_TIMEOUT_MS = 3_000L
+        private const val MAX_EMPTY_READS = 10
+        private const val EMPTY_READ_BACKOFF_MS = 10L
+        private const val MAX_EMPTY_READ_BACKOFF_MS = 100L
         private const val POWER_LOG_INTERVAL_MS = 60_000L
 
         const val ENCODER_FILE = "encoder-epoch-20-avg-2-chunk-16-left-64.onnx"
