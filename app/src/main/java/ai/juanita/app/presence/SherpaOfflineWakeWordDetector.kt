@@ -4,6 +4,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.Process
+import android.os.Debug
+import android.os.SystemClock
 import android.util.Log
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.KeywordSpotter
@@ -159,6 +161,15 @@ class SherpaOfflineWakeWordDetector(
             }
 
             val pcm = ShortArray(SAMPLE_BUFFER_SIZE)
+            // Reuse the common 100 ms float buffer. The old per-read FloatArray allocation
+            // created continuous short-lived objects and avoidable GC work while armed.
+            var samples = FloatArray(SAMPLE_BUFFER_SIZE)
+            var lastPowerLogAtMs = SystemClock.elapsedRealtime()
+            var lastThreadCpuNs = Debug.threadCpuTimeNanos()
+            var decodeCpuWallNs = 0L
+            var decodedFrames = 0L
+            var audioBlocks = 0L
+
             while (running.get()) {
                 val count = activeRecorder.read(pcm, 0, pcm.size, AudioRecord.READ_BLOCKING)
                 if (count == AudioRecord.ERROR_DEAD_OBJECT) {
@@ -166,17 +177,47 @@ class SherpaOfflineWakeWordDetector(
                 }
                 if (count <= 0) continue
 
-                val samples = FloatArray(count) { index -> pcm[index] / PCM_SCALE }
-                activeStream.acceptWaveform(samples, SAMPLE_RATE)
+                if (samples.size < count) samples = FloatArray(count)
+                for (index in 0 until count) {
+                    samples[index] = pcm[index] / PCM_SCALE
+                }
+                val acceptedSamples = if (count == samples.size) samples else samples.copyOf(count)
+                activeStream.acceptWaveform(acceptedSamples, SAMPLE_RATE)
+                audioBlocks++
 
                 while (keywordSpotter.isReady(activeStream)) {
+                    val decodeStartedNs = SystemClock.elapsedRealtimeNanos()
                     keywordSpotter.decode(activeStream)
+                    decodeCpuWallNs += SystemClock.elapsedRealtimeNanos() - decodeStartedNs
+                    decodedFrames++
                     val result = keywordSpotter.getResult(activeStream).keyword
                     if (result.isNotBlank()) {
                         detectedPhrase = result.replace('_', ' ')
                         running.set(false)
                         break
                     }
+                }
+
+                // Low-frequency diagnostics quantify the actual KWS worker load on-device.
+                // This is deliberately not a polling worker and does not keep the CPU awake.
+                val nowMs = SystemClock.elapsedRealtime()
+                if (nowMs - lastPowerLogAtMs >= POWER_LOG_INTERVAL_MS) {
+                    val nowCpuNs = Debug.threadCpuTimeNanos()
+                    val wallNs = (nowMs - lastPowerLogAtMs) * 1_000_000L
+                    val cpuNs = (nowCpuNs - lastThreadCpuNs).coerceAtLeast(0L)
+                    val cpuPercent = if (wallNs > 0L) cpuNs * 100.0 / wallNs else 0.0
+                    val decodePercent = if (wallNs > 0L) decodeCpuWallNs * 100.0 / wallNs else 0.0
+                    Log.i(
+                        TAG,
+                        "KWS power sample: workerCpuPercent=%.1f decodeWallPercent=%.1f blocks=%d decodedFrames=%d".format(
+                            java.util.Locale.US, cpuPercent, decodePercent, audioBlocks, decodedFrames
+                        )
+                    )
+                    lastPowerLogAtMs = nowMs
+                    lastThreadCpuNs = nowCpuNs
+                    decodeCpuWallNs = 0L
+                    decodedFrames = 0L
+                    audioBlocks = 0L
                 }
             }
         } catch (error: Throwable) {
@@ -227,6 +268,7 @@ class SherpaOfflineWakeWordDetector(
         private const val KEYWORD_SCORE = 1.0f
         private const val KEYWORD_THRESHOLD = 0.20f
         private const val STOP_TIMEOUT_MS = 3_000L
+        private const val POWER_LOG_INTERVAL_MS = 60_000L
 
         const val ENCODER_FILE = "encoder-epoch-20-avg-2-chunk-16-left-64.onnx"
         const val DECODER_FILE = "decoder-epoch-20-avg-2-chunk-16-left-64.onnx"
