@@ -558,25 +558,14 @@ private fun ConversationArchiveCalendar(
                                     turnsLoading = false
                                 }
                             }) { Text("Apri", color = gold) }
-                            TextButton(onClick = {
-                            ioScope.launch {
-                                runCatching { withContext(Dispatchers.IO) { onDeleteConversation(session.sessionId) } }
-                                    .onSuccess { conversations = withContext(Dispatchers.IO) { onRefresh() } }
-                                    .onFailure { turnsLoading = false }
-                            }
-                        }) { Text("Elimina", color = Color(0xFFE6A0A0)) }
+                            TextButton(onClick = { onDeleteConversation(session.sessionId) }) { Text("Elimina", color = Color(0xFFE6A0A0)) }
                         }
                     }
                 }
             }
             if (sessions.isNotEmpty()) Button(onClick = { confirmDay = true }, modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4A292B))) { Text("Elimina l'intera giornata") }
-            if (conversations.isNotEmpty()) TextButton(onClick = {
-                ioScope.launch {
-                    runCatching { withContext(Dispatchers.IO) { onClearArchive() } }
-                        .onSuccess { conversations = emptyList(); turns = emptyList(); turnsPageInfo = null }
-                }
-            }) { Text("SVUOTA TUTTO L'ARCHIVIO", color = Color(0xFFE6A0A0)) }
+            if (conversations.isNotEmpty()) TextButton(onClick = onClearArchive) { Text("SVUOTA TUTTO L'ARCHIVIO", color = Color(0xFFE6A0A0)) }
         }
     }
     if (confirmSelectedDays) AlertDialog(onDismissRequest = { confirmSelectedDays = false },
