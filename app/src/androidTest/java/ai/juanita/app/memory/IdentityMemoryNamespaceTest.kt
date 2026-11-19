@@ -538,6 +538,41 @@ class IdentityMemoryNamespaceTest {
         }
     }
 
+    @Test
+    fun sessionStartContextUsesOnlyNewestBoundedTurnsForSelectedIdentity() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "bounded-context-${UUID.randomUUID()}"
+        val start = System.currentTimeMillis()
+        val juanitaTurns = (1..4).map { "JUANITA_PRIVATE_TURN_$it" }
+        val joseTurns = (1..4).map { "JOSE_PRIVATE_TURN_$it" }
+        try {
+            repeat(4) { index ->
+                store.appendConversationTurn(
+                    sessionId, "USER", juanitaTurns[index],
+                    start + index * 2L, personaId = "identity-juanita"
+                )
+                store.appendConversationTurn(
+                    sessionId, "USER", joseTurns[index],
+                    start + index * 2L + 1L, personaId = "identity-jose"
+                )
+            }
+
+            val contextPacket = store.buildAssistantContext(
+                maxTurns = 2,
+                personaId = "identity-juanita"
+            )
+
+            assertTrue("The newest Juanita episode must be included", contextPacket.contains(juanitaTurns[3]))
+            assertTrue("The preceding Juanita episode must be included", contextPacket.contains(juanitaTurns[2]))
+            assertFalse("Older Juanita episodes must be outside the bounded context", contextPacket.contains(juanitaTurns[0]))
+            assertFalse("Another identity's private episode must never enter this context", joseTurns.any(contextPacket::contains))
+        } finally {
+            store.deleteConversation(sessionId)
+            store.clearAll()
+        }
+    }
+
     private fun isolatedContext(): Context {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
         val directory = File(target.cacheDir, "shared-memory-test").apply {
