@@ -1,3 +1,57 @@
+# 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
+
+**Documento operativo corrente per PR #58.** Questa sezione prevale sulle sequenze e sugli stati storici riportati più avanti. Le voci datate successive sono cronologia, non istruzioni che possono sovrascrivere questa baseline.
+
+## Invarianti di progetto
+- Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Head iniziale di questa esecuzione: `f4e0df39532444ef94823e9f4a5f75f3430f5fa3`.
+- PR #58 resta draft/open/unmerged. Nessun merge, release o modifica a `main` senza approvazione esplicita.
+- Release stabile protetta: v0.11.12, versionCode 51, applicationId `ai.juanita.app`; debug ID `ai.juanita.app.debug`. Non cambiare firma, chiavi, package ID, schema cifrato o dati utente.
+- Nessun servizio/API a pagamento, nessun Firebase Blaze, nessun raw audio conservato.
+- Restano esattamente sei tab: Home, Avatar, Sveglia, Settaggi, Memoria, Altro.
+- Le conoscenze personali durevoli possono essere condivise tra i personaggi; gli episodi e i transcript sono privati per ID stabile dell'identità. Voce e personalità restano indipendenti. Un solo personaggio attivo per sessione.
+- Gemini Live nativo resta il percorso vocale. TTS cloud separata resta disabilitata. Avatar generativo/animato/lip-sync resta l'ultima fase.
+
+## Roadmap vincolante e criteri di uscita
+
+### Fase 1 — Affidabilità, prestazioni e sicurezza (IN CORSO)
+1. Spostare ogni lettura/scrittura dell'archivio cifrato fuori dal Main Thread, inclusi caricamento iniziale, salvataggi, conferme, cancellazioni e report.
+2. Eliminare la scansione/decrittazione integrale dello storico ad ogni costruzione del contesto; recuperare solo i turni recenti necessari, mantenendo ordine e isolamento per identità. La prima migrazione/ricostruzione legacy può essere costosa ma deve essere esplicita, una tantum e misurabile.
+3. Rendere asincrona la diagnostica vocale con coda limitata, scrittura serializzata, rotazione e conteggio esplicito degli eventi diagnostici scartati. Nessun transcript/audio/prompt nei log.
+4. Stabilizzare lifecycle audio: stop confermato, ownership microfono unica, handoff Sherpa/Live, routing, reconnect e fail-closed.
+5. Aggiungere diagnostica locale in Altro per CPU, RAM, wake lock, batteria, temperatura, durata sessione e stato audio, senza polling aggressivo.
+6. Misurare sul Note10+ Android 12 e S22 Ultra Android 15: idle, wake armata, Live foreground/background, screen-off, falsi positivi/negativi, drain e termica.
+
+**Uscita Fase 1:** test JVM e strumentali pertinenti superati sull'head esatto; nessun I/O disco nel Main o callback audio; test di regressione per code/timeout/paginazione; verifiche fisiche Samsung documentate. CI non sostituisce i test fisici.
+
+### Fase 2 — Presenza controllata C3
+Completare controlli espliciti, stato sempre visibile, consensi, background policy e comportamento non proattivo/non occulto. Nessuna riattivazione automatica del microfono dopo process death.
+
+### Fase 3 — Personaggi, voci e apprendimento C4
+Unificare la configurazione runtime del personaggio: ID, nome, personalità, lingua, dialetto, voce Gemini Live, wake phrase e istruzioni. Ogni sessione usa uno snapshot immutabile. Lo switch identità chiude la sessione precedente prima di avviare la nuova. Nessuna TTS cloud separata.
+
+### Fase 4 — Memoria evoluta e archivio C5
+Mantenere fonti cifrate autorevoli, provenance, conferma/provvisorietà, correzioni/contraddizioni, indici derivati ricostruibili, invalidazione completa su modifica/cancellazione, ricerca lessicale/parafrasi migliorata, budget di retrieval, export/restore cifrati e test migrazione/crash/scala. Nessun embedding cloud o training del modello implicito.
+
+### Fase 5 — Personal Organizer e Agenda
+Attività/promemoria locali persistenti, ricorrenze, stati e notifiche; agenda leggibile; eventuale scrittura calendario solo con conferma esplicita. Le sveglie esistenti restano indipendenti.
+
+### Fase 6 — Avatar (ULTIMA)
+Solo dopo accettazione delle fasi precedenti: immagine 2D, binding con identità, espressioni, animazione e lip-sync. Nessuna promessa di fotorealismo/real-time finché non esiste una soluzione gratuita verificata.
+
+## Sprint attivo — correzioni approvate
+- A1: `VoiceDiagnosticLog.event()` non deve più scrivere sincronicamente dal callback; coda bounded e worker IO.
+- A2: caricamento iniziale, salvataggio, conferma, modifica e cancellazione di memorie/report devono avvenire su IO; gli errori non devono essere presentati come successo.
+- A3: `buildAssistantContext()` deve recuperare un numero limitato di turni per persona senza decifrare l'intero archivio a ogni sessione. Le fonti archiviate restano intatte; indici/cache sono derivati e ricostruibili.
+- Ogni intervento richiede test di regressione e CI sull'head risultante. Se una correzione non può essere resa sicura senza migrazione o modifica schema, fermarsi e documentare il blocco invece di improvvisare.
+
+## Stato di validazione
+- HEAD di partenza: `f4e0df39532444ef94823e9f4a5f75f3430f5fa3`.
+- Audit differenziale: 70 test strumentali API 31 riportati superati; le evidenze vanno ricontrollate sulla CI dell'head aggiornato.
+- Correzioni Sherpa già inserite, ma l'hardware non è stato validato.
+- Nessun dato di consumo, temperatura o accuratezza acustica è considerato misurato finché non provato sui dispositivi reali.
+
+---
+
 # 2026-11-18 22:36 — Wake runtime and identity phrase integration update
 
 **Current code state:** PR #58 head at this update contains the offline runtime connection in `JuanitaVoiceService`, explicit opt-in UI, pinned model installer, serialized KWS-to-Live microphone handoff and Live-to-KWS rearm after confirmed shutdown. A verified local phrase catalog now supports `Hola Juanita` and `Hola José`; the selected phrase follows the assistant identity. Canonical SentencePiece CI checks both phrases and the exact generated keyword hashes.
