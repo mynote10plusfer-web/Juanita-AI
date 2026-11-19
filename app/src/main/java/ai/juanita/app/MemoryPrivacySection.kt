@@ -421,12 +421,21 @@ internal fun MemoryPrivacySection(
                     editingMemory = null
                     if (editedText.isNotBlank()) {
                         ioScope.launch {
-                            val updated = withContext(Dispatchers.IO) {
-                                onUpdateMemory(memoryId, editedText)
-                            }
-                            if (updated) {
-                                memories = withContext(Dispatchers.IO) { onRefreshMemories() }
-                                memoryPage = 0
+                            storageError = null
+                            runCatching {
+                                withContext(Dispatchers.IO) { onUpdateMemory(memoryId, editedText) }
+                            }.onSuccess { updated ->
+                                if (updated) {
+                                    runCatching { withContext(Dispatchers.IO) { onRefreshMemories() } }
+                                        .onSuccess { memories = it; memoryPage = 0 }
+                                        .onFailure { failure ->
+                                            storageError = "Ricordo aggiornato, ma la rilettura non è riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                        }
+                                } else {
+                                    storageError = "Il ricordo non è stato aggiornato."
+                                }
+                            }.onFailure { failure ->
+                                storageError = "Modifica non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
                             }
                         }
                     }
@@ -584,6 +593,8 @@ private fun ConversationArchiveCalendar(
                                     }.onSuccess { page ->
                                         turns = page.turns
                                         turnsPageInfo = page
+                                    }.onFailure { failure ->
+                                        onStorageError("Conversazione non leggibile: ${failure.localizedMessage ?: failure.javaClass.simpleName}")
                                     }
                                     turnsLoading = false
                                 }
