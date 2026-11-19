@@ -106,7 +106,11 @@ internal fun MemoryPrivacySection(
     val ioScope = rememberCoroutineScope()
     // Refresh once when the Memory tab is opened, never on every streaming status update.
     LaunchedEffect(Unit) {
-        memories = withContext(Dispatchers.IO) { onRefreshMemories() }
+        runCatching { withContext(Dispatchers.IO) { onRefreshMemories() } }
+            .onSuccess { memories = it; storageError = null }
+            .onFailure { failure ->
+                storageError = "Lettura ricordi non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+            }
     }
     val rangeStartDate = runCatching { LocalDate.parse(archiveRangeStart.trim()) }.getOrNull()
     val rangeEndDate = runCatching { LocalDate.parse(archiveRangeEnd.trim()) }.getOrNull()
@@ -150,7 +154,15 @@ internal fun MemoryPrivacySection(
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("${memories.size} ricordi · ${memories.sumOf { it.text.length }} caratteri · archivio locale senza soglia applicativa", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
-                TextButton(onClick = { ioScope.launch { memories = withContext(Dispatchers.IO) { onRefreshMemories() } } }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
+                TextButton(onClick = {
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onRefreshMemories() } }
+                            .onSuccess { memories = it; storageError = null }
+                            .onFailure { failure ->
+                                storageError = "Aggiornamento ricordi non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                    }
+                }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
             }
             OutlinedTextField(
                 value = memoryDraft, onValueChange = { memoryDraft = it },
@@ -321,7 +333,8 @@ internal fun MemoryPrivacySection(
                 onDeleteTimeRange = { id, from, until ->
                     onDeleteConversationRange(id, from, until)
                 },
-                onClearArchive = { confirmAction = "clear_archive" }
+                onClearArchive = { confirmAction = "clear_archive" },
+                onStorageError = { storageError = it }
             )
         }
     }
@@ -433,7 +446,8 @@ private fun ConversationArchiveCalendar(
     onRefresh: () -> List<EncryptedMemoryStore.ArchivedConversation>, onDeleteConversation: (String) -> Unit,
     onDeleteDay: (LocalDate) -> Unit,
     onListTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
-    onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit
+    onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit,
+    onStorageError: (String) -> Unit
 ) {
     var month by remember { mutableStateOf(YearMonth.now()) }
     var day by remember { mutableStateOf(LocalDate.now()) }
@@ -449,6 +463,7 @@ private fun ConversationArchiveCalendar(
     var selectedDays by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var confirmSelectedDays by remember { mutableStateOf(false) }
     var conversations by remember(initialConversations) { mutableStateOf(initialConversations) }
+    var archiveError by remember { mutableStateOf<String?>(null) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -458,7 +473,12 @@ private fun ConversationArchiveCalendar(
     // The user can refresh explicitly; disk work always stays off the UI thread.
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            conversations = withContext(Dispatchers.IO) { onRefresh() }
+            runCatching { withContext(Dispatchers.IO) { onRefresh() } }
+                .onSuccess { conversations = it; archiveError = null }
+                .onFailure { failure ->
+                    archiveError = "Archivio non leggibile: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                    onStorageError(archiveError!!)
+                }
         }
     }
     val byDay = remember(conversations) {
@@ -476,7 +496,16 @@ private fun ConversationArchiveCalendar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = archiveEnabled, onCheckedChange = onArchiveEnabledChanged)
                 Text(if (archiveEnabled) "Archiviazione attiva" else "Archiviazione in pausa", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                TextButton(onClick = { ioScope.launch { conversations = withContext(Dispatchers.IO) { onRefresh() } } }) { Text("Aggiorna", color = gold) }
+                TextButton(onClick = {
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onRefresh() } }
+                            .onSuccess { conversations = it; archiveError = null }
+                            .onFailure { failure ->
+                                archiveError = "Aggiornamento archivio non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                onStorageError(archiveError!!)
+                            }
+                    }
+                }) { Text("Aggiorna", color = gold) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Conservazione: " + retentionLabel, color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
@@ -531,6 +560,7 @@ private fun ConversationArchiveCalendar(
                     Text("Elimina ${selectedDays.size} giorni", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
             }
+            archiveError?.let { Text(it, color = Color(0xFFE6A0A0), fontSize = 11.sp) }
             Text("Conversazioni del " + day.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ITALIAN)), color = gold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             val sessions = byDay[day].orEmpty().sortedByDescending { it.startedAtMillis }
             if (sessions.isEmpty()) Text("Nessuna conversazione archiviata in questo giorno.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
