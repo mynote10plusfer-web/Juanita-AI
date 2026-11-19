@@ -246,13 +246,8 @@ class MainActivity : ComponentActivity() {
         val avatarStore = AvatarProfileStore(applicationContext)
         val digitalIdentityStore = DigitalIdentityStore(applicationContext)
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
-        val initialMemoriesResult = runCatching { memoryStore.listMemories() }
-        val initialReportsResult = runCatching { memoryStore.listImprovementReports() }
-        val memoryLoadErrors = listOfNotNull(
-            initialMemoriesResult.exceptionOrNull()?.let { "Memorie personali: ${it.localizedMessage ?: it.javaClass.simpleName}" },
-            initialReportsResult.exceptionOrNull()?.let { "Rapporti: ${it.localizedMessage ?: it.javaClass.simpleName}" }
-        ).joinToString(" · ")
-        val initialMemoryLoadError = memoryLoadErrors.takeIf { it.isNotBlank() }
+        // Encrypted memory/report records are loaded by their Compose sections on Dispatchers.IO.
+        // Do not decrypt the archive while Activity.onCreate is running on the Main thread.
         val initialActiveDigitalIdentityId = preferences.activeDigitalIdentityId
             ?.takeIf { selectedId -> initialDigitalIdentities.any { it.id == selectedId && !it.archived } }
             .also { validId ->
@@ -289,11 +284,11 @@ class MainActivity : ComponentActivity() {
                 onCompleteInitialSetup = { preferences.hasCompletedOnboarding = true },
                 initialArchiveEnabled = memoryStore.isConversationArchiveEnabled,
                 initialAutoMemoryEnabled = memoryStore.isAutomaticMemoryEnabled,
-                initialMemories = initialMemoriesResult.getOrDefault(emptyList()),
-                initialMemoryLoadError = initialMemoryLoadError,
+                initialMemories = emptyList(),
+                initialMemoryLoadError = null,
                 // The archive is loaded asynchronously only when its tab is opened; do not scan/decrypt it during Activity composition.
                 initialArchivedConversations = emptyList(),
-                initialImprovementReports = initialReportsResult.getOrDefault(emptyList()),
+                initialImprovementReports = emptyList(),
                 onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
                     memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
                 },
