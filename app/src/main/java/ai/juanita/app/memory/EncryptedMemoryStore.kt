@@ -785,10 +785,8 @@ class EncryptedMemoryStore(context: Context) {
             .take(2600)
 
         val recentTurns = if (isConversationArchiveEnabled) {
-            allArchivedTurns().map { it.second }
-                .filter { it.personaId == personaId }
-                .sortedBy { it.timestampMillis }
-                .takeLast(maxTurns.coerceIn(1, 80))
+            purgeExpiredArchive()
+            latestArchivedTurns(maxTurns.coerceIn(1, 80), personaId)
         } else emptyList()
 
         if (memoryLines.isBlank() && biographyLines.isBlank() && recentTurns.isEmpty()) return ""
@@ -1376,6 +1374,84 @@ class EncryptedMemoryStore(context: Context) {
         if (purgeCompleted) {
             preferences.edit().putLong(KEY_LAST_ARCHIVE_PURGE_AT, now).apply()
         }
+    }
+
+    /**
+     * Selects the newest turns by filename/metadata first, then decrypts only the
+     * candidates needed for the requested identity and context budget. Append-only
+     * journal filenames expose only timestamp and random turn ID; transcript content
+     * and persona ownership remain inside each authenticated AES-GCM frame.
+     *
+     * Packed legacy archives are still decoded as a compatibility fallback because
+     * their records do not have independently addressable frame files.
+     */
+    private fun latestArchivedTurns(maxTurns: Int, personaId: String?): List<ArchivedTurn> {
+        data class Candidate(
+            val sessionId: String,
+            val timestampMillis: Long,
+            val turnId: String,
+            val frame: File? = null,
+            val packedTurn: ArchivedTurn? = null
+        )
+
+        val candidates = mutableListOf<Candidate>()
+        val legacyRecords = readRecords()
+        for (index in 0 until legacyRecords.length()) {
+            val record = legacyRecords.optJSONObject(index) ?: continue
+            if (record.optString("kind") != "turn") continue
+            val sessionId = record.optString("sessionId")
+            val turnId = record.optString("id")
+            if (sessionId.isNotBlank() && turnId.isNotBlank()) {
+                candidates += Candidate(
+                    sessionId = sessionId,
+                    timestampMillis = record.optLong("createdAt"),
+                    turnId = turnId,
+                    packedTurn = ArchivedTurn(
+                        id = turnId,
+                        role = record.optString("role"),
+                        text = record.optString("text"),
+                        timestampMillis = record.optLong("createdAt"),
+                        personaId = record.optString("personaId").takeIf { it.isNotBlank() }
+                    )
+                )
+            }
+        }
+
+        sessionArchiveSessionIds().forEach { sessionId ->
+            val packedFile = sessionArchiveFile(sessionId)
+            if (packedFile.isFile) {
+                readPackedSessionArchive(packedFile).forEach { turn ->
+                    candidates += Candidate(sessionId, turn.timestampMillis, turn.id, packedTurn = turn)
+                }
+            }
+            val journal = sessionJournalDirectory(sessionId)
+            if (journal.isDirectory) {
+                val frames = journal.listFiles { frame -> frame.isFile && frame.name.endsWith(".enc") }
+                    ?: throw IllegalStateException("Unable to list encrypted transcript frames for recent context")
+                frames.forEach { frame ->
+                    val stem = frame.name.removeSuffix(".enc")
+                    val separator = stem.indexOf('_')
+                    require(separator > 0) { "Invalid encrypted transcript frame name: ${frame.name}" }
+                    val timestamp = stem.substring(0, separator).toLongOrNull()
+                        ?: throw IllegalStateException("Invalid transcript timestamp: ${frame.name}")
+                    val turnId = stem.substring(separator + 1)
+                    if (turnId.isNotBlank()) candidates += Candidate(sessionId, timestamp, turnId, frame = frame)
+                }
+            }
+        }
+
+        val ordered = candidates
+            .distinctBy { it.sessionId to it.turnId }
+            .sortedWith(compareByDescending<Candidate> { it.timestampMillis }.thenByDescending { it.turnId })
+        val selected = ArrayList<ArchivedTurn>(maxTurns)
+        for (candidate in ordered) {
+            if (selected.size >= maxTurns) break
+            val turn = candidate.packedTurn ?: readEncryptedJournalFrame(
+                checkNotNull(candidate.frame) { "Recent archive candidate has no encrypted frame" }
+            )
+            if (turn.personaId == personaId) selected += turn
+        }
+        return selected.sortedWith(compareBy<ArchivedTurn> { it.timestampMillis }.thenBy { it.id })
     }
 
     /** Merge encrypted per-session archives with legacy transcript records. */
