@@ -15,12 +15,17 @@ import android.util.Log
 
 /**
  * Owns Android communication routing and transient audio focus for one Gemini Live session.
- * Audio focus is abandoned and the previous route/mode restored on every confirmed teardown.
+ *
+ * Gemini Live is full-duplex voice communication, so MODE_IN_COMMUNICATION is required.
+ * On supported devices we explicitly route communication output to the built-in loudspeaker;
+ * older Android versions use the legacy speakerphone switch. The previous route is restored
+ * after confirmed teardown. We never alter the user's volume level.
  */
 class VoiceAudioRouteController(context: Context) {
     private val audioManager = context.applicationContext.getSystemService(AudioManager::class.java)
     private var previousMode: Int? = null
     private var previousCommunicationDevice: AudioDeviceInfo? = null
+    private var previousSpeakerphoneOn: Boolean? = null
     private var focusRequest: AudioFocusRequest? = null
     private var focusGranted = false
     private var onFocusLost: (() -> Unit)? = null
@@ -66,20 +71,32 @@ class VoiceAudioRouteController(context: Context) {
             previousMode = audioManager.mode
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 previousCommunicationDevice = audioManager.communicationDevice
+            } else {
+                @Suppress("DEPRECATION")
+                run { previousSpeakerphoneOn = audioManager.isSpeakerphoneOn }
             }
             audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 audioManager.registerAudioDeviceCallback(deviceCallback, Handler(Looper.getMainLooper()))
                 deviceCallbackRegistered = true
                 selectCommunicationDevice()
+            } else {
+                @Suppress("DEPRECATION")
+                run { audioManager.isSpeakerphoneOn = true }
             }
 
             val outputs = runCatching {
                 audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
                     .joinToString { "${it.productName}/type=${it.type}" }
             }.getOrDefault("unavailable")
-            Log.i(TAG, "Voice route started with audio focus: mode=${audioManager.mode}, outputs=[$outputs], " +
-                "AEC_available=${runCatching { AcousticEchoCanceler.isAvailable() }.getOrDefault(false)}, " +
+            val route = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.communicationDevice?.let { "${it.productName}/type=${it.type}" } ?: "not-selected"
+            } else {
+                @Suppress("DEPRECATION")
+                if (audioManager.isSpeakerphoneOn) "legacy-built-in-speaker" else "legacy-earpiece"
+            }
+            Log.i(TAG, "Voice route started: mode=${audioManager.mode}, selected=$route, outputs=[$outputs], " +
+                "volumeStream=VOICE_CALL, AEC_available=${runCatching { AcousticEchoCanceler.isAvailable() }.getOrDefault(false)}, " +
                 "NS_available=${runCatching { NoiseSuppressor.isAvailable() }.getOrDefault(false)}. " +
                 "Effect availability does not prove attachment to Firebase's recorder.")
             return true
@@ -120,21 +137,27 @@ class VoiceAudioRouteController(context: Context) {
     private fun selectCommunicationDevice() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || previousMode == null) return
         val available = audioManager.availableCommunicationDevices
-        val preferredTypes = listOf(
-            AudioDeviceInfo.TYPE_BLE_HEADSET,
-            AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-            AudioDeviceInfo.TYPE_WIRED_HEADSET,
-            AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-            AudioDeviceInfo.TYPE_USB_HEADSET,
-            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-        )
-        val selected = preferredTypes.firstNotNullOfOrNull { type ->
-            available.firstOrNull { it.type == type }
+        // User's requested default: the phone's loudspeaker, not the earpiece.
+        // Only fall back to an external communication device if the built-in speaker is absent.
+        val selected = available.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+            ?: listOf(
+                AudioDeviceInfo.TYPE_BLE_HEADSET,
+                AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_USB_HEADSET
+            ).firstNotNullOfOrNull { type -> available.firstOrNull { it.type == type } }
+
+        if (selected == null) {
+            Log.w(TAG, "No built-in speaker or external communication output is available")
+            return
         }
-        if (selected != null && audioManager.communicationDevice?.id != selected.id &&
+        if (audioManager.communicationDevice?.id != selected.id &&
             !audioManager.setCommunicationDevice(selected)
         ) {
             Log.w(TAG, "Android refused communication output route type=${selected.type}")
+        } else {
+            Log.i(TAG, "Communication output selected: ${selected.productName}/type=${selected.type}")
         }
     }
 
@@ -159,8 +182,16 @@ class VoiceAudioRouteController(context: Context) {
                     if (stillAvailable != null) audioManager.setCommunicationDevice(stillAvailable)
                     else audioManager.clearCommunicationDevice()
                 }.onFailure { Log.w(TAG, "Could not restore previous communication device", it) }
+            } else if (restoreMode != null) {
+                val previousSpeaker = previousSpeakerphoneOn
+                previousSpeakerphoneOn = null
+                if (previousSpeaker != null) {
+                    @Suppress("DEPRECATION")
+                    runCatching { audioManager.isSpeakerphoneOn = previousSpeaker }
+                        .onFailure { Log.w(TAG, "Could not restore previous speakerphone state", it) }
+                }
             }
-            // Restore MODE even if unregistering a listener or restoring a headset route failed.
+            // Restore MODE even if unregistering a listener or restoring a speaker route failed.
             if (restoreMode != null) {
                 runCatching { audioManager.mode = restoreMode }
                     .onSuccess { Log.i(TAG, "Voice route ended; restored AudioManager mode=$restoreMode") }
