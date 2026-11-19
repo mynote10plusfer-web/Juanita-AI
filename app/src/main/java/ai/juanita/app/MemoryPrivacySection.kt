@@ -88,6 +88,8 @@ internal fun MemoryPrivacySection(
     var conversations by remember { mutableStateOf(initialArchivedConversations) }
     var retentionDays by remember { mutableStateOf(initialRetentionDays) }
     var memoryDraft by remember { mutableStateOf("") }
+    var memorySaving by remember { mutableStateOf(false) }
+    var storageError by remember { mutableStateOf<String?>(null) }
     var retentionMenu by remember { mutableStateOf(false) }
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var editingMemory by remember { mutableStateOf<MemoryItem?>(null) }
@@ -158,14 +160,27 @@ internal fun MemoryPrivacySection(
             )
             Button(
                 onClick = {
-                    if (memoryDraft.isNotBlank()) {
-                        memories = listOf(onSaveMemory(memoryDraft.trim())) + memories
-                        memoryDraft = ""
+                    val draft = memoryDraft.trim()
+                    if (draft.isNotBlank() && !memorySaving) {
+                        memorySaving = true
+                        storageError = null
+                        ioScope.launch {
+                            runCatching { withContext(Dispatchers.IO) { onSaveMemory(draft) } }
+                                .onSuccess { saved ->
+                                    memories = listOf(saved) + memories
+                                    memoryDraft = ""
+                                }
+                                .onFailure { failure ->
+                                    storageError = "Salvataggio non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                }
+                            memorySaving = false
+                        }
                     }
                 },
-                enabled = memoryDraft.isNotBlank(), modifier = Modifier.fillMaxWidth(),
+                enabled = memoryDraft.isNotBlank() && !memorySaving, modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-            ) { Text("Salva ricordo") }
+            ) { Text(if (memorySaving) "Salvataggio…" else "Salva ricordo") }
+            storageError?.let { Text(it, color = Color(0xFFE6A0A0), fontSize = 11.sp) }
 
             if (memories.isEmpty()) {
                 Text("Non hai ancora salvato ricordi personali.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
@@ -199,8 +214,18 @@ internal fun MemoryPrivacySection(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 if (!item.confirmedByUser) {
                                     TextButton(onClick = {
-                                        if (onConfirmMemory(item.id)) {
-                                            memories = memories.map { if (it.id == item.id) it.copy(confirmedByUser = true, source = "user_confirmed") else it }
+                                        val memoryId = item.id
+                                        ioScope.launch {
+                                            storageError = null
+                                            runCatching { withContext(Dispatchers.IO) { onConfirmMemory(memoryId) } }
+                                                .onSuccess { confirmed ->
+                                                    if (confirmed) memories = memories.map {
+                                                        if (it.id == memoryId) it.copy(confirmedByUser = true, source = "user_confirmed") else it
+                                                    } else storageError = "Il ricordo non è stato confermato."
+                                                }
+                                                .onFailure { failure ->
+                                                    storageError = "Conferma non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                                }
                                         }
                                     }) { Text("Conferma", color = gold, fontSize = 12.sp) }
                                 }
@@ -324,33 +349,44 @@ internal fun MemoryPrivacySection(
             title = { Text(title) }, text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = {
-                    when {
-                        action == "archive_range" -> {
-                            val start = rangeStartDate
-                            val end = rangeEndDate
-                            if (start != null && end != null && !end.isBefore(start)) {
-                                val zone = ZoneId.systemDefault()
-                                val startMillis = start.atStartOfDay(zone).toInstant().toEpochMilli()
-                                val endMillis = end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-                                onDeleteArchiveRange(startMillis, endMillis)
-                                conversations = onRefreshArchive()
+                    val selectedIds = selectedMemoryIds
+                    val memoryId = action.takeIf { isMemory }?.removePrefix("memory:")
+                    val conversationId = action.takeIf { isConversation }?.removePrefix("conversation:")
+                    val archiveRange = if (action == "archive_range" && rangeStartDate != null && rangeEndDate != null && !rangeEndDate.isBefore(rangeStartDate)) {
+                        val zone = ZoneId.systemDefault()
+                        rangeStartDate.atStartOfDay(zone).toInstant().toEpochMilli() to
+                            rangeEndDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                    } else null
+                    confirmAction = null
+                    storageError = null
+                    ioScope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                when {
+                                    archiveRange != null -> onDeleteArchiveRange(archiveRange.first, archiveRange.second)
+                                    action == "clear_memories" -> onClearMemories()
+                                    action == "clear_archive" -> onClearArchive()
+                                    action == "selected_memories" -> onDeleteMemories(selectedIds)
+                                    memoryId != null -> onDeleteMemory(memoryId)
+                                    conversationId != null -> onDeleteConversation(conversationId)
+                                }
                             }
-                        }
-                        action == "clear_memories" -> { onClearMemories(); memories = emptyList() }
-                        action == "clear_archive" -> { onClearArchive(); conversations = emptyList() }
-                        action == "selected_memories" -> { onDeleteMemories(selectedMemoryIds); memories = memories.filterNot { it.id in selectedMemoryIds }; selectedMemoryIds = emptySet() }
-                        isMemory -> {
-                            val id = action.removePrefix("memory:")
-                            onDeleteMemory(id)
-                            memories = memories.filterNot { it.id == id }
-                        }
-                        isConversation -> {
-                            val id = action.removePrefix("conversation:")
-                            onDeleteConversation(id)
-                            conversations = conversations.filterNot { it.sessionId == id }
+                        }.onSuccess {
+                            when {
+                                action == "clear_memories" -> memories = emptyList()
+                                action == "selected_memories" -> {
+                                    memories = memories.filterNot { it.id in selectedIds }
+                                    selectedMemoryIds = emptySet()
+                                }
+                                memoryId != null -> memories = memories.filterNot { it.id == memoryId }
+                                action == "clear_archive" -> conversations = emptyList()
+                                conversationId != null -> conversations = conversations.filterNot { it.sessionId == conversationId }
+                                archiveRange != null -> conversations = withContext(Dispatchers.IO) { onRefreshArchive() }
+                            }
+                        }.onFailure { failure ->
+                            storageError = "Operazione non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
                         }
                     }
-                    confirmAction = null
                 }) { Text("Elimina", color = Color(0xFFB94A48)) }
             },
             dismissButton = { TextButton(onClick = { confirmAction = null }) { Text("Annulla") } }
