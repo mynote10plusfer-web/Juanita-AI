@@ -179,6 +179,10 @@ class JuanitaVoiceService : Service() {
     }
 
     inner class LocalBinder : Binder() {
+        /** Read-only diagnostics for the Altro screen; does not alter service/audio state. */
+        fun diagnosticLifecycleState(): String = lifecycleState.name
+        fun isCpuWakeLockHeld(): Boolean = cpuWakeLock?.isHeld == true
+
         fun sendVideoFrame(bitmap: Bitmap) {
             if (!videoFrameInFlight.compareAndSet(false, true)) return
             // JPEG compression and the Live image upload are CPU/network work;
