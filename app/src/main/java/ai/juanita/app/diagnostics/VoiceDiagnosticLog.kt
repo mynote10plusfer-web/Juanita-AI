@@ -79,7 +79,12 @@ class VoiceDiagnosticLog(context: Context) {
         try {
             // put() may wait for queue capacity, but this method is never called by
             // an audio callback; event() itself remains non-blocking.
-            writer.queue.put(Runnable { barrier.countDown() })
+            try {
+                writer.execute { barrier.countDown() }
+            } catch (_: RejectedExecutionException) {
+                // The queue is full: enqueue the barrier after existing events drain.
+                writer.queue.put(Runnable { barrier.countDown() })
+            }
             barrier.await(timeoutMillis, TimeUnit.MILLISECONDS)
         } catch (interrupted: InterruptedException) {
             Thread.currentThread().interrupt()
