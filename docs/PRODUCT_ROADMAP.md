@@ -2,6 +2,43 @@
 
 **Documento operativo corrente per PR #58.** Questa sezione prevale sulle sequenze e sugli stati storici riportati più avanti. Le voci datate successive sono cronologia, non istruzioni che possono sovrascrivere questa baseline.
 
+
+## Informazioni contestuali in tempo reale — Meteo, traffico e percorsi (richiesta utente 2026-11-19)
+
+### Diagnosi dello stato attuale
+- La posizione del dispositivo è già acquisita solo in foreground con permesso Android e inserita nel contesto iniziale della sessione; questo NON equivale a un servizio meteo o traffico.
+- Nel ramo cumulativo esiste `MorningBriefingContext.readWeather()`, invocato dal briefing della sveglia mattutina. Non risulta collegato come funzione invocabile nelle normali conversazioni Gemini Live: per questo Juanita può non rispondere alle domande meteo generali anche se la posizione è autorizzata.
+- Il meteo della sveglia usa Open-Meteo e tre centri modello tramite un singolo provider. La posizione è letta dai last-known provider Android; va controllata l'età del fix e va mostrato l'orario di aggiornamento. Non descrivere tre modelli dello stesso provider come tre fonti API indipendenti.
+- Non esiste ancora un motore di percorso/traffico conversazionale integrato né una stima di ETA consapevole del traffico. Le informazioni di posizione da sole non forniscono né percorso né congestione.
+
+### Requisito funzionale richiesto
+Esempio: «Devo andare dalla mia posizione a Los Cristianos. Dimmi se c'è traffico, quanto ci metto e com'è il meteo».
+1. Interpretare origine corrente (solo con permesso e fix fresco) e destinazione detta o disambiguata; se la posizione manca, chiedere una sola volta il punto di partenza.
+2. Risolvere geograficamente la destinazione, costruire uno o più percorsi stradali e fornire distanza + tempo base.
+3. Recuperare dati di traffico/incidenti effettivamente aggiornati lungo il percorso. Separare il tempo base dal tempo corretto per traffico; mostrare fonte e timestamp. Se il provider non offre velocità/congestione live, NON inventare una ETA traffic-aware: riportare il tempo base e gli incidenti ufficiali disponibili con la limitazione esplicita.
+4. Recuperare meteo corrente/previsionale per origine, destinazione e, quando utile, punti intermedi/altitudine; distinguere osservazioni e previsioni e indicare aggiornamento.
+5. Restituire una sintesi vocale naturale, breve e pratica, con opzione di approfondire percorso o alternative. La ricerca è on-demand, cancellabile, con timeout e cache breve.
+
+### Fonti e vincoli gratuiti da validare prima dell'integrazione
+- Meteo: Open-Meteo come prima implementazione senza chiave per il caso d'uso compatibile con i termini; conservare timestamp e modello, gestire rate limits, e confrontare centri modello senza confondere modello e provider. AEMET OpenData è fonte ufficiale complementare ma richiede API key e va valutata senza segreti incorporati nell'APK.
+- Traffico Tenerife: il Cabildo pubblica il Centro de Información de Carreteras con stato della circolazione in tempo reale, AforoNetWeb e dataset aperti di incidenti; il dataset incidenti è aggiornato mensilmente e non va spacciato per feed live. Verificare endpoint/termini/struttura effettivamente accessibili e automatizzabili prima di implementarli.
+- Routing: valutare un motore OpenStreetMap gratuito per il tempo base; verificare limiti d'uso, attribuzione e affidabilità. Un routing OSM standard NON contiene automaticamente il traffico live. Non introdurre chiavi/API commerciali, servizi a pagamento, Blaze o billing.
+- Dati di posizione: solo foreground e consenso esplicito; nessun tracciamento continuo o cronologia di spostamenti. Non inviare coordinate precise a servizi non necessari.
+
+### Sequenza di consegna
+1. Ripristinare e verificare la diagnostica/build attualmente bloccata da errore Kotlin, quindi testare la funzione meteo esistente della sveglia.
+2. Rendere il meteo una funzione conversazionale on-demand di Gemini Live, con test per permesso negato, fix assente/scaduto, rete assente, timeout, provider parziale e modelli discordanti.
+3. Integrare geocoding e routing con tempi base chiaramente etichettati.
+4. Collegare fonti ufficiali/automatizzabili per incidenti e traffico; soltanto dopo aver dimostrato dati live affidabili abilitare ETA corretta per congestione.
+5. Test end-to-end: posizione attuale → Los Cristianos, località manuale, deviazioni/incidenti, traffico assente, meteo lungo il tragitto, rete assente e risposta vocale.
+
+### Criteri di accettazione
+- La richiesta meteo ordinaria funziona in una conversazione Live, non soltanto nel briefing della sveglia.
+- La richiesta origine-destinazione produce percorso e tempo base reali; il traffico è riportato solo se verificato da una fonte attuale.
+- Ogni dato live ha timestamp/fonte; dati obsoleti sono esplicitamente segnalati.
+- Nessun dato meteorologico, incidente, congestione o tempo di percorrenza viene inventato.
+- Nessuna API a pagamento, chiave segreta nell'APK, permesso background location o nuova scheda.
+
 ## Invarianti di progetto
 - Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Head iniziale di questa esecuzione: `f4e0df39532444ef94823e9f4a5f75f3430f5fa3`.
 - PR #58 resta draft/open/unmerged. Nessun merge, release o modifica a `main` senza approvazione esplicita.
