@@ -566,7 +566,7 @@ class IdentityMemoryNamespaceTest {
             assertTrue("The newest Juanita episode must be included", contextPacket.contains(juanitaTurns[3]))
             assertTrue("The preceding Juanita episode must be included", contextPacket.contains(juanitaTurns[2]))
             assertFalse("Older Juanita episodes must be outside the bounded context", contextPacket.contains(juanitaTurns[0]))
-            assertFalse("Another identity's private episode must never enter this context", joseTurns.any(contextPacket::contains))
+            assertFalse("Another identity's private episode must never enter this context", joseTurns.any { contextPacket.contains(it) })
         } finally {
             store.deleteConversation(sessionId)
             store.clearAll()
