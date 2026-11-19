@@ -36,10 +36,10 @@ Before changing code, read:
 5. Relevant implementation, tests, manifest, Gradle configuration and recent PR diff.
 
 Stable installed release: v0.11.12, versionCode 51, application ID `ai.juanita.app`.
-Development PR: #40, branch `feature/shared-memory-single-active-persona`.
+Development PR: #58, branch `integration/unified-rollup-2026-11-18`. PR #58 remains draft/open/unmerged.
 Debug application ID must remain `ai.juanita.app.debug`.
 The stable signing certificate fingerprint and upgrade path must not change.
-Exactly one voice persona may be active. All personas share the user's memory; their character/voice settings remain independent.
+Exactly one character identity may be active per voice session. Shared durable user knowledge may be available to all characters; transcript episodes and private memories remain scoped to the exact stable DigitalIdentity ID. Character voice, language, dialect and personality remain independent.
 Avatar generation/animation/lip-sync is the final roadmap phase. Do not start substantive Avatar engineering before phases 1–5 are accepted.
 The user is a beginner and expects simple, truthful progress reporting.
 
