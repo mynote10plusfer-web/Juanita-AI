@@ -8,7 +8,7 @@
 
 Juanita must maintain reliable continuity across minutes, sessions, process death and device restarts. Memory is a core subsystem, not merely a transcript viewer. It must preserve exact historical evidence, build structured knowledge from it, retrieve relevant context with provenance, learn from corrections, and support useful associations and ideas without inventing facts or claiming consciousness.
 
-The same user memory is shared by all selectable Juanita/José personas. Persona voice, language, style and character remain separate. Only one persona may be active at a time.
+Shared durable user knowledge is available to selectable Juanita/José personas, while transcript episodes and private memories remain scoped to the exact stable DigitalIdentity ID. Persona voice, language, style and character remain separate. Only one identity may be active at a time.
 
 ## Memory ownership: shared user knowledge vs private character episodes
 
