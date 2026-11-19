@@ -162,7 +162,7 @@ internal fun DeviceDiagnosticsSection(
                 DiagnosticValue("RAM disponibile dispositivo", data.availableMemory)
                 DiagnosticValue("CPU processo", data.cpuAverage)
                 DiagnosticValue("Stato termico Android", data.thermal)
-                DiagnosticValue("Durata sessione Gemini Live", data.liveSessionDuration),
+                DiagnosticValue("Durata sessione Gemini Live", data.liveSessionDuration)
                 DiagnosticValue("Registratori audio attivi", data.activeRecorders)
             }
         }
