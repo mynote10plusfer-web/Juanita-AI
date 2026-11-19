@@ -292,14 +292,14 @@ class MainActivity : ComponentActivity() {
                 onSaveImprovementReport = { title, type, area, observed, evidence, expected, acceptance ->
                     memoryStore.addImprovementReport(title, type, area, observed, evidence, expected, acceptance)
                 },
-                onRefreshImprovementReports = { runCatching { memoryStore.listImprovementReports() }.getOrDefault(emptyList()) },
+                onRefreshImprovementReports = { memoryStore.listImprovementReports() },
                 onDeleteImprovementReports = { memoryStore.deleteImprovementReports(it) },
                 initialAvatarProfiles = avatarStore.listProfiles(),
                 initialActiveAvatarProfileId = avatarStore.activeProfile()?.id,
                 initialRetentionDays = memoryStore.archiveRetentionDays,
                 onArchiveEnabledChanged = { memoryStore.setConversationArchiveEnabled(it) },
                 onAutoMemoryEnabledChanged = { memoryStore.setAutomaticMemoryEnabled(it) },
-                onRefreshMemories = { runCatching { memoryStore.listMemories() }.getOrDefault(emptyList()) },
+                onRefreshMemories = { memoryStore.listMemories() },
                 onSaveMemory = { text ->
                     val selectedScope = preferences.activeDigitalIdentityId?.let { selectedId ->
                         runCatching { digitalIdentityStore.get(selectedId)?.effectiveMemoryScopeId }.getOrNull()
@@ -315,7 +315,7 @@ class MainActivity : ComponentActivity() {
                 onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
                 onListConversationTurns = { sessionId, pageIndex, pageSize -> memoryStore.listConversationTurnsPage(sessionId, pageIndex, pageSize) },
                 onDeleteConversationRange = { id, start, end -> memoryStore.deleteConversationRange(id, start, end) },
-                onRefreshArchive = { runCatching { memoryStore.listArchivedConversations() }.getOrDefault(emptyList()) },
+                onRefreshArchive = { memoryStore.listArchivedConversations() },
                  onSearchArchive = { query -> memoryStore.searchArchivedTurns(query, limit = 12) },
                 onClearArchive = { memoryStore.clearConversationArchive() },
                 onRetentionChanged = { memoryStore.archiveRetentionDays = it },
