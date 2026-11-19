@@ -1293,6 +1293,16 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "MORE") {
+                DeviceDiagnosticsSection(
+                    panel = panel,
+                    gold = gold,
+                    liveState = liveState,
+                    wakeWordEnabled = wakeWordListeningEnabled,
+                    wakeWordStatus = wakeWordStatus,
+                    serviceBound = cameraServiceBinder != null,
+                    serviceLifecycle = cameraServiceBinder?.diagnosticLifecycleState() ?: "NON COLLEGATO",
+                    wakeLockHeld = cameraServiceBinder?.isCpuWakeLockHeld() ?: false
+                )
                 SettingsCard(panel, gold, "DIAGNOSTICA VOCALE") {
                     Text(
                         "Registra gli eventi tecnici della conversazione per individuare blocchi del microfono, ricezione Gemini e sintesi vocale. Non salva le parole pronunciate, l'audio o le istruzioni private.",
