@@ -59,7 +59,7 @@ internal fun DeviceDiagnosticsSection(
     serviceBound: Boolean,
     serviceLifecycle: String,
     wakeLockHeld: Boolean,
-    liveSessionDurationMillis: Long
+    liveSessionDurationMillis: () -> Long
 ) {
     val context = LocalContext.current
     var snapshot by remember { mutableStateOf<DeviceDiagnosticSnapshot?>(null) }
@@ -125,7 +125,7 @@ internal fun DeviceDiagnosticsSection(
             cpuAverage = String.format(Locale.getDefault(), "%.1f%% medio dall'avvio del processo", cpuAverage),
             thermal = thermal,
             activeRecorders = recorderCount,
-            liveSessionDuration = formatSessionDuration(liveSessionDurationMillis)
+            liveSessionDuration = formatSessionDuration(liveSessionDurationMillis())
         )
     }
 
