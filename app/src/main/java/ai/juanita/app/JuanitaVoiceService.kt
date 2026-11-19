@@ -97,6 +97,8 @@ class JuanitaVoiceService : Service() {
     private var wakeStartIntent: Intent? = null
     /** Main-thread-confined lifecycle gate: one session can own audio resources at a time. */
     private var lifecycleState = VoiceLifecycleState.IDLE
+    /** Monotonic start marker used only for read-only session-duration diagnostics. */
+    private var liveSessionStartedAtElapsedRealtime = 0L
     private var activeIdentityId: String? = null
     /** Non-null only when this Live session was launched by a specific alarm. */
     private var activeAlarmId: String? = null
@@ -182,6 +184,10 @@ class JuanitaVoiceService : Service() {
         /** Read-only diagnostics for the Altro screen; does not alter service/audio state. */
         fun diagnosticLifecycleState(): String = lifecycleState.name
         fun isCpuWakeLockHeld(): Boolean = cpuWakeLock?.isHeld == true
+        fun diagnosticSessionDurationMillis(): Long =
+            if (lifecycleState == VoiceLifecycleState.ACTIVE && liveSessionStartedAtElapsedRealtime > 0L) {
+                (SystemClock.elapsedRealtime() - liveSessionStartedAtElapsedRealtime).coerceAtLeast(0L)
+            } else 0L
 
         fun sendVideoFrame(bitmap: Bitmap) {
             if (!videoFrameInFlight.compareAndSet(false, true)) return
@@ -771,6 +777,7 @@ class JuanitaVoiceService : Service() {
                                     .putBoolean(profilePromptKey, true).apply()
                             }
                             lifecycleState = VoiceLifecycleState.ACTIVE
+                            liveSessionStartedAtElapsedRealtime = SystemClock.elapsedRealtime()
                             if (!appInForeground && backgroundContinuationAuthorized && activeAlarmId == null) {
                                 acquireCpuWakeLock()
                                 lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
