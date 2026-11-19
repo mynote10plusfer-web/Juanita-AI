@@ -45,7 +45,8 @@ private data class DeviceDiagnosticSnapshot(
     val availableMemory: String,
     val cpuAverage: String,
     val thermal: String,
-    val activeRecorders: String
+    val activeRecorders: String,
+    val liveSessionDuration: String
 )
 
 @Composable
@@ -57,7 +58,8 @@ internal fun DeviceDiagnosticsSection(
     wakeWordStatus: String,
     serviceBound: Boolean,
     serviceLifecycle: String,
-    wakeLockHeld: Boolean
+    wakeLockHeld: Boolean,
+    liveSessionDurationMillis: Long
 ) {
     val context = LocalContext.current
     var snapshot by remember { mutableStateOf<DeviceDiagnosticSnapshot?>(null) }
@@ -122,7 +124,8 @@ internal fun DeviceDiagnosticsSection(
             availableMemory = String.format(Locale.getDefault(), "%.0f MB", availableMb),
             cpuAverage = String.format(Locale.getDefault(), "%.1f%% medio dall'avvio del processo", cpuAverage),
             thermal = thermal,
-            activeRecorders = recorderCount
+            activeRecorders = recorderCount,
+            liveSessionDuration = formatSessionDuration(liveSessionDurationMillis)
         )
     }
 
@@ -159,10 +162,21 @@ internal fun DeviceDiagnosticsSection(
                 DiagnosticValue("RAM disponibile dispositivo", data.availableMemory)
                 DiagnosticValue("CPU processo", data.cpuAverage)
                 DiagnosticValue("Stato termico Android", data.thermal)
+                DiagnosticValue("Durata sessione Gemini Live", data.liveSessionDuration),
                 DiagnosticValue("Registratori audio attivi", data.activeRecorders)
             }
         }
     }
+}
+
+private fun formatSessionDuration(durationMillis: Long): String {
+    if (durationMillis <= 0L) return "Nessuna sessione Live attiva"
+    val totalSeconds = durationMillis / 1_000L
+    val hours = totalSeconds / 3_600L
+    val minutes = (totalSeconds % 3_600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) String.format(Locale.ROOT, "%02d:%02d:%02d", hours, minutes, seconds)
+    else String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
 }
 
 @Composable
