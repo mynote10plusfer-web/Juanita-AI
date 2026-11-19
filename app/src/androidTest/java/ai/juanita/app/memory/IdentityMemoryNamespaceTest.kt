@@ -547,6 +547,7 @@ class IdentityMemoryNamespaceTest {
         val juanitaTurns = (1..4).map { "JUANITA_PRIVATE_TURN_$it" }
         val joseTurns = (1..4).map { "JOSE_PRIVATE_TURN_$it" }
         try {
+            store.setConversationArchiveEnabled(true)
             repeat(4) { index ->
                 store.appendConversationTurn(
                     sessionId, "USER", juanitaTurns[index],
@@ -557,6 +558,12 @@ class IdentityMemoryNamespaceTest {
                     start + index * 2L + 1L, personaId = "identity-jose"
                 )
             }
+            // Corrupt the oldest source frame. A bounded recent-context read must not
+            // decrypt it when the selected identity already has enough newer turns.
+            val journal = File(context.filesDir, "conversation_archive/$sessionId.journal")
+            val oldestFrame = journal.listFiles { file -> file.isFile && file.name.endsWith(".enc") }
+                ?.minByOrNull { it.name } ?: throw AssertionError("Expected archived journal frames")
+            oldestFrame.writeBytes(byteArrayOf(1, 2, 3, 4))
 
             val contextPacket = store.buildAssistantContext(
                 maxTurns = 2,
