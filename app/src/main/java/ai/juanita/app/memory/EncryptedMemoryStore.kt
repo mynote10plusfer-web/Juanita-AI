@@ -18,7 +18,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-/** One encrypted, local-first user memory shared by every selectable character. */
+/** One encrypted local-first store for shared user knowledge and identity-scoped memory records. */
 data class MemoryItem(
     val id: String,
     val text: String,
