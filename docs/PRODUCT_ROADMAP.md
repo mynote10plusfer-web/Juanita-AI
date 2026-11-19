@@ -50,6 +50,14 @@ Solo dopo accettazione delle fasi precedenti: immagine 2D, binding con identità
 - Correzioni Sherpa già inserite, ma l'hardware non è stato validato.
 - Nessun dato di consumo, temperatura o accuratezza acustica è considerato misurato finché non provato sui dispositivi reali.
 
+### Aggiornamento operativo 2026-11-19 — diagnostica e CI HEAD esatto
+- HEAD verificato: `180b08f110be6cdd0b91f1f31e1e65d1fc1a4496`, PR #58, branch cumulativo invariato.
+- Workflow `44604298017`: modello/tokenizer SUCCESS; debug APK SUCCESS; test JVM SUCCESS; compilazione test Android SUCCESS; strumentali API 31 SUCCESS; verifica package identity SUCCESS. Detekt resta SKIPPED nel workflow e non viene dichiarato superato.
+- Artefatto debug `Juanita-AI-debug` presente nel run; package identity verificata come debug isolato. La build non prova il comportamento fisico del microfono, la batteria o la termica.
+- `Altro > Stato dispositivo ed energia` include ora anche la durata della sessione Gemini Live, letta da un contatore monotono del servizio; la lettura è passiva e non avvia polling né un secondo microfono.
+- Le misure di batteria/temperatura/CPU/RAM sono istantanee o stime. Non sono ancora disponibili mAh consumati, drain rate validato o benchmark energetico. Occorrono sessioni di confronto su Note10+ Android 12 e S22 Ultra Android 15.
+- Stato del progetto in UI allineato: CI esatta superata; test fisici ancora da completare.
+
 ---
 
 # 2026-11-18 22:36 — Wake runtime and identity phrase integration update
