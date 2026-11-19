@@ -138,8 +138,13 @@ internal fun MemoryPrivacySection(
             Text("MEMORIA AUTOMATICA", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = autoMemoryEnabled, onCheckedChange = { enabled ->
-                    autoMemoryEnabled = enabled
-                    onAutoMemoryEnabledChanged(enabled)
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onAutoMemoryEnabledChanged(enabled) } }
+                            .onSuccess { autoMemoryEnabled = enabled; storageError = null }
+                            .onFailure { failure ->
+                                storageError = "Modifica della memoria automatica non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                    }
                 })
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Ricorda automaticamente le informazioni importanti", color = Color.White, fontSize = 13.sp)
@@ -321,7 +326,15 @@ internal fun MemoryPrivacySection(
                 panel = panel, gold = gold, initialConversations = conversations,
                 archiveEnabled = archiveEnabled, retentionLabel = retentionLabel,
                 onArchiveEnabledChanged = { archiveEnabled = it; onArchiveEnabledChanged(it) },
-                onRetentionChanged = { retentionDays = it; onRetentionChanged(it) },
+                onRetentionChanged = { value ->
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onRetentionChanged(value) } }
+                            .onSuccess { retentionDays = value; storageError = null }
+                            .onFailure { failure ->
+                                storageError = "Modifica della conservazione non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                    }
+                },
                 onRefresh = onRefreshArchive,
                 onDeleteConversation = { confirmAction = "conversation:" + it },
                 onDeleteDay = { day ->
