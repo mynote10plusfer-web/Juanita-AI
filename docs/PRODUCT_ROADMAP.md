@@ -5,6 +5,18 @@
 
 ## Informazioni contestuali in tempo reale — Meteo, traffico e percorsi (richiesta utente 2026-11-19)
 
+### Requisito trasversale: architettura internazionale (decisione utente 2026-11-20)
+Questa funzione è un servizio geografico globale, non una funzione locale per Tenerife. Tenerife/Los Cristianos è soltanto il primo scenario di collaudo. Ogni implementazione deve poter funzionare in altri Paesi senza modifiche specifiche all'app e senza presumere che l'utente si trovi in Spagna.
+
+- **Core indipendente dal Paese:** definire interfacce separate per geolocalizzazione, geocoding/risoluzione località, routing, meteo e traffico/eventi stradali. La logica conversazionale e il formato dei risultati non devono dipendere da un singolo fornitore o da endpoint territoriali.
+- **Provider selezionabili per copertura:** usare provider globali gratuiti/open quando la copertura, i termini, i limiti e l'affidabilità sono adeguati; aggiungere adattatori regionali (es. autorità stradali nazionali/locali) soltanto come integrazioni opzionali. Un provider disponibile in Spagna non può essere requisito per il funzionamento mondiale.
+- **Copertura dichiarata, non presunta:** per ogni Paese/area registrare quali capacità sono effettivamente disponibili (meteo corrente/previsioni, geocoding, percorso, incidenti, congestione live), qualità, aggiornamento, limiti e fonte. Se un dato non è coperto, Juanita lo dice chiaramente e offre solo ciò che è verificabile.
+- **Fallback controllato:** se manca una fonte traffico locale, fornire il percorso e il tempo base, specificando che non è corretto per il traffico; non trasformare segnalazioni sporadiche o dataset storici in traffico live. Se manca il meteo locale, indicare indisponibilità invece di inventare o sostituire con una località lontana senza consenso.
+- **Localizzazione internazionale:** lingua della risposta, nomi/località, formati data e ora, fuso orario, unità metriche/imperiali e convenzioni regionali devono seguire le preferenze dell'utente e il contesto locale. Le coordinate e la località manuale devono funzionare anche senza GPS; gestire omonimie chiedendo chiarimento.
+- **Privacy e costi:** richiesta on-demand; posizione precisa solo con permesso e fix recente, niente tracciamento continuo o storico degli spostamenti. Nessun servizio a pagamento, chiave segreta incorporata nell'APK, Firebase Blaze o billing. Rispettare attribuzione, licenze, rate limit e termini di ogni provider.
+- **Collaudo internazionale:** oltre al test iniziale Tenerife → Los Cristianos, predisporre test in almeno più aree geografiche e Paesi, con lingue, fusi e unità differenti, inclusi casi di copertura parziale e assenza di feed traffico. La disponibilità effettiva va documentata per area; non dichiarare copertura mondiale finché non è dimostrata.
+
+
 ### Diagnosi dello stato attuale
 - La posizione del dispositivo è già acquisita solo in foreground con permesso Android e inserita nel contesto iniziale della sessione; questo NON equivale a un servizio meteo o traffico.
 - Nel ramo cumulativo esiste `MorningBriefingContext.readWeather()`, invocato dal briefing della sveglia mattutina. Non risulta collegato come funzione invocabile nelle normali conversazioni Gemini Live: per questo Juanita può non rispondere alle domande meteo generali anche se la posizione è autorizzata.
