@@ -27,24 +27,24 @@ object MorningBriefingContext {
         val systemAlarmText = nextAlarm?.let {
             val alarmTime = java.time.Instant.ofEpochMilli(it.triggerTime).atZone(ZoneId.systemDefault())
             "Next Android alarm reported by the system: " +
-                alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'alle' HH:mm", locale)) + "."
+                alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'at' HH:mm", locale)) + "."
         } ?: "Android reports no upcoming external alarm."
         val calendarText = readCalendar(context, now, locale)
         val weatherText = readWeather(context, locale)
         return """
-            CONTESTO PER IL RISVEGLIO — dati locali raccolti sul dispositivo:
-            Oggi è $date. Ora locale: $time. Fuso orario: $zone.
+            MORNING BRIEFING CONTEXT — device-local data:
+            LOCAL DATE: $date. LOCAL TIME: $time. TIME ZONE: $zone.
             $systemAlarmText
-            CALENDARIO: $calendarText
-            METEO: $weatherText
+            CALENDAR: $calendarText
+            WEATHER: $weatherText
 
-            Lingua richiesta per il risveglio: $languageTag. Usa questa lingua in modo coerente.
-            La voce Gemini Live viene selezionata dal profilo attivo dell'utente.
-            Apri con un buongiorno molto dolce, rassicurante e luminoso, senza frasi robotiche.
-            Pronuncia il giorno, la data e l'ora; poi riassumi brevemente meteo e appuntamenti.
-            Se un dato non è disponibile, dichiaralo: non inventare previsioni o impegni.
-            Distingui la sveglia Android da quella di Juanita. Non leggere emoji ad alta voce.
-            Concludi con una frase affettuosa e lascia spazio alla risposta, senza interrogare.
+            REQUIRED WAKE-UP LANGUAGE: $languageTag. Use this language consistently.
+            The Gemini Live voice is selected from the user's active identity profile.
+            Open with a very warm, reassuring and uplifting good morning greeting; avoid robotic phrasing.
+            Say the weekday, date and local time, then briefly summarize weather and calendar events.
+            If a fact is unavailable, say so; never invent forecasts or appointments.
+            Distinguish the Android alarm from Juanita's alarm. Do not read emoji aloud.
+            End with an affectionate sentence and leave room for the user's reply without asking a string of questions.
         """.trimIndent()
     }
 
@@ -65,7 +65,7 @@ object MorningBriefingContext {
                 val beginIndex = cursor.getColumnIndex(CalendarContract.Instances.BEGIN)
                 val locationIndex = cursor.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
                 while (cursor.moveToNext() && events.size < 12) {
-                    val title = cursor.getString(titleIndex)?.takeIf { it.isNotBlank() } ?: "Appuntamento"
+                    val title = cursor.getString(titleIndex)?.takeIf { it.isNotBlank() } ?: "Calendar event"
                     val begin = java.time.Instant.ofEpochMilli(cursor.getLong(beginIndex)).atZone(now.zone)
                         .format(DateTimeFormatter.ofPattern("HH:mm", locale))
                     val place = if (locationIndex >= 0) cursor.getString(locationIndex)?.takeIf { it.isNotBlank() } else null
@@ -154,10 +154,10 @@ object MorningBriefingContext {
         } else {
             "Only one model is available; the result has not been cross-checked."
         }
-        return "Open-Meteo, confronto di ${results.size} modelli ($sources): temperatura media attuale ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
-            "percepita media ${String.format(locale, "%.1f", average { it.feelsLike })}°C; vento medio ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
-            "minima media ${String.format(locale, "%.1f", average { it.minimum })}°C, massima media ${String.format(locale, "%.1f", average { it.maximum })}°C; " +
-            "probabilità media di pioggia ${String.format(locale, "%.0f", average { it.rainChance })}%. $confidenceNote"
+        return "Open-Meteo, comparison of ${results.size} models ($sources): current average temperature ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
+            "average feels-like temperature ${String.format(locale, "%.1f", average { it.feelsLike })}°C; average wind ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
+            "average low ${String.format(locale, "%.1f", average { it.minimum })}°C, average high ${String.format(locale, "%.1f", average { it.maximum })}°C; " +
+            "average precipitation probability ${String.format(locale, "%.0f", average { it.rainChance })}%. $confidenceNote"
     }
 
 }
