@@ -13,6 +13,9 @@ import com.k2fsa.sherpa.onnx.KeywordSpotterConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.OnlineStream
 import com.k2fsa.sherpa.onnx.OnlineTransducerModelConfig
+import com.k2fsa.sherpa.onnx.SileroVadModelConfig
+import com.k2fsa.sherpa.onnx.Vad
+import com.k2fsa.sherpa.onnx.VadModelConfig
 import java.io.Closeable
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
@@ -28,6 +31,7 @@ import kotlin.concurrent.thread
  */
 class SherpaOfflineWakeWordDetector(
     private val modelDirectory: File,
+    private val vadModelFile: File?,
     private val phrase: String,
     private val onDetected: (String) -> Unit,
     private val onFailure: (Throwable) -> Unit
@@ -50,6 +54,7 @@ class SherpaOfflineWakeWordDetector(
     init {
         require(WakePhraseValidator.validate(phrase) == null) { "Invalid wake phrase" }
         require(modelDirectory.isDirectory) { "Wake-word model directory is missing" }
+        require(vadModelFile == null || vadModelFile.isFile) { "Silero VAD model file is missing" }
 
         val encoder = modelDirectory.resolve(ENCODER_FILE)
         val decoder = modelDirectory.resolve(DECODER_FILE)
@@ -124,6 +129,7 @@ class SherpaOfflineWakeWordDetector(
 
     private fun runCapture() {
         var stream: OnlineStream? = null
+        var vad: Vad? = null
         var audioRecord: AudioRecord? = null
         var detectedPhrase: String? = null
         var failure: Throwable? = null
@@ -153,6 +159,23 @@ class SherpaOfflineWakeWordDetector(
             // text2token/SentencePiece implementation; never pass raw user text here.
             val activeStream = keywordSpotter.createStream()
             stream = activeStream
+            val activeVad = vadModelFile?.let { modelFile ->
+                Vad(
+                    config = VadModelConfig(
+                        sileroVadModelConfig = SileroVadModelConfig(
+                            model = modelFile.absolutePath,
+                            threshold = SileroVadSpeechGate.DEFAULT_THRESHOLD,
+                            windowSize = SileroVadSpeechGate.VAD_WINDOW_SAMPLES
+                        ),
+                        sampleRate = SAMPLE_RATE,
+                        numThreads = MODEL_THREADS,
+                        provider = "cpu"
+                    )
+                ).also { vad = it }
+            }
+            val speechGate = activeVad?.let { detector ->
+                SileroVadSpeechGate { samples -> detector.compute(samples) }
+            }
             val activeRecorder = audioRecord
             synchronized(recorderLock) {
                 if (!running.get()) return
@@ -192,8 +215,21 @@ class SherpaOfflineWakeWordDetector(
                 // Accumulate short reads into fixed 100 ms frames. This avoids copyOf()
                 // allocations for every partial AudioRecord.read() result.
                 if (frameAccumulator.append(pcm, count)) {
-                    activeStream.acceptWaveform(frameAccumulator.floatFrame, SAMPLE_RATE)
-                    audioBlocks++
+                    val feedKeywordSpotter: (FloatArray) -> Unit = { audioFrame ->
+                        activeStream.acceptWaveform(audioFrame, SAMPLE_RATE)
+                        audioBlocks++
+                    }
+                    if (speechGate != null) {
+                        speechGate.process(
+                            frameAccumulator.floatFrame,
+                            SystemClock.elapsedRealtime(),
+                            feedKeywordSpotter
+                        )
+                    } else {
+                        // Integrity/download failure of the optional VAD must never
+                        // disable wake detection: retain the proven continuous Sherpa path.
+                        feedKeywordSpotter(frameAccumulator.floatFrame)
+                    }
 
                     while (keywordSpotter.isReady(activeStream)) {
                         val decodeStartedNs = SystemClock.elapsedRealtimeNanos()
@@ -235,6 +271,7 @@ class SherpaOfflineWakeWordDetector(
             if (running.get()) failure = error
         } finally {
             running.set(false)
+            runCatching { vad?.release() }
             runCatching { stream?.release() }
             synchronized(recorderLock) {
                 val ownedRecorder = audioRecord
