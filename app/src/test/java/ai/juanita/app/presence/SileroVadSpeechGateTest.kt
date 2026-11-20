@@ -8,7 +8,7 @@ import org.junit.Test
 class SileroVadSpeechGateTest {
     @Test
     fun silenceDoesNotReachKeywordSpotter() {
-        val gate = SileroVadSpeechGate(speechProbability = { window -> if (window.any { it > 0.2f }) 0.9f else 0.0f }))
+        val gate = SileroVadSpeechGate(speechProbability = { window -> if (window.any { it > 0.2f }) 0.9f else 0.0f })
         var forwarded = 0
 
         repeat(12) {
@@ -22,7 +22,7 @@ class SileroVadSpeechGateTest {
 
     @Test
     fun speechOnsetReplaysBoundedPreRollInChronologicalOrder() {
-        val gate = SileroVadSpeechGate(speechProbability = { window -> if (window.any { it > 0.75f }) 0.9f else 0.0f }))
+        val gate = SileroVadSpeechGate(speechProbability = { window -> if (window.any { it > 0.75f }) 0.9f else 0.0f })
         val received = mutableListOf<Float>()
 
         repeat(7) { index ->
@@ -41,7 +41,7 @@ class SileroVadSpeechGateTest {
 
     @Test
     fun preRollRemainsBoundedAndTrailingSilenceClosesGate() {
-        val gate = SileroVadSpeechGate(speechProbability = { window -> if (window.any { it > 0.2f }) 0.9f else 0.0f }))
+        val gate = SileroVadSpeechGate(speechProbability = { window -> if (window.any { it > 0.2f }) 0.9f else 0.0f })
         var forwarded = 0
         val quiet = FloatArray(SileroVadSpeechGate.KWS_FRAME_SAMPLES)
         val speech = FloatArray(SileroVadSpeechGate.KWS_FRAME_SAMPLES) { 0.9f }
