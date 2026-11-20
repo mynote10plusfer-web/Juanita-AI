@@ -160,20 +160,24 @@ class SherpaOfflineWakeWordDetector(
             val activeStream = keywordSpotter.createStream()
             stream = activeStream
             val activeVad = vadModelFile?.let { modelFile ->
-                Vad(
-                    config = VadModelConfig(
-                        sileroVadModelConfig = SileroVadModelConfig(
-                            model = modelFile.absolutePath,
-                            threshold = SileroVadSpeechGate.DEFAULT_THRESHOLD,
-                            windowSize = SileroVadSpeechGate.VAD_WINDOW_SAMPLES
-                        ),
-                        sampleRate = SAMPLE_RATE,
-                        numThreads = MODEL_THREADS,
-                        provider = "cpu"
-                    )
-                ).also { vad = it }
+                runCatching {
+                    Vad(
+                        config = VadModelConfig(
+                            sileroVadModelConfig = SileroVadModelConfig(
+                                model = modelFile.absolutePath,
+                                threshold = SileroVadSpeechGate.DEFAULT_THRESHOLD,
+                                windowSize = SileroVadSpeechGate.VAD_WINDOW_SAMPLES
+                            ),
+                            sampleRate = SAMPLE_RATE,
+                            numThreads = MODEL_THREADS,
+                            provider = "cpu"
+                        )
+                    ).also { vad = it }
+                }.onFailure { error ->
+                    Log.w(TAG, "Silero VAD initialization failed; using continuous Sherpa fallback", error)
+                }.getOrNull()
             }
-            val speechGate = activeVad?.let { detector ->
+            var speechGate = activeVad?.let { detector ->
                 SileroVadSpeechGate { samples -> detector.compute(samples) }
             }
             val activeRecorder = audioRecord
@@ -221,15 +225,22 @@ class SherpaOfflineWakeWordDetector(
                         activeStream.acceptWaveform(audioFrame, SAMPLE_RATE)
                         audioBlocks++
                     }
-                    if (speechGate != null) {
-                        speechGate.process(
-                            frameAccumulator.floatFrame,
-                            SystemClock.elapsedRealtime(),
-                            feedKeywordSpotter
-                        )
+                    val activeGate = speechGate
+                    if (activeGate != null) {
+                        runCatching {
+                            activeGate.process(
+                                frameAccumulator.floatFrame,
+                                SystemClock.elapsedRealtime(),
+                                feedKeywordSpotter
+                            )
+                        }.onFailure { error ->
+                            Log.w(TAG, "Silero VAD runtime failure; switching to continuous Sherpa", error)
+                            speechGate = null
+                        }
+                        if (speechGate == null) feedKeywordSpotter(frameAccumulator.floatFrame)
                     } else {
-                        // Integrity/download failure of the optional VAD must never
-                        // disable wake detection: retain the proven continuous Sherpa path.
+                        // Integrity, initialization, or runtime failure of optional VAD
+                        // must never disable wake detection: retain continuous Sherpa.
                         feedKeywordSpotter(frameAccumulator.floatFrame)
                     }
 
