@@ -2082,3 +2082,12 @@ Cross-cutting safeguards and acceptance criteria:
 
 **Execution order:** complete and obtain acceptance for reliability/device safety, C3, C4 and C5 first; then complete the Personal Organizer and Agenda; then implement this **Phone and App Assistant** phase; keep Avatar as the final product phase. This addition does not change the current priority or authorize work that would destabilize the current APK candidate.
 
+## 2026-11-20 — Chiusura automatica della voce dopo la sveglia
+
+- Una sessione Gemini Live avviata dalla sveglia non deve restare aperta senza limite: non eredita il timeout di background standard, perché la sessione allarme era esclusa intenzionalmente da quella policy.
+- Dopo l'avvio riuscito di Live, se non arriva alcuna prima risposta vocale entro 45 secondi, la sessione viene chiusa ordinatamente.
+- Dal primo parlato di Juanita, ogni turno vocale riconosciuto aggiorna un timer di inattività di 20 secondi. Se non arriva altro parlato, Gemini Live viene chiuso; una durata massima assoluta di 3 minuti impedisce che una conversazione lasciata aperta continui indefinitamente.
+- Il percorso di chiusura resta quello comune e fail-closed: prima conferma la chiusura del microfono e della sessione Gemini; solo dopo riattiva Sherpa se la parola di attivazione era stata esplicitamente abilitata. Se l'utente non ha attivato la wake word, il servizio termina e rilascia le risorse.
+- Nessuna seconda registrazione simultanea, nessuna attivazione automatica del microfono se l'utente non ha dato consenso, nessun cambiamento alla sessione Live manuale o al timeout di 15 minuti già previsto per il Live in background autorizzato.
+- Test unitari dedicati alla finestra d'inattività, al rinnovo dopo un turno vocale e al limite massimo assoluto.
+- Stato: implementazione inserita nella PR #58; build e test CI sull'HEAD aggiornato e verifica fisica su Samsung ancora da completare. I tempi sono valori iniziali prudenti, da validare nell'uso reale.
