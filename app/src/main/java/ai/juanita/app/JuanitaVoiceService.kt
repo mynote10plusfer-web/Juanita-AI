@@ -1196,11 +1196,17 @@ class JuanitaVoiceService : Service() {
                 }
                 // VAD is an optional optimization: if provisioning fails, keep the
                 // existing Sherpa-only detector fully operational.
-                val vadModelFile = runCatching {
+                val vadModelFile = try {
                     WakeWordModelInstaller.installVadModel(applicationContext)
-                }.onFailure { error ->
-                    voiceDiagnostics.event("wake.vad.install_failed", "fallback=continuous_sherpa; reason=${error.javaClass.simpleName}")
-                }.getOrNull()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    voiceDiagnostics.event(
+                        "wake.vad.install_failed",
+                        "fallback=continuous_sherpa; reason=${error.javaClass.simpleName}"
+                    )
+                    null
+                }
                 if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
                 val detector = withContext(Dispatchers.IO) {
                     SherpaOfflineWakeWordDetector(
