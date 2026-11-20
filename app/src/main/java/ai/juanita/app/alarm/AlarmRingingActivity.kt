@@ -21,6 +21,8 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import ai.juanita.app.JuanitaVoiceService
 import ai.juanita.app.data.AssistantPreferences
+import ai.juanita.app.identity.DigitalIdentityStore
+import ai.juanita.app.identity.toSystemInstruction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -154,32 +156,44 @@ class AlarmRingingActivity : ComponentActivity() {
         voiceStarted = true
         statusText?.text = "Mi collego alla voce Gemini Live…"
         lifecycleScope.launch {
-            val briefing = withContext(Dispatchers.IO) {
-                MorningBriefingContext.build(this@AlarmRingingActivity)
-            }
             val preferences = AssistantPreferences(this@AlarmRingingActivity)
-            val assistantName = preferences.assistantName.ifBlank { AssistantPreferences.DEFAULT_ASSISTANT_NAME }
-            val identityGuidance = if (preferences.assistantGender == "MASCHILE") {
-                "Sei $assistantName, un assistente vocale personale dell'utente. Usa sempre forme grammaticali maschili quando la lingua le prevede."
-            } else {
-                "Sei $assistantName, un'assistente vocale personale dell'utente. Usa sempre forme grammaticali femminili quando la lingua le prevede."
+            val selectedIdentity = withContext(Dispatchers.IO) {
+                preferences.activeDigitalIdentityId?.let { identityId ->
+                    runCatching { DigitalIdentityStore(applicationContext).get(identityId) }.getOrNull()
+                        ?.takeUnless { it.archived }
+                }
             }
+            val languageTag = selectedIdentity?.preferredLanguageTag ?: preferences.languageTag
+            val selectedVoice = selectedIdentity?.voiceName ?: preferences.liveVoiceName
+            val assistantName = selectedIdentity?.displayName
+                ?: preferences.assistantName.ifBlank { AssistantPreferences.DEFAULT_ASSISTANT_NAME }
+            val briefing = withContext(Dispatchers.IO) {
+                MorningBriefingContext.build(this@AlarmRingingActivity, languageTag)
+            }
+            val identityGuidance = selectedIdentity?.toSystemInstruction() ?: """
+                ASSISTANT IDENTITY: You are $assistantName, a personal voice assistant.
+                Use the configured response language tag: $languageTag. Keep grammatical self-reference
+                consistent with the configured assistant identity.
+            """.trimIndent()
             val instruction = """
-                $identityGuidance Questa è la sveglia del mattino autorizzata dall'utente.
-                Usa esclusivamente la voce Gemini Live configurata. Mantieni un tono caldo,
-                naturale, positivo e rassicurante. Non usare TTS Android.
-                Inizia con un buongiorno e un tono positivo. Comunica giorno, data e ora locali,
-                poi meteo e appuntamenti solo se presenti nei dati verificati. Se un dato non è
-                accessibile, dichiaralo senza inventare né dire che il calendario è vuoto.
-                Dopo il breve riepilogo resta disponibile per la conversazione.
+                $identityGuidance
+                This is the user's explicitly enabled morning alarm greeting.
+                Use the selected Gemini Live voice only; never use Android TTS or a fallback voice.
+                Speak in the configured response language ($languageTag) throughout the greeting.
+                Keep the tone warm, natural, positive and reassuring.
+                Briefly say good morning, the local day/date/time, then weather and calendar items
+                only when supported by the supplied verified context. If a fact is unavailable,
+                say so without inventing it or claiming the calendar is empty.
+                After the short briefing, remain available for conversation.
             """.trimIndent()
             runCatching {
                 JuanitaVoiceService.start(
                     this@AlarmRingingActivity,
                     instruction,
-                    preferences.liveVoiceName,
+                    selectedVoice,
                     briefing,
-                    alarmId
+                    alarmId,
+                    identityId = selectedIdentity?.id
                 )
             }.onFailure { error ->
                 voiceStarted = false
