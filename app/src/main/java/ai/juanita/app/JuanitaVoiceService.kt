@@ -102,6 +102,11 @@ class JuanitaVoiceService : Service() {
     private var activeIdentityId: String? = null
     /** Non-null only when this Live session was launched by a specific alarm. */
     private var activeAlarmId: String? = null
+    /** Alarm Live must not remain connected indefinitely after the spoken briefing. */
+    private var alarmGreetingTimeoutJob: Job? = null
+    private var alarmIdleTimeoutJob: Job? = null
+    private var alarmFirstAssistantAtElapsedRealtime = 0L
+    private var alarmLastVoiceActivityAtElapsedRealtime = 0L
     /** Consent is captured when the user explicitly starts this Live session. */
     private var backgroundContinuationAuthorized = false
     private var appInForeground = true
@@ -643,6 +648,27 @@ class JuanitaVoiceService : Service() {
                                 voiceName = voice,
                                 onTranscript = { role, text ->
                                     voiceDiagnostics.event("transcript.callback", "role=$role; characters=${text.length}")
+                                    if (alarmId != null &&
+                                        (role.equals("ASSISTANT", ignoreCase = true) || role.equals("USER", ignoreCase = true))
+                                    ) {
+                                        serviceScope.launch {
+                                            if (activeAlarmId == alarmId && startRequested) {
+                                                val now = SystemClock.elapsedRealtime()
+                                                if (alarmFirstAssistantAtElapsedRealtime == 0L &&
+                                                    role.equals("ASSISTANT", ignoreCase = true)
+                                                ) {
+                                                    alarmFirstAssistantAtElapsedRealtime = now
+                                                    alarmGreetingTimeoutJob?.cancel()
+                                                    alarmGreetingTimeoutJob = null
+                                                    voiceDiagnostics.event("alarm.live.greeting_started", "idleGuard=armed")
+                                                }
+                                                if (alarmFirstAssistantAtElapsedRealtime > 0L) {
+                                                    alarmLastVoiceActivityAtElapsedRealtime = now
+                                                    armAlarmLiveIdleTimeout()
+                                                }
+                                            }
+                                        }
+                                    }
                                     if (previewDurationMillis == 0L && role.equals("USER", ignoreCase = true)) {
                                         serviceScope.launch {
                                             if (!appInForeground && backgroundContinuationAuthorized && activeAlarmId == null) {
@@ -778,6 +804,24 @@ class JuanitaVoiceService : Service() {
                             }
                             lifecycleState = VoiceLifecycleState.ACTIVE
                             liveSessionStartedAtElapsedRealtime = SystemClock.elapsedRealtime()
+                            if (alarmId != null) {
+                                alarmFirstAssistantAtElapsedRealtime = 0L
+                                alarmLastVoiceActivityAtElapsedRealtime = 0L
+                                alarmGreetingTimeoutJob?.cancel()
+                                alarmGreetingTimeoutJob = serviceScope.launch {
+                                    delay(45_000L)
+                                    if (activeAlarmId == alarmId &&
+                                        alarmFirstAssistantAtElapsedRealtime == 0L &&
+                                        lifecycleState == VoiceLifecycleState.ACTIVE
+                                    ) {
+                                        voiceDiagnostics.event("alarm.live.greeting_timeout", "action=orderly_stop")
+                                        requestStop(
+                                            preserveContinuitySnapshot = true,
+                                            finalMessage = "Sveglia vocale terminata: nessuna risposta audio ricevuta."
+                                        )
+                                    }
+                                }
+                            }
                             if (!appInForeground && backgroundContinuationAuthorized && activeAlarmId == null) {
                                 acquireCpuWakeLock()
                                 lastBackgroundUserActivityAtElapsedRealtime = SystemClock.elapsedRealtime()
@@ -925,6 +969,10 @@ class JuanitaVoiceService : Service() {
         voicePreviewJob?.cancel()
         backgroundIdleTimeoutJob?.cancel()
         backgroundIdleTimeoutJob = null
+        alarmGreetingTimeoutJob?.cancel()
+        alarmGreetingTimeoutJob = null
+        alarmIdleTimeoutJob?.cancel()
+        alarmIdleTimeoutJob = null
         if (stopJob?.isActive == true) {
             // The first stop owns teardown and snapshot cleanup. A duplicate Stop must
             // never launch a second archive rewrite that can race the next conversation.
@@ -1009,6 +1057,12 @@ class JuanitaVoiceService : Service() {
                 lifecycleState = VoiceLifecycleState.IDLE
                 activeIdentityId = null
                 activeAlarmId = null
+                alarmGreetingTimeoutJob?.cancel()
+                alarmGreetingTimeoutJob = null
+                alarmIdleTimeoutJob?.cancel()
+                alarmIdleTimeoutJob = null
+                alarmFirstAssistantAtElapsedRealtime = 0L
+                alarmLastVoiceActivityAtElapsedRealtime = 0L
                 if (assistantStopped) releaseCpuWakeLock()
                 if (assistantStopped) {
                     _state.value = finalMessage ?: "Conversazione terminata"
@@ -1049,6 +1103,44 @@ class JuanitaVoiceService : Service() {
                     } else {
                         stopSelf()
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * Alarm briefing gets a short conversational grace period, then Live is closed.
+     * Each speech turn refreshes the idle window, with a hard maximum session length.
+     * The common stop path re-arms Sherpa only when the user opted in.
+     */
+    private fun armAlarmLiveIdleTimeout() {
+        val startedAt = alarmFirstAssistantAtElapsedRealtime
+        if (activeAlarmId == null || startedAt <= 0L ||
+            lifecycleState != VoiceLifecycleState.ACTIVE
+        ) return
+        alarmIdleTimeoutJob?.cancel()
+        val remaining = ai.juanita.app.presence.AlarmLiveIdlePolicy.remainingTimeoutMillis(
+            startedAtElapsedRealtime = startedAt,
+            lastVoiceActivityElapsedRealtime = alarmLastVoiceActivityAtElapsedRealtime,
+            nowElapsedRealtime = SystemClock.elapsedRealtime()
+        )
+        voiceDiagnostics.event("alarm.live.idle_guard.armed", "remainingMs=$remaining")
+        alarmIdleTimeoutJob = serviceScope.launch {
+            delay(remaining)
+            val nextRemaining = ai.juanita.app.presence.AlarmLiveIdlePolicy.remainingTimeoutMillis(
+                startedAtElapsedRealtime = startedAt,
+                lastVoiceActivityElapsedRealtime = alarmLastVoiceActivityAtElapsedRealtime,
+                nowElapsedRealtime = SystemClock.elapsedRealtime()
+            )
+            if (activeAlarmId != null && lifecycleState == VoiceLifecycleState.ACTIVE) {
+                if (nextRemaining <= 0L) {
+                    voiceDiagnostics.event("alarm.live.idle_guard.timeout", "action=orderly_stop")
+                    requestStop(
+                        preserveContinuitySnapshot = true,
+                        finalMessage = "Buongiorno terminato · ascolto vocale chiuso per risparmiare batteria."
+                    )
+                } else {
+                    armAlarmLiveIdleTimeout()
                 }
             }
         }
@@ -1500,6 +1592,10 @@ class JuanitaVoiceService : Service() {
         }
         backgroundIdleTimeoutJob?.cancel()
         backgroundIdleTimeoutJob = null
+        alarmGreetingTimeoutJob?.cancel()
+        alarmGreetingTimeoutJob = null
+        alarmIdleTimeoutJob?.cancel()
+        alarmIdleTimeoutJob = null
         // Normal destruction is reached only after requestStop() has awaited SDK
         // microphone and Live-session shutdown. Never launch detached cleanup here:
         // Android could destroy this Service while that unowned coroutine is still running.
