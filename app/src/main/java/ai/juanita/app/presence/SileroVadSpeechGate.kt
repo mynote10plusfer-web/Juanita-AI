@@ -22,6 +22,11 @@ internal class SileroVadSpeechGate(
     private var lastSpeechAtMillis = Long.MIN_VALUE
     private var active = false
 
+    var vadWindowsProcessed: Long = 0L
+        private set
+    var speechWindowsDetected: Long = 0L
+        private set
+
     init {
         require(threshold in 0f..1f)
         require(trailingSilenceMillis >= 0L)
@@ -49,7 +54,11 @@ internal class SileroVadSpeechGate(
         frame.forEach { sample ->
             vadWindow[vadWindowFill++] = sample
             if (vadWindowFill == VAD_WINDOW_SAMPLES) {
-                if (speechProbability(vadWindow) >= threshold) speechDetected = true
+                vadWindowsProcessed++
+                if (speechProbability(vadWindow) >= threshold) {
+                    speechDetected = true
+                    speechWindowsDetected++
+                }
                 vadWindowFill = 0
             }
         }
@@ -83,6 +92,8 @@ internal class SileroVadSpeechGate(
         vadWindowFill = 0
         lastSpeechAtMillis = Long.MIN_VALUE
         active = false
+        vadWindowsProcessed = 0L
+        speechWindowsDetected = 0L
     }
 
     companion object {
