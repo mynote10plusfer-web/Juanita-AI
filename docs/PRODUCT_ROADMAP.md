@@ -2091,3 +2091,19 @@ Cross-cutting safeguards and acceptance criteria:
 - Nessuna seconda registrazione simultanea, nessuna attivazione automatica del microfono se l'utente non ha dato consenso, nessun cambiamento alla sessione Live manuale o al timeout di 15 minuti già previsto per il Live in background autorizzato.
 - Test unitari dedicati alla finestra d'inattività, al rinnovo dopo un turno vocale e al limite massimo assoluto.
 - Stato: implementazione inserita nella PR #58; build e test CI sull'HEAD aggiornato e verifica fisica su Samsung ancora da completare. I tempi sono valori iniziali prudenti, da validare nell'uso reale.
+
+
+## 2026-11-20 — Collaborazione con assistente Android predefinito (RICERCA COMPLETATA)
+
+**Richiesta utente:** mantenere Juanita AI con tutte le funzioni attuali, ma ridurre il consumo in standby appoggiandosi all'assistente Android già selezionato, senza obbligare a sostituirlo.
+
+- Distinguere handoff da delega del microfono: Google App Actions possono far riconoscere una richiesta all'assistente e avviare una Activity/deep link di Juanita; non consegnano all'app il callback della hotword né condividono il microfono. Il percorso può evitare che Sherpa resti in ascolto mentre Juanita è inattiva, ma dipende dall'assistente e dalla sua frase di invocazione.
+- App Actions è specifico di Google Assistant, richiede registrazione/integrazione Play e ha limiti: i custom intent sono attualmente en-US e richiedono query esplicite del tipo "open [app] and ...". Non registra una hotword always-on arbitraria come "Hola Juanita". Le routine Bixby/OEM sono eventuali adattatori per dispositivo, non un contratto Android universale.
+- La Role ASSISTANT e VoiceInteractionService sono un'alternativa diversa: il servizio dell'app selezionata resta mantenuto dal sistema, ma selezionare Juanita sostituisce l'assistente attuale. Non equivale a collaborare con esso.
+- La selezione del ruolo non garantisce il DSP. AlwaysOnHotwordDetector dipende da enrollment, SoundTrigger HAL e hardware; le API hotword framework correnti sono SystemApi/hidden e i permessi correlati sono privilegiati. Non usare reflection, API nascoste, root o permessi signature/privileged.
+- **Decisione:** non chiedere il ruolo ASSISTANT e non sostituire Google/Bixby. Mantenere Sherpa come percorso diretto "Hola Juanita"/"Hola José"; progettare un ingresso opzionale tramite intent/deep link/App Actions che avvii il medesimo runtime Gemini Live senza aprire il microfono in background. Valutare App Actions solo per distribuzione Play e lingue effettivamente supportate; OEM routines solo dopo verifica sul singolo dispositivo.
+- Futuro DSP: integrare soltanto quando esiste API pubblica/documentata e capacità verificata sul dispositivo; mantenere fallback Sherpa per Android precedenti e dispositivi senza supporto.
+- Separare le misure: standby con assistente esterno e Juanita inattiva, standby Sherpa, Gemini Live attivo. Non dichiarare risparmio senza test fisici 1/4/8 ore, batteria, temperatura e accuratezza.
+- Documento tecnico: `docs/DEFAULT_ASSISTANT_INTEROP_RESEARCH_2026-11-20.md`.
+- Nessuna modifica runtime, permesso, tab, package ID, firma o dati utente in questo passaggio.
+
