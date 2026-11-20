@@ -51,6 +51,17 @@ Esempio: «Devo andare dalla mia posizione a Los Cristianos. Dimmi se c'è traff
 - Nessun dato meteorologico, incidente, congestione o tempo di percorrenza viene inventato.
 - Nessuna API a pagamento, chiave segreta nell'APK, permesso background location o nuova scheda.
 
+## 2026-11-20 — Sveglia coerente con identità, lingua e voce selezionate
+
+**Difetto riprodotto dal codice e correzione in corso su PR #58.**
+- Causa verificata: il briefing mattutino forzava `it-IT` e conteneva un'istruzione esplicita a parlare italiano; la schermata sveglia avviava inoltre Gemini Live con la voce globale `AssistantPreferences.liveVoiceName`, ignorando la voce del profilo digitale attivo.
+- Comportamento corretto: quando esiste un profilo digitale attivo e valido, la sveglia deve caricare il suo `preferredLanguageTag`, `voiceName`, identità e istruzioni regionali dalla stessa fonte cifrata usata dalla conversazione normale. Deve passare anche l'ID del profilo al servizio Live.
+- Se non esiste un profilo digitale attivo, usare lingua, nome, genere e voce delle preferenze globali legacy. Non inventare fallback linguistici.
+- Data, ora, giorno, calendario e formattazione del briefing devono usare il locale del profilo effettivo, non italiano fisso. La risposta vocale deve restare nella lingua configurata.
+- Nessuna seconda configurazione obbligatoria nella sveglia: il profilo è la fonte autorevole. Una futura eccezione per singola sveglia può essere aggiunta soltanto come override facoltativo esplicito, senza duplicare le impostazioni normali.
+- Test di accettazione: profilo italiano/voce A; spagnolo canario/voce B; ceco/voce C; profilo archiviato o mancante; modalità legacy senza profilo. Verificare voce passata al servizio, lingua del briefing, calendario e data locale, e che una modifica al profilo venga recepita alla successiva sveglia.
+- La modifica del 2026-11-20 è implementata in prima passata in `MorningBriefingContext` e `AlarmRingingActivity`; build, test automatici e prova fisica audio multilingue restano obbligatori prima di dichiararla completata.
+
 ## Invarianti di progetto
 - Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Head iniziale di questa esecuzione: `f4e0df39532444ef94823e9f4a5f75f3430f5fa3`.
 - PR #58 resta draft/open/unmerged. Nessun merge, release o modifica a `main` senza approvazione esplicita.
