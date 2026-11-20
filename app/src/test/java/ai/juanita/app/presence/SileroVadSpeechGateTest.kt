@@ -20,7 +20,7 @@ class SileroVadSpeechGateTest {
 
     @Test
     fun speechOnsetReplaysBoundedPreRollInChronologicalOrder() {
-        val gate = SileroVadSpeechGate { window -> if (window.any { it > 0.2f }) 0.9f else 0.0f }
+        val gate = SileroVadSpeechGate { window -> if (window.any { it > 0.75f }) 0.9f else 0.0f }
         val received = mutableListOf<Float>()
 
         repeat(7) { index ->
