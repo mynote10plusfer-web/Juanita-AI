@@ -16,6 +16,8 @@ class SileroVadSpeechGateTest {
         }
 
         assertEquals(0, forwarded)
+        assertTrue(gate.vadWindowsProcessed > 0L)
+        assertEquals(0L, gate.speechWindowsDetected)
     }
 
     @Test
@@ -33,6 +35,7 @@ class SileroVadSpeechGateTest {
         }
 
         assertEquals(8, received.size)
+        assertTrue(gate.speechWindowsDetected > 0L)
         assertEquals(listOf(0.1f, 0.2f, 0.3f, 0.4f, 0.5f, 0.6f, 0.7f, 0.8f), received)
     }
 
