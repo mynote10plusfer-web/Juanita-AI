@@ -17,9 +17,9 @@ import java.util.Locale
 
 /** Builds factual device-local morning context. Missing access is never reported as an empty day. */
 object MorningBriefingContext {
-    fun build(context: Context): String {
+    fun build(context: Context, languageTag: String = Locale.getDefault().toLanguageTag()): String {
         val now = ZonedDateTime.now()
-        val locale = Locale.forLanguageTag("it-IT")
+        val locale = Locale.forLanguageTag(languageTag).takeIf { it.language.isNotBlank() } ?: Locale.getDefault()
         val date = now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", locale))
         val time = now.format(DateTimeFormatter.ofPattern("HH:mm", locale))
         val zone = now.zone.id
@@ -29,8 +29,8 @@ object MorningBriefingContext {
             "Prossima sveglia Android comunicata dal sistema: " +
                 alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'alle' HH:mm", locale)) + "."
         } ?: "Android non comunica una prossima sveglia esterna a Juanita."
-        val calendarText = readCalendar(context, now)
-        val weatherText = readWeather(context)
+        val calendarText = readCalendar(context, now, locale)
+        val weatherText = readWeather(context, locale)
         return """
             CONTESTO PER IL RISVEGLIO — dati locali raccolti sul dispositivo:
             Oggi è $date. Ora locale: $time. Fuso orario: $zone.
@@ -38,7 +38,8 @@ object MorningBriefingContext {
             CALENDARIO: $calendarText
             METEO: $weatherText
 
-            Parla in italiano naturale, con la voce Gemini Live già selezionata dall'utente.
+            Lingua richiesta per il risveglio: $languageTag. Usa questa lingua in modo coerente.
+            La voce Gemini Live viene selezionata dal profilo attivo dell'utente.
             Apri con un buongiorno molto dolce, rassicurante e luminoso, senza frasi robotiche.
             Pronuncia il giorno, la data e l'ora; poi riassumi brevemente meteo e appuntamenti.
             Se un dato non è disponibile, dichiaralo: non inventare previsioni o impegni.
@@ -47,7 +48,7 @@ object MorningBriefingContext {
         """.trimIndent()
     }
 
-    private fun readCalendar(context: Context, now: ZonedDateTime): String {
+    private fun readCalendar(context: Context, now: ZonedDateTime, locale: Locale): String {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
             return "Calendario non accessibile: permesso non concesso. Non dedurre che non ci siano appuntamenti."
         }
@@ -66,7 +67,7 @@ object MorningBriefingContext {
                 while (cursor.moveToNext() && events.size < 12) {
                     val title = cursor.getString(titleIndex)?.takeIf { it.isNotBlank() } ?: "Appuntamento"
                     val begin = java.time.Instant.ofEpochMilli(cursor.getLong(beginIndex)).atZone(now.zone)
-                        .format(DateTimeFormatter.ofPattern("HH:mm", Locale.ITALIAN))
+                        .format(DateTimeFormatter.ofPattern("HH:mm", locale))
                     val place = if (locationIndex >= 0) cursor.getString(locationIndex)?.takeIf { it.isNotBlank() } else null
                     events += if (place == null) "$begin — $title" else "$begin — $title, $place"
                 }
@@ -87,7 +88,7 @@ object MorningBriefingContext {
         val rainChance: Double
     )
 
-    private fun readWeather(context: Context): String {
+    private fun readWeather(context: Context, locale: Locale): String {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!fine && !coarse) return "Meteo non disponibile: manca il permesso di posizione."
@@ -149,14 +150,14 @@ object MorningBriefingContext {
         val confidenceNote = if (results.size >= 2 && spread <= 3.0) {
             "I modelli sono abbastanza concordi sulla temperatura attuale."
         } else if (results.size >= 2) {
-            "I modelli divergono di circa ${String.format(Locale.ITALIAN, "%.1f", spread)} gradi: segnala l'intervallo, senza presentare la media come certezza."
+            "I modelli divergono di circa ${String.format(locale, "%.1f", spread)} gradi: segnala l'intervallo, senza presentare la media come certezza."
         } else {
             "È disponibile un solo modello: il dato non è stato confrontato."
         }
-        return "Open-Meteo, confronto di ${results.size} modelli ($sources): temperatura media attuale ${String.format(Locale.ITALIAN, "%.1f", average { it.temperature })}°C; " +
-            "percepita media ${String.format(Locale.ITALIAN, "%.1f", average { it.feelsLike })}°C; vento medio ${String.format(Locale.ITALIAN, "%.0f", average { it.wind })} km/h; " +
-            "minima media ${String.format(Locale.ITALIAN, "%.1f", average { it.minimum })}°C, massima media ${String.format(Locale.ITALIAN, "%.1f", average { it.maximum })}°C; " +
-            "probabilità media di pioggia ${String.format(Locale.ITALIAN, "%.0f", average { it.rainChance })}%. $confidenceNote"
+        return "Open-Meteo, confronto di ${results.size} modelli ($sources): temperatura media attuale ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
+            "percepita media ${String.format(locale, "%.1f", average { it.feelsLike })}°C; vento medio ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
+            "minima media ${String.format(locale, "%.1f", average { it.minimum })}°C, massima media ${String.format(locale, "%.1f", average { it.maximum })}°C; " +
+            "probabilità media di pioggia ${String.format(locale, "%.0f", average { it.rainChance })}%. $confidenceNote"
     }
 
 }
