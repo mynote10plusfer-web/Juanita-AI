@@ -101,3 +101,17 @@ The Android DSP / default-assistant interop track remains separate: no public un
 - AndroidWakeWord: https://github.com/Suxsem/AndroidWakeWord
 - VoxRT Silero Android: https://github.com/VoxRT/voxrt-silero-android
 - Android wake-word architecture and DSP limitation: https://www.home-assistant.io/blog/2026/07/31/a-big-win-for-android-interoperability/
+
+
+## Implementation update — 2026-11-20
+
+The first runtime prototype is now present on the cumulative integration branch:
+
+- It uses Sherpa ONNX's own Silero VAD API and a separately downloaded, size- and SHA-256-pinned `silero_vad.onnx` model. This avoids introducing a second native runtime at this stage.
+- Silero evaluates 512-sample windows at 16 kHz. When speech is detected, the gate replays a bounded 800 ms pre-roll to the existing BPE KWS stream, then forwards live audio through a 600 ms trailing-silence window.
+- The optional gate is enabled only in DEBUG builds. RELEASE builds retain the current continuous Sherpa path.
+- Download, native initialization, and runtime inference failures fall back to continuous Sherpa; they must not turn wake listening off.
+- JVM tests cover silence suppression, chronological pre-roll, bounded buffering, trailing-silence closure, reset, and VAD counters.
+- The 60-second diagnostic now includes total worker CPU, KWS decode wall time, VAD window count, speech-window count, and speech-window ratio. It records no audio or transcript.
+
+This is an implementation prototype, **not evidence of battery savings**. Silero itself runs continuously, so its inference cost must be compared against the KWS work it suppresses. CI and physical-device acoustic/energy validation remain mandatory. The earlier Speex-first proposal is deferred: do not add a second native VAD until this simpler Sherpa-native experiment is measured and shown insufficient.
