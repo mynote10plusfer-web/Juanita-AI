@@ -2120,3 +2120,15 @@ Cross-cutting safeguards and acceptance criteria:
 - Gate di accettazione: almeno 100 prove per frase e ambiente, falsi positivi/negativi misurati, test di continuità audio, confronti standby 1/4/8 ore su Note10+ Android 12 e S22 Ultra Android 15; temperatura e consumo separati da Gemini Live.
 - Documento: `docs/WAKE_WORD_BATTERY_OPTIMIZATION_AUDIT_2026-11-20.md`.
 - Stato: audit sorgenti e decisione architetturale completati; prototipo runtime e misurazioni fisiche non ancora implementati/eseguiti. Nessuna riduzione percentuale di batteria dichiarata.
+
+
+## 2026-11-20 — Prototipo VAD-gated Sherpa (IMPLEMENTAZIONE IN VALIDAZIONE)
+
+- Aggiunto `SileroVadSpeechGate`: finestre Silero da 512 campioni a 16 kHz, pre-roll circolare di 8 frame KWS (800 ms), coda di 600 ms e nessun invio di audio al KWS durante il silenzio classificato.
+- Riutilizzata l'API VAD già inclusa in Sherpa ONNX 1.13.8: nessuna seconda libreria JNI. Il modello `silero_vad.onnx` viene scaricato separatamente nella directory privata dell'app e verificato con dimensione e SHA-256 prima dell'attivazione.
+- La pipeline VAD è abilitata solo nelle build DEBUG. Le build RELEASE continuano a usare il percorso Sherpa continuo finché non saranno superati test acustici e misure energetiche reali.
+- Fallback automatico al percorso Sherpa continuo in caso di download, inizializzazione o inferenza VAD fallita; il fallimento non deve disabilitare la hotword.
+- Aggiunti test JVM per silenzio, ordine e limite del pre-roll, coda di silenzio, reset e contatori VAD. Aggiunta diagnostica a 60 secondi con CPU worker, tempo decode KWS, finestre VAD e rapporto finestre classificate come parlato. Nessun audio o trascrizione viene registrato.
+- **Limite importante:** Silero viene eseguito continuamente sulle finestre da 512 campioni; non è ancora dimostrato che il suo costo sia inferiore al KWS che evita. Il prototipo misura il carico complessivo e il rapporto di attività, ma non autorizza a dichiarare un risparmio percentuale.
+- Prossimi gate: CI completa (APK debug, test JVM, compile instrumentation); poi prove su Note10+ Android 12 con entrambe le frasi, test rumore/moto/TV, confronto standby 1/4/8 ore e verifica temperatura/batteria. Solo dopo si valuta un front-end leggero aggiuntivo o l'abilitazione release.
+- Candidate cumulative: `0.11.13`, versionCode `52`; PR #58 resta draft e non viene unita a `main`.
