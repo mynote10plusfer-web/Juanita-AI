@@ -25,6 +25,10 @@ object WakeWordModelInstaller {
     private const val READ_TIMEOUT_MS = 120_000
     private const val BUFFER_SIZE = 64 * 1024
     private const val MIN_STAGING_RESERVE_BYTES = 2L * 1024L * 1024L
+    private const val VAD_MODEL_REVISION = "sherpa-asr-models-2025-07-11"
+    private const val VAD_MODEL_BYTES = 643_854L
+    private const val VAD_MODEL_SHA256 = "9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+    private const val VAD_MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
     private val installMutex = Mutex()
 
     private data class Asset(val name: String, val bytes: Long, val sha256: String)
@@ -45,6 +49,63 @@ object WakeWordModelInstaller {
         onProgress: ((fileName: String, downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): File = withContext(Dispatchers.IO) {
         installMutex.withLock { installBlocking(context.applicationContext, phrase, onProgress) }
+    }
+
+    /**
+     * Installs the small, revision-pinned Silero VAD model independently from KWS.
+     * The existing KWS bundle remains intact if VAD provisioning fails.
+     */
+    suspend fun installVadModel(context: Context): File = withContext(Dispatchers.IO) {
+        installMutex.withLock {
+            val appContext = context.applicationContext
+            val destination = File(appContext.filesDir, "wake-models/silero-vad-$VAD_MODEL_REVISION.onnx")
+            if (destination.isFile && destination.length() == VAD_MODEL_BYTES &&
+                runCatching { sha256(destination) == VAD_MODEL_SHA256 }.getOrDefault(false)
+            ) return@withLock destination
+
+            val parent = destination.parentFile ?: error("Invalid VAD model destination")
+            check(parent.mkdirs() || parent.isDirectory) { "Unable to create private VAD model directory" }
+            val temporary = File(parent, "${destination.name}.part")
+            val connection = (URL(VAD_MODEL_URL).openConnection() as HttpURLConnection).apply {
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = true
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "JuanitaAI-SileroVAD/$VAD_MODEL_REVISION")
+            }
+            try {
+                check(connection.responseCode == HttpURLConnection.HTTP_OK) {
+                    "Silero VAD model download failed: HTTP ${connection.responseCode}"
+                }
+                val digest = MessageDigest.getInstance("SHA-256")
+                var count = 0L
+                connection.inputStream.use { input ->
+                    FileOutputStream(temporary).use { output ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            count += read
+                            check(count <= VAD_MODEL_BYTES) { "Silero VAD model exceeds pinned size" }
+                            digest.update(buffer, 0, read)
+                            output.write(buffer, 0, read)
+                        }
+                        output.fd.sync()
+                    }
+                }
+                val hash = digest.digest().joinToString("") { "%02x".format(it) }
+                check(count == VAD_MODEL_BYTES && hash == VAD_MODEL_SHA256) {
+                    "Silero VAD model failed its pinned size/SHA-256 integrity check"
+                }
+                check(temporary.renameTo(destination)) { "Unable to activate verified Silero VAD model" }
+                destination
+            } catch (error: Throwable) {
+                temporary.delete()
+                throw error
+            } finally {
+                connection.disconnect()
+            }
+        }
     }
 
     fun isInstalled(context: Context, phrase: String = DEFAULT_PHRASE): Boolean {
