@@ -178,7 +178,7 @@ class SherpaOfflineWakeWordDetector(
                 }.getOrNull()
             }
             var speechGate = activeVad?.let { detector ->
-                SileroVadSpeechGate { samples -> detector.compute(samples) }
+                SileroVadSpeechGate(speechProbability = { samples -> detector.compute(samples) })
             }
             val activeRecorder = audioRecord
             synchronized(recorderLock) {
