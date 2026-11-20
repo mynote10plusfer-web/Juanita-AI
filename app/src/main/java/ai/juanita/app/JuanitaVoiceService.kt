@@ -481,6 +481,12 @@ class JuanitaVoiceService : Service() {
                     lifecycleState = VoiceLifecycleState.STARTING
                     activeIdentityId = identityId
                     activeAlarmId = alarmId
+                    alarmFirstAssistantAtElapsedRealtime = 0L
+                    alarmLastVoiceActivityAtElapsedRealtime = 0L
+                    alarmGreetingTimeoutJob?.cancel()
+                    alarmGreetingTimeoutJob = null
+                    alarmIdleTimeoutJob?.cancel()
+                    alarmIdleTimeoutJob = null
                     backgroundContinuationAuthorized = requestedBackgroundContinuation && alarmId == null
                     if (!startedFromWake) appInForeground = true
                     backgroundIdleTimeoutJob?.cancel()
@@ -805,20 +811,22 @@ class JuanitaVoiceService : Service() {
                             lifecycleState = VoiceLifecycleState.ACTIVE
                             liveSessionStartedAtElapsedRealtime = SystemClock.elapsedRealtime()
                             if (alarmId != null) {
-                                alarmFirstAssistantAtElapsedRealtime = 0L
-                                alarmLastVoiceActivityAtElapsedRealtime = 0L
-                                alarmGreetingTimeoutJob?.cancel()
-                                alarmGreetingTimeoutJob = serviceScope.launch {
-                                    delay(45_000L)
-                                    if (activeAlarmId == alarmId &&
-                                        alarmFirstAssistantAtElapsedRealtime == 0L &&
-                                        lifecycleState == VoiceLifecycleState.ACTIVE
-                                    ) {
-                                        voiceDiagnostics.event("alarm.live.greeting_timeout", "action=orderly_stop")
-                                        requestStop(
-                                            preserveContinuitySnapshot = true,
-                                            finalMessage = "Sveglia vocale terminata: nessuna risposta audio ricevuta."
-                                        )
+                                if (alarmFirstAssistantAtElapsedRealtime > 0L) {
+                                    armAlarmLiveIdleTimeout()
+                                } else {
+                                    alarmGreetingTimeoutJob?.cancel()
+                                    alarmGreetingTimeoutJob = serviceScope.launch {
+                                        delay(45_000L)
+                                        if (activeAlarmId == alarmId &&
+                                            alarmFirstAssistantAtElapsedRealtime == 0L &&
+                                            lifecycleState == VoiceLifecycleState.ACTIVE
+                                        ) {
+                                            voiceDiagnostics.event("alarm.live.greeting_timeout", "action=orderly_stop")
+                                            requestStop(
+                                                preserveContinuitySnapshot = true,
+                                                finalMessage = "Sveglia vocale terminata: nessuna risposta audio ricevuta."
+                                            )
+                                        }
                                     }
                                 }
                             }
