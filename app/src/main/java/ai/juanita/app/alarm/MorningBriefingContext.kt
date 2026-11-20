@@ -26,9 +26,9 @@ object MorningBriefingContext {
         val nextAlarm = runCatching { context.getSystemService(AlarmManager::class.java).nextAlarmClock }.getOrNull()
         val systemAlarmText = nextAlarm?.let {
             val alarmTime = java.time.Instant.ofEpochMilli(it.triggerTime).atZone(ZoneId.systemDefault())
-            "Prossima sveglia Android comunicata dal sistema: " +
+            "Next Android alarm reported by the system: " +
                 alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'alle' HH:mm", locale)) + "."
-        } ?: "Android non comunica una prossima sveglia esterna a Juanita."
+        } ?: "Android reports no upcoming external alarm."
         val calendarText = readCalendar(context, now, locale)
         val weatherText = readWeather(context, locale)
         return """
@@ -50,7 +50,7 @@ object MorningBriefingContext {
 
     private fun readCalendar(context: Context, now: ZonedDateTime, locale: Locale): String {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
-            return "Calendario non accessibile: permesso non concesso. Non dedurre che non ci siano appuntamenti."
+            return "Calendar unavailable: permission not granted. Do not assume there are no events."
         }
         val start = now.toLocalDate().atStartOfDay(now.zone).toInstant().toEpochMilli()
         val end = now.toLocalDate().plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
@@ -72,9 +72,9 @@ object MorningBriefingContext {
                     events += if (place == null) "$begin — $title" else "$begin — $title, $place"
                 }
             }
-            if (events.isEmpty()) "Nessun evento trovato oggi nel calendario autorizzato."
+            if (events.isEmpty()) "No events found today in the authorized calendar."
             else events.joinToString("; ")
-        }.getOrElse { "Calendario temporaneamente non leggibile (${it.javaClass.simpleName}); non assumere che sia vuoto." }
+        }.getOrElse { "Calendar temporarily unreadable (${it.javaClass.simpleName}); do not assume it is empty." }
     }
 
     private data class ModelWeather(
@@ -91,13 +91,13 @@ object MorningBriefingContext {
     private fun readWeather(context: Context, locale: Locale): String {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (!fine && !coarse) return "Meteo non disponibile: manca il permesso di posizione."
+        if (!fine && !coarse) return "Weather unavailable: location permission is missing."
         val location = runCatching {
             val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
             listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
                 .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
                 .maxByOrNull { it.time }
-        }.getOrNull() ?: return "Meteo non disponibile: il telefono non ha una posizione recente."
+        }.getOrNull() ?: return "Weather unavailable: the phone has no recent location fix."
 
         val models = listOf(
             "ecmwf_ifs025" to "ECMWF",
@@ -138,7 +138,7 @@ object MorningBriefingContext {
                 } finally { connection.disconnect() }
             }.getOrNull()
         }
-        if (results.isEmpty()) return "Meteo non disponibile: nessuno dei modelli meteorologici ha risposto."
+        if (results.isEmpty()) return "Weather unavailable: none of the weather models responded."
 
         fun average(selector: (ModelWeather) -> Double): Double {
             val values = results.map(selector).filter { it.isFinite() }
@@ -148,11 +148,11 @@ object MorningBriefingContext {
         val spread = if (temperatures.size > 1) temperatures.maxOrNull()!! - temperatures.minOrNull()!! else 0.0
         val sources = results.joinToString(", ") { it.model }
         val confidenceNote = if (results.size >= 2 && spread <= 3.0) {
-            "I modelli sono abbastanza concordi sulla temperatura attuale."
+            "The models broadly agree on the current temperature."
         } else if (results.size >= 2) {
-            "I modelli divergono di circa ${String.format(locale, "%.1f", spread)} gradi: segnala l'intervallo, senza presentare la media come certezza."
+            "The models differ by about ${String.format(locale, "%.1f", spread)} degrees: report the range and do not present the average as certain."
         } else {
-            "È disponibile un solo modello: il dato non è stato confrontato."
+            "Only one model is available; the result has not been cross-checked."
         }
         return "Open-Meteo, confronto di ${results.size} modelli ($sources): temperatura media attuale ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
             "percepita media ${String.format(locale, "%.1f", average { it.feelsLike })}°C; vento medio ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
