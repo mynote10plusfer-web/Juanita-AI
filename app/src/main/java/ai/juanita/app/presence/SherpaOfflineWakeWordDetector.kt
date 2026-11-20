@@ -191,6 +191,8 @@ class SherpaOfflineWakeWordDetector(
             var decodeCpuWallNs = 0L
             var decodedFrames = 0L
             var audioBlocks = 0L
+            var lastVadWindowCount = 0L
+            var lastSpeechWindowCount = 0L
 
             while (running.get()) {
                 val count = activeRecorder.read(pcm, 0, pcm.size, AudioRecord.READ_BLOCKING)
@@ -254,12 +256,24 @@ class SherpaOfflineWakeWordDetector(
                     val cpuNs = (nowCpuNs - lastThreadCpuNs).coerceAtLeast(0L)
                     val cpuPercent = if (wallNs > 0L) cpuNs * 100.0 / wallNs else 0.0
                     val decodePercent = if (wallNs > 0L) decodeCpuWallNs * 100.0 / wallNs else 0.0
+                    val vadWindowCount = speechGate?.vadWindowsProcessed ?: 0L
+                    val speechWindowCount = speechGate?.speechWindowsDetected ?: 0L
+                    val vadWindowsDelta = (vadWindowCount - lastVadWindowCount).coerceAtLeast(0L)
+                    val speechWindowsDelta = (speechWindowCount - lastSpeechWindowCount).coerceAtLeast(0L)
+                    val speechRatio = if (vadWindowsDelta > 0L) {
+                        speechWindowsDelta * 100.0 / vadWindowsDelta
+                    } else {
+                        0.0
+                    }
                     Log.i(
                         TAG,
-                        "KWS power sample: workerCpuPercent=%.1f decodeWallPercent=%.1f blocks=%d decodedFrames=%d".format(
-                            java.util.Locale.US, cpuPercent, decodePercent, audioBlocks, decodedFrames
+                        "KWS power sample: workerCpuPercent=%.1f decodeWallPercent=%.1f blocks=%d decodedFrames=%d vadWindows=%d speechWindows=%d speechRatio=%.1f%%".format(
+                            java.util.Locale.US, cpuPercent, decodePercent, audioBlocks, decodedFrames,
+                            vadWindowsDelta, speechWindowsDelta, speechRatio
                         )
                     )
+                    lastVadWindowCount = vadWindowCount
+                    lastSpeechWindowCount = speechWindowCount
                     lastPowerLogAtMs = nowMs
                     lastThreadCpuNs = nowCpuNs
                     decodeCpuWallNs = 0L
