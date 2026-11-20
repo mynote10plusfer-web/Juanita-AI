@@ -2107,3 +2107,16 @@ Cross-cutting safeguards and acceptance criteria:
 - Documento tecnico: `docs/DEFAULT_ASSISTANT_INTEROP_RESEARCH_2026-11-20.md`.
 - Nessuna modifica runtime, permesso, tab, package ID, firma o dati utente in questo passaggio.
 
+
+
+## 2026-11-20 — Audit open source per riduzione consumi wake word
+
+- Confrontati i sorgenti Home Assistant Android/microWakeWord, Suxsem/AndroidWakeWord e VoxRT Silero Android con il detector Sherpa attuale.
+- Il detector Juanita usa un solo AudioRecord 16 kHz mono, frame riutilizzati da 100 ms, un thread Sherpa CPU e diagnostica CPU/decode; al momento non applica un gate VAD prima dell'inferenza KWS.
+- La soluzione più promettente da sperimentare è una pipeline a due stadi: Speex VAD leggero sempre attivo → VAD neurale di conferma solo su possibile parlato → Sherpa KWS soltanto sul segmento vocale, con pre-roll PCM per non perdere l'inizio della frase.
+- Non copiare direttamente il wrapper Speex di AndroidWakeWord: il suo puntatore di stato C++ globale non è un'ownership per istanza adatta a Juanita. Non importare tutto il suo stack ONNX openWakeWord: non sostituisce il nostro modello BPE per Hola Juanita/Hola José.
+- Nessuna soglia RMS improvvisata: può perdere parlato basso o confondere vento/motore/rumore. Nessuna modifica al comportamento predefinito finché il gate non dimostra accuratezza equivalente e minore consumo.
+- **Decisione operativa:** realizzare un prototipo VAD-gated Sherpa isolato e disattivato per default, con fallback automatico al detector attuale, buffer circolare pre-roll, ownership singola del microfono, test di onset/offset e diagnostica di rapporto tempo vocale/inferenza.
+- Gate di accettazione: almeno 100 prove per frase e ambiente, falsi positivi/negativi misurati, test di continuità audio, confronti standby 1/4/8 ore su Note10+ Android 12 e S22 Ultra Android 15; temperatura e consumo separati da Gemini Live.
+- Documento: `docs/WAKE_WORD_BATTERY_OPTIMIZATION_AUDIT_2026-11-20.md`.
+- Stato: audit sorgenti e decisione architetturale completati; prototipo runtime e misurazioni fisiche non ancora implementati/eseguiti. Nessuna riduzione percentuale di batteria dichiarata.
