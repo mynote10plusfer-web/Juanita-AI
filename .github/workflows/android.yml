@@ -98,9 +98,12 @@ jobs:
 
 
   instrumentation:
-    name: Run Android instrumentation tests (API 31)
+    name: Run Android instrumentation tests (API 31, software TCG)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
+    env:
+      # Hosted runners lack KVM; current Android Emulator requires explicit TCG opt-in with -accel off.
+      ANDROID_I_WANT_MY_TCG: "yes"
     strategy:
       fail-fast: false
       matrix:
@@ -131,8 +134,8 @@ jobs:
           target: default
           arch: x86_64
           profile: pixel_2
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          emulator-boot-timeout: 300
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          emulator-boot-timeout: 600
           # Start ADB before the runner's boot polling; its launcher calls adb directly.
           pre-emulator-launch-script: adb start-server
           # Avoid the runner's failing post-boot animation/ADB settings command.
