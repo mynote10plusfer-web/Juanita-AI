@@ -193,7 +193,7 @@ class GeminiLiveAssistant {
                     if location or network is unavailable, ask the user for a locality or explain the limitation.
                     You also have getRouteEstimate. Use it only when the user explicitly asks for a road route or base travel time between named places.
                     Pass the destination; leave origin blank only when the user explicitly asks to start from their current phone location.
-                    Before the first route lookup in each conversation, briefly explain that the requested origin/destination coordinates will be sent to the public OSRM demo (OpenStreetMap) and ask for explicit consent. Do not call until the user explicitly says yes. Set privacyConsent to "confirmed" only after that yes; never assume consent from the route request alone. Do not call if the user declines or asks not to share location. This is a best-effort standard car route,
+                    Before the first route lookup in each conversation, explain that the origin/destination place text is sent to Open-Meteo Geocoding and the resolved coordinates are sent to the public OSRM demo (OpenStreetMap); ask explicit consent to both transfers. Do not call until the user explicitly says yes. Set privacyConsent to "confirmed" only after that yes; never assume consent from the route request alone. Do not call if the user declines or asks not to share location. This is a best-effort standard car route,
                     not live-traffic-adjusted, not motorcycle-specific, and not turn-by-turn navigation. Always describe it as a base estimate
                     and state that live traffic was not checked. If a place is ambiguous, ask the user to clarify instead of guessing.
                     You also have getCurrentDateTime. Call it whenever the user asks for the current
@@ -277,7 +277,7 @@ class GeminiLiveAssistant {
                         ),
                         FunctionDeclaration(
                             name = "getRouteEstimate",
-                            description = "Calculate a best-effort base road route and driving-time estimate from OpenStreetMap data through the public OSRM demo. Use only after an explicit route request and explicit user consent to send origin/destination coordinates to that public service. Set privacyConsent exactly to confirmed only after the user said yes. This is not live traffic, not a motorcycle-specific profile, and not turn-by-turn navigation. Leave origin blank only when the user explicitly says to start from current phone location; destination is required. Place names/localities are supported; full street addresses may not resolve. Ask the user to disambiguate places if the result is ambiguous.",
+                            description = "Calculate a best-effort base road route and driving-time estimate from OpenStreetMap data through the public OSRM demo. Use only after an explicit route request and explicit user consent to send origin/destination place text to Open-Meteo Geocoding and resolved coordinates to the public OSRM/OpenStreetMap service. Set privacyConsent exactly to confirmed only after the user said yes. This is not live traffic, not a motorcycle-specific profile, and not turn-by-turn navigation. Leave origin blank only when the user explicitly says to start from current phone location; destination is required. Place names/localities are supported; full street addresses may not resolve. Ask the user to disambiguate places if the result is ambiguous.",
                             parameters = mapOf(
                                 "origin" to Schema.string("Starting town/city/region explicitly supplied by the user. Leave blank only for an explicitly requested current phone location; full street addresses may not resolve."),
                                 "destination" to Schema.string("Required destination town/city/region supplied by the user; full street addresses may not resolve."),
@@ -368,7 +368,7 @@ class GeminiLiveAssistant {
                     if (!ai.juanita.app.route.isRouteShareConsentConfirmed(privacyConsent)) {
                         FunctionResponsePart(
                             functionCall.name,
-                            JsonObject(mapOf("route_estimate" to JsonPrimitive("No route lookup was performed and no coordinates were sent. Explain that origin/destination coordinates go to the public OSRM/OpenStreetMap routing service and ask for explicit consent; call again only after the user confirms."))),
+                            JsonObject(mapOf("route_estimate" to JsonPrimitive("No route lookup was performed and no coordinates were sent. Explain that origin/destination place text goes to Open-Meteo Geocoding and resolved coordinates go to the public OSRM/OpenStreetMap routing service; ask explicit consent and call again only after the user confirms."))),
                             functionCall.id
                         )
                     } else {
