@@ -57,9 +57,11 @@ jobs:
           JUANITA_SIGNING_STORE_PASSWORD: ${{ secrets.JUANITA_KEYSTORE_PASSWORD }}
           JUANITA_SIGNING_KEY_ALIAS: ${{ secrets.JUANITA_KEY_ALIAS }}
           JUANITA_SIGNING_KEY_PASSWORD: ${{ secrets.JUANITA_KEY_PASSWORD }}
-          JUANITA_TEST_VERSION_CODE: ${{ 100000 + github.run_number }}
+          JUANITA_TEST_VERSION_CODE: ${{ github.run_number }}
           JUANITA_TEST_VERSION_NAME: 0.11.13-ci${{ github.run_number }}
         run: |
+          set -euo pipefail
+          export JUANITA_TEST_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))
           gradle --no-daemon :app:assembleTestRelease
           gradle --no-daemon :app:testDebugUnitTest
 
@@ -82,7 +84,12 @@ jobs:
             echo "::error::Expected isolated test package ai.juanita.app.debug."
             exit 1
           }
-          echo "Verified stable test package and permanent certificate: $CERT_SHA256"
+          VERSION_CODE=$(sed -nE 's/.*versionCode=([0-9]+).*/\1/p' <<< "$BADGING" | head -n1)
+          if [[ -z "$VERSION_CODE" || "$VERSION_CODE" -le 100000 ]]; then
+            echo "::error::Test APK does not have the expected monotonic versionCode."
+            exit 1
+          fi
+          echo "Verified stable test package, monotonic versionCode and permanent certificate: $CERT_SHA256"
 
       - name: Upload signed test APK
         uses: actions/upload-artifact@v4
