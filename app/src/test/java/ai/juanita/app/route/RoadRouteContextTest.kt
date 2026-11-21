@@ -58,6 +58,14 @@ class RoadRouteContextTest {
     }
 
     @Test
+    fun routeProviderRequiresExplicitConsentMarker() {
+        assertTrue(isRouteShareConsentConfirmed("confirmed"))
+        assertTrue(!isRouteShareConsentConfirmed(""))
+        assertTrue(!isRouteShareConsentConfirmed("yes"))
+        assertTrue(!isRouteShareConsentConfirmed("declined"))
+    }
+
+    @Test
     fun routeLocationMustBeFreshAndAccurate() {
         assertTrue(isRouteLocationAcceptable(30_000L, 100f))
         assertTrue(isRouteLocationAcceptable(120_000L, 5_000f))

@@ -88,6 +88,9 @@ private fun normalizePlaceText(value: String): String =
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
         .trim()
 
+internal fun isRouteShareConsentConfirmed(value: String): Boolean =
+    value.trim().equals("confirmed", ignoreCase = true)
+
 internal fun isRouteLocationAcceptable(ageMillis: Long, accuracyMeters: Float): Boolean =
     ageMillis in 0L..120_000L && accuracyMeters.isFinite() && accuracyMeters >= 0f && accuracyMeters <= 5_000f
 
@@ -120,7 +123,7 @@ internal object RouteText {
 object RoadRouteContext {
     private const val GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
     private const val OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
-    private const val USER_AGENT = "JuanitaAI/0.11.15 (https://github.com/mynote10plusfer-web/Juanita-AI)"
+    private const val USER_AGENT = "JuanitaAI/0.11.16 (https://github.com/mynote10plusfer-web/Juanita-AI)"
     private const val ROUTE_CACHE_TTL_MS = 5L * 60L * 1000L
     private const val GEOCODE_CACHE_TTL_MS = 24L * 60L * 60L * 1000L
 

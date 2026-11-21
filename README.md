@@ -6,7 +6,7 @@ Android voice assistant for natural multilingual, multi-turn conversations, conf
 
 Production application ID: `ai.juanita.app`, protected by the permanent signing certificate.
 
-## Current development candidate — PR #58: 0.11.15 (versionCode 54)
+## Current development candidate — PR #58: 0.11.16 (versionCode 55)
 
 The cumulative integration branch is the sole active development line. Its signed Release workflow builds the production package and verifies the permanent certificate, exact application ID and monotonically increasing version before uploading an APK artifact. Debug is used only as an internal CI test target; no debug APK is published for installation.
 
