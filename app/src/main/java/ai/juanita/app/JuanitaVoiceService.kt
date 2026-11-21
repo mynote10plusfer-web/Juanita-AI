@@ -261,6 +261,9 @@ class JuanitaVoiceService : Service() {
                     putExtra(EXTRA_IDENTITY_ID, identityId)
                     putExtra(EXTRA_BACKGROUND_CONTINUATION_AUTHORIZED, backgroundAuthorized)
                 }
+                wakeRecoveryJob?.cancel()
+                wakeRecoveryJob = null
+                wakeRecoveryAttempt = 0
                 wakeWordRequested = true
                 _wakeWordEnabled.value = true
                 _wakeWordStatus.value = "Preparazione ascolto offline…"
@@ -1237,6 +1240,9 @@ class JuanitaVoiceService : Service() {
                             serviceScope.launch {
                                 if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
                                 voiceDiagnostics.event("wake.detected", "phrase=$phrase; source=offline_sherpa")
+                                // A successful wake hit proves the listener recovered; reset
+                                // the consecutive-failure budget before the next idle cycle.
+                                wakeRecoveryAttempt = 0
                                 val completedDetector = wakeDetector
                                 wakeDetector = null
                                 if (completedDetector != null) {
@@ -1282,7 +1288,6 @@ class JuanitaVoiceService : Service() {
                 withContext(Dispatchers.IO) { detector.start() }
                 wakeRecoveryJob?.cancel()
                 wakeRecoveryJob = null
-                wakeRecoveryAttempt = 0
                 _wakeWordStatus.value = "Ascolto offline attivo · $configuredPhrase"
                 updateNotification(_wakeWordStatus.value)
                 voiceDiagnostics.event("wake.armed", "modelRevision=${WakeWordModelInstaller.MODEL_REVISION}")
