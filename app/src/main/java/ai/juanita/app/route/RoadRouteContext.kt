@@ -58,15 +58,22 @@ internal fun resolveRoutePlace(
     }
     if (nameMatches.size == 1) return RoutePlaceResolution.Selected(nameMatches.first())
 
-    val contextualMatches = nameMatches.filter { candidate ->
-        listOf(candidate.admin2, candidate.admin1, candidate.country)
+    val regionalMatches = nameMatches.filter { candidate ->
+        listOf(candidate.admin2, candidate.admin1)
             .map(::normalizePlaceText)
             .filter { it.length >= 3 }
             .any { normalizedQuery.contains(it) }
     }
-    if (contextualMatches.size == 1) return RoutePlaceResolution.Selected(contextualMatches.first())
+    if (regionalMatches.size == 1) return RoutePlaceResolution.Selected(regionalMatches.first())
+    if (regionalMatches.size > 1) return RoutePlaceResolution.Ambiguous(regionalMatches.take(5))
+
+    val countryMatches = nameMatches.filter { candidate ->
+        val country = normalizePlaceText(candidate.country)
+        country.length >= 3 && normalizedQuery.contains(country)
+    }
+    if (countryMatches.size == 1) return RoutePlaceResolution.Selected(countryMatches.first())
     if (candidates.size == 1) return RoutePlaceResolution.Selected(candidates.first())
-    return RoutePlaceResolution.Ambiguous((contextualMatches.ifEmpty { nameMatches.ifEmpty { candidates } }).take(5))
+    return RoutePlaceResolution.Ambiguous((countryMatches.ifEmpty { nameMatches.ifEmpty { candidates } }).take(5))
 }
 
 private fun normalizePlaceText(value: String): String =

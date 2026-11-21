@@ -32,6 +32,18 @@ class RoadRouteContextTest {
     }
 
     @Test
+    fun countryHintAloneDoesNotResolveDuplicateCities() {
+        val candidates = listOf(
+            RoutePlace("Springfield", "Illinois", "Sangamon County", "United States", 39.78, -89.64),
+            RoutePlace("Springfield", "Massachusetts", "Hampden County", "United States", 42.10, -72.59)
+        )
+
+        val result = resolveRoutePlace("Springfield, United States", candidates)
+
+        assertTrue(result is RoutePlaceResolution.Ambiguous)
+    }
+
+    @Test
     fun uniqueLocalityCanBeSelectedFromNearbySearchResults() {
         val candidates = listOf(
             RoutePlace("Los Cristianos", "Canary Islands", "Santa Cruz de Tenerife", "Spain", 28.05, -16.72),
