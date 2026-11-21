@@ -296,6 +296,7 @@ class JuanitaVoiceService : Service() {
                     serviceScope.launch {
                         stopWakeDetector()
                         stopForeground(STOP_FOREGROUND_REMOVE)
+                        postListeningStoppedNotification("Ascolto offline disattivato")
                         stopSelf()
                     }
                 } else {
@@ -1438,6 +1439,7 @@ class JuanitaVoiceService : Service() {
             serviceScope.launch {
                 stopWakeDetector()
                 stopForeground(STOP_FOREGROUND_REMOVE)
+                postListeningStoppedNotification("Ascolto offline disattivato perché Juanita è stata chiusa da Recenti. Apri l'app per riattivarlo.")
                 stopSelf()
             }
         }
@@ -1652,6 +1654,29 @@ class JuanitaVoiceService : Service() {
     private fun updateNotification(message: String) {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(message))
+    }
+
+    /** A one-shot, non-ongoing notification remains after the foreground listener stops. */
+    private fun postListeningStoppedNotification(message: String) {
+        val openIntent = Intent(this, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val openPendingIntent = PendingIntent.getActivity(
+            this, 1, openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("Juanita AI · ascolto disattivato")
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setContentIntent(openPendingIntent)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setAutoCancel(true)
+            .setOngoing(false)
+            .setOnlyAlertOnce(true)
+            .build()
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
     }
 
     override fun onBind(intent: Intent?): IBinder = localBinder
