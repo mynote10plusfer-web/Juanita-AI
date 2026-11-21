@@ -88,7 +88,7 @@ object MorningBriefingContext {
         val rainChance: Double
     )
 
-    private fun readWeather(context: Context, locale: Locale): String {
+    fun readWeather(context: Context, locale: Locale = Locale.getDefault()): String {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!fine && !coarse) return "Weather unavailable: location permission is missing."
@@ -98,6 +98,10 @@ object MorningBriefingContext {
                 .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
                 .maxByOrNull { it.time }
         }.getOrNull() ?: return "Weather unavailable: the phone has no recent location fix."
+        val fixAgeMs = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
+        if (fixAgeMs > 2 * 60 * 60 * 1000L) {
+            return "Weather unavailable: the last phone location is stale (${fixAgeMs / 60_000L} minutes old). Ask the user to open Juanita with location enabled or provide a locality."
+        }
 
         val models = listOf(
             "ecmwf_ifs025" to "ECMWF",
@@ -154,7 +158,8 @@ object MorningBriefingContext {
         } else {
             "Only one model is available; the result has not been cross-checked."
         }
-        return "Open-Meteo, comparison of ${results.size} models ($sources): current average temperature ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
+        val checkedAt = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        return "Open-Meteo, comparison of ${results.size} models ($sources), checked at $checkedAt; current average temperature ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
             "average feels-like temperature ${String.format(locale, "%.1f", average { it.feelsLike })}°C; average wind ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
             "average low ${String.format(locale, "%.1f", average { it.minimum })}°C, average high ${String.format(locale, "%.1f", average { it.maximum })}°C; " +
             "average precipitation probability ${String.format(locale, "%.0f", average { it.rainChance })}%. $confidenceNote"
