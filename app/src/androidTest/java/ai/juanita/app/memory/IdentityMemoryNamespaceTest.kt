@@ -1,0 +1,628 @@
+package ai.juanita.app.memory
+
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
+import java.util.UUID
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class IdentityMemoryNamespaceTest {
+    @Test
+    fun productionFactoryReturnsOneProcessWideEncryptedStoreInstance() {
+        // Use the real target application context: the process singleton must never
+        // retain a test-only ContextWrapper or redirect production storage into cacheDir.
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext.applicationContext
+        val first = EncryptedMemoryStore.getInstance(appContext)
+        val second = EncryptedMemoryStore.getInstance(appContext)
+        assertSame("Activity and service must share the same synchronized store", first, second)
+    }
+
+    @Test
+    fun automaticCloudMemoryIsOffByDefaultAndRequiresExplicitOptIn() {
+        val context = isolatedContext()
+        context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE).edit().clear().commit()
+        val store = EncryptedMemoryStore(context)
+        try {
+            assertFalse("SAFE mode must not send transcript excerpts to Gemini by default", store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(true)
+            assertTrue("Automatic extraction is enabled only after explicit opt-in", store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(false)
+            assertFalse(store.isAutomaticMemoryEnabled)
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun safeModeDisablesLegacyAutomaticMemoryPreferenceOnce() {
+        val context = isolatedContext()
+        val preferences = context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE)
+        preferences.edit().clear().putBoolean("automatic_memory_enabled", true).commit()
+        try {
+            val store = EncryptedMemoryStore(context)
+            assertFalse("SAFE mode must revoke a legacy enabled/default state on first upgrade", store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(true)
+            assertTrue("A new explicit user opt-in must persist", store.isAutomaticMemoryEnabled)
+            assertTrue(EncryptedMemoryStore(context).isAutomaticMemoryEnabled)
+        } finally {
+            preferences.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun encryptedAutomaticMemoryQueueSurvivesStoreRecreationAndRemainsBounded() {
+        val context = isolatedContext()
+        val preferences = context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE)
+        // Each instrumentation test gets an isolated preference namespace and must not
+        // inherit the explicit-consent toggle left by another test in the same process.
+        preferences.edit().clear().commit()
+        val store = EncryptedMemoryStore(context)
+        val turns = (1..8).map { "Turno automatico cifrato $it ${UUID.randomUUID()}" }
+        try {
+            assertFalse(store.isAutomaticMemoryEnabled)
+            store.setAutomaticMemoryEnabled(true)
+            val clearVersion = store.memoryClearVersion
+            turns.forEachIndexed { index, turn ->
+                assertEquals(index + 1, store.enqueuePendingAutomaticMemoryTurn(turn, clearVersion))
+            }
+            assertEquals(-2, store.enqueuePendingAutomaticMemoryTurn("Overflow", clearVersion))
+
+            val encryptedPayload = context.getSharedPreferences(
+                "juanita_encrypted_memory", Context.MODE_PRIVATE
+            ).getString("encrypted_records", null).orEmpty()
+            assertTrue("Pending transcript excerpts must be persisted in the encrypted store", encryptedPayload.isNotBlank())
+            assertFalse("Plain transcript excerpts must never appear in preferences", encryptedPayload.contains(turns.first()))
+
+            val recreatedStore = EncryptedMemoryStore(isolatedContext())
+            assertEquals("Pending turns must survive store recreation", turns,
+                recreatedStore.readPendingAutomaticMemoryTurns(clearVersion))
+
+            recreatedStore.setAutomaticMemoryEnabled(false)
+            assertTrue("Disabling automatic memory must invalidate queued transcript excerpts",
+                recreatedStore.readPendingAutomaticMemoryTurns().isEmpty())
+            recreatedStore.setAutomaticMemoryEnabled(true)
+            assertTrue("Re-enabling memory must not resurrect excerpts from an earlier consent period",
+                recreatedStore.readPendingAutomaticMemoryTurns(clearVersion).isEmpty())
+        } finally {
+            store.clearAll()
+            preferences.edit().clear().commit()
+        }
+    }
+
+    @Test
+    fun sharedKnowledgeIsVisibleToEveryCharacterWhileConversationHistoryIsIdentityScoped() {
+        val context = isolatedContext()
+        val juanitaMemory = EncryptedMemoryStore(context)
+        val joseMemory = EncryptedMemoryStore(context)
+        val tokenFromJuanita = "Conoscenza condivisa Juanita ${UUID.randomUUID()}"
+        val tokenFromJose = "Conoscenza condivisa Jose ${UUID.randomUUID()}"
+        val juanitaSession = "juanita-session-${UUID.randomUUID()}"
+        val joseSession = "jose-session-${UUID.randomUUID()}"
+        val juanitaTurn = "Conversazione iniziata con Juanita"
+        val joseTurn = "Conversazione iniziata con José"
+
+        try {
+            juanitaMemory.addMemory(tokenFromJuanita)
+            juanitaMemory.appendConversationTurn(juanitaSession, "USER", juanitaTurn, personaId = "juanita-1")
+
+            joseMemory.addMemory(tokenFromJose)
+            joseMemory.appendConversationTurn(joseSession, "USER", joseTurn, personaId = "jose-1")
+
+            assertTrue(joseMemory.listMemories().any { it.text == tokenFromJuanita })
+            assertTrue(juanitaMemory.listMemories().any { it.text == tokenFromJose })
+            assertTrue(juanitaMemory.listConversationTurns(juanitaSession).any { it.text == juanitaTurn })
+            assertTrue(joseMemory.listConversationTurns(joseSession).any { it.text == joseTurn })
+            assertTrue(juanitaMemory.searchArchivedTurns(joseTurn, personaId = "juanita-1").none { it.sessionId == joseSession })
+            assertTrue(joseMemory.searchArchivedTurns(juanitaTurn, personaId = "jose-1").none { it.sessionId == juanitaSession })
+            assertEquals(2, juanitaMemory.listMemories().count { it.text.startsWith("Conoscenza condivisa") })
+        } finally {
+            juanitaMemory.clearAll()
+        }
+    }
+
+    @Test
+    fun sharedMemorySurvivesStoreRecreationAndRemainsIndependentFromCharacterProfiles() {
+        val context = isolatedContext()
+        val token = "Persistenza memoria comune ${UUID.randomUUID()}"
+        try {
+            EncryptedMemoryStore(context).addMemory(token)
+            assertTrue(EncryptedMemoryStore(isolatedContext()).listMemories().any { it.text == token })
+        } finally {
+            EncryptedMemoryStore(context).clearAll()
+        }
+    }
+
+    @Test
+    fun topicRoutedRecallIsSharedAcrossCharactersAndKeepsBroadFallback() {
+        val context = isolatedContext()
+        val juanitaMemory = EncryptedMemoryStore(context)
+        val joseMemory = EncryptedMemoryStore(context)
+        val vehicleFact = "La mia Yamaha Tricity 300 è il mio scooter principale."
+        val projectFact = "Juanita AI è il progetto Android che sto sviluppando."
+        try {
+            juanitaMemory.addMemory(vehicleFact)
+            juanitaMemory.addMemory(projectFact)
+
+            val vehicleRecall = joseMemory.buildRelevantRecallContext("Come va la mia Tricity?")
+            assertTrue(vehicleRecall.contains(vehicleFact))
+            assertTrue(vehicleRecall.contains("topic=vehicles_transport"))
+
+            val projectRecall = joseMemory.buildRelevantRecallContext("Problema con il progetto Android Juanita")
+            assertTrue(projectRecall.contains(projectFact))
+            assertTrue(projectRecall.contains("topic=projects_technology"))
+        } finally {
+            juanitaMemory.clearAll()
+        }
+    }
+
+    @Test
+    fun encryptedRecallIndexIsReusedAcrossSessionsAndRebuiltAfterCorrection() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val indexFile = File(context.filesDir, "memory_recall_index.enc")
+        val original = "Juanita project uses a local encrypted associative memory index."
+        val corrected = "Juanita project uses a rebuildable encrypted semantic recall index."
+        try {
+            val saved = store.addMemory(original, category = "project")
+            assertTrue(store.buildRelevantRecallContext("Tell me about the Juanita project").contains(original))
+            assertTrue("First recall should build a persistent encrypted index", indexFile.isFile)
+            val encryptedBytes = indexFile.readBytes()
+            assertTrue(encryptedBytes.isNotEmpty())
+            assertFalse("Index must not expose plaintext memory", String(encryptedBytes, Charsets.UTF_8).contains(original))
+
+            val recreated = EncryptedMemoryStore(isolatedContext())
+            assertTrue("A recreated store should reuse the persisted index",
+                recreated.buildRelevantRecallContext("Tell me about the Juanita project").contains(original))
+            assertTrue(indexFile.isFile)
+
+            assertTrue(recreated.updateMemory(saved.id, corrected))
+            assertFalse("A source-record mutation must invalidate the derived index", indexFile.exists())
+            val correctedRecall = recreated.buildRelevantRecallContext("Tell me about the Juanita project")
+            assertTrue(correctedRecall.contains(corrected))
+            assertFalse(correctedRecall.contains(original))
+            assertTrue("The next recall must rebuild the index from authoritative encrypted records", indexFile.isFile)
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun automaticallyExtractedMemoriesAreAvailableToRecallAsProvisionalEvidence() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val fact = "Juanita AI usa una memoria condivisa organizzata per progetti."
+        try {
+            val saved = store.addMemory(
+                text = fact,
+                category = "project",
+                source = "automatic",
+                confidence = 0.88f,
+                confirmedByUser = false,
+                sensitive = false
+            )
+
+            assertTrue("Automatic facts must be included in session-start continuity",
+                store.buildAssistantContext().contains(fact))
+
+            val recalled = store.buildRelevantRecallContext("Come procede il progetto Juanita AI?")
+            assertTrue("A topic-matched automatic fact must be returned even before manual confirmation",
+                recalled.contains(fact))
+            assertTrue("The model must be told that this is provisional extracted evidence",
+                recalled.contains("provisional"))
+            assertTrue("The record must remain unconfirmed in the user-facing memory state",
+                store.listMemories().single { it.id == saved.id }.confirmedByUser.not())
+
+            assertTrue(store.confirmMemory(saved.id))
+            val confirmedRecall = store.buildRelevantRecallContext("Come procede il progetto Juanita AI?")
+            assertTrue("Confirmed facts must remain retrievable", confirmedRecall.contains(fact))
+            assertTrue("Confirmed facts must be distinguished from provisional extraction",
+                confirmedRecall.contains("user-confirmed"))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun editingAMemorySupersedesTheOldFactAndPreservesCorrectionHistory() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val original = "Preferenza iniziale correzione test"
+        val corrected = "Preferenza corretta confermata dall'utente"
+        try {
+            val saved = store.addMemory(original, source = "automatic", confidence = 0.84f, confirmedByUser = false)
+            assertTrue(store.updateMemory(saved.id, corrected))
+
+            val updated = store.listMemories().single { it.text == corrected }
+            assertTrue("A correction must receive a new stable record ID", updated.id != saved.id)
+            assertEquals("user_corrected", updated.source)
+            assertEquals(1.0f, updated.confidence, 0.0f)
+            assertTrue(updated.confirmedByUser)
+            assertEquals("Only the corrected fact may remain in ordinary recall", 1, store.listMemories().size)
+
+            val history = store.listAllMemories()
+            val superseded = history.single { it.id == saved.id }
+            assertEquals(original, superseded.text)
+            assertEquals(updated.id, superseded.supersededBy)
+
+            val restored = EncryptedMemoryStore(isolatedContext())
+            val reloaded = restored.listMemories().single { it.text == corrected }
+            assertEquals(updated.id, reloaded.id)
+            assertEquals("user_corrected", reloaded.source)
+            assertEquals(1.0f, reloaded.confidence, 0.0f)
+            assertTrue("Explicit user correction must survive encrypted persistence", reloaded.confirmedByUser)
+            val restoredHistory = restored.listAllMemories().single { it.id == saved.id }
+            assertEquals(original, restoredHistory.text)
+            assertEquals(reloaded.id, restoredHistory.supersededBy)
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun retentionAndRangeDeletionPreserveUnreadableSessionArchiveBytes() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "corrupt-${UUID.randomUUID()}"
+        val journalDirectory = File(File(context.filesDir, "conversation_archive"), "$sessionId.journal")
+        val corruptedBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04, 0x05)
+
+        try {
+            store.appendConversationTurn(sessionId, "USER", "Archivio da proteggere")
+            assertTrue("Expected an encrypted per-turn session journal", journalDirectory.isDirectory)
+            val frame = journalDirectory.listFiles()?.singleOrNull { it.isFile && it.name.endsWith(".enc") }
+                ?: throw AssertionError("Expected one encrypted transcript frame")
+
+            // Simulate a truncated/corrupted ciphertext or a transient Keystore read failure.
+            frame.writeBytes(corruptedBytes)
+            store.archiveRetentionDays = 7
+            assertTrue("Retention must not delete an unreadable journal", journalDirectory.exists())
+            assertArrayEquals("Retention must preserve unreadable bytes", corruptedBytes, frame.readBytes())
+
+            store.deleteArchiveRange(0L, System.currentTimeMillis() + 1L)
+            assertTrue("Range deletion must not delete an unreadable journal", journalDirectory.exists())
+            assertArrayEquals("Range deletion must preserve unreadable bytes", corruptedBytes, frame.readBytes())
+        } finally {
+            store.archiveRetentionDays = 0
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun sharedFactsAreVisibleToBothCharactersButPrivateMemoriesStayIsolated() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val shared = "Fatto comune ${UUID.randomUUID()}"
+        val juanitaOnly = "Ricordo privato Juanita ${UUID.randomUUID()}"
+        val joseOnly = "Ricordo privato Jose ${UUID.randomUUID()}"
+        try {
+            store.addMemory(shared)
+            store.addMemory(juanitaOnly, personaId = "juanita-1")
+            store.addMemory(joseOnly, personaId = "jose-1")
+            val juanitaMemories = store.listMemoriesForPersona("juanita-1").map { it.text }
+            val joseMemories = store.listMemoriesForPersona("jose-1").map { it.text }
+            assertTrue(shared in juanitaMemories)
+            assertTrue(shared in joseMemories)
+            assertTrue(juanitaOnly in juanitaMemories)
+            assertTrue(juanitaOnly !in joseMemories)
+            assertTrue(joseOnly in joseMemories)
+            assertTrue(joseOnly !in juanitaMemories)
+
+            val juanitaContext = store.buildAssistantContext(personaId = "juanita-1")
+            val joseContext = store.buildAssistantContext(personaId = "jose-1")
+            assertTrue(juanitaContext.contains(shared))
+            assertTrue(joseContext.contains(shared))
+            assertTrue(juanitaContext.contains(juanitaOnly))
+            assertTrue(!juanitaContext.contains(joseOnly))
+            assertTrue(joseContext.contains(joseOnly))
+            assertTrue(!joseContext.contains(juanitaOnly))
+
+            val juanitaRecall = store.buildRelevantRecallContext("Fatto comune", personaId = "juanita-1")
+            val joseRecall = store.buildRelevantRecallContext("Fatto comune", personaId = "jose-1")
+            assertTrue(juanitaRecall.contains(shared))
+            assertTrue(joseRecall.contains(shared))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun conversationRecallIsScopedToTheActiveCharacter() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val juanitaSession = "juanita-${UUID.randomUUID()}"
+        val joseSession = "jose-${UUID.randomUUID()}"
+        val juanitaPhrase = "Juanita episodio esclusivo ${UUID.randomUUID()}"
+        val josePhrase = "Jose episodio esclusivo ${UUID.randomUUID()}"
+        try {
+            store.appendConversationTurn(juanitaSession, "USER", juanitaPhrase, personaId = "juanita-1")
+            store.appendConversationTurn(joseSession, "USER", josePhrase, personaId = "jose-1")
+            val juanitaHits = store.searchArchivedTurns(juanitaPhrase, personaId = "juanita-1")
+            val joseHits = store.searchArchivedTurns(josePhrase, personaId = "jose-1")
+            val juanitaRecall = store.buildRelevantRecallContext(juanitaPhrase, personaId = "juanita-1")
+            val joseRecall = store.buildRelevantRecallContext(josePhrase, personaId = "jose-1")
+            assertTrue(juanitaHits.any { it.sessionId == juanitaSession })
+            assertTrue(juanitaHits.none { it.sessionId == joseSession })
+            assertTrue(joseHits.any { it.sessionId == joseSession })
+            assertTrue(joseHits.none { it.sessionId == juanitaSession })
+            assertTrue(juanitaRecall.contains(juanitaPhrase))
+            assertTrue(!juanitaRecall.contains(josePhrase))
+            assertTrue(joseRecall.contains(josePhrase))
+            assertTrue(!joseRecall.contains(juanitaPhrase))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun interruptedContinuityIsRecoveredOnlyByTheSameCharacter() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val juanitaSession = "juanita-continuity-${UUID.randomUUID()}"
+        val joseSession = "jose-continuity-${UUID.randomUUID()}"
+        val juanitaText = "Filo privato Juanita ${UUID.randomUUID()}"
+        val joseText = "Filo privato Jose ${UUID.randomUUID()}"
+        try {
+            store.appendContinuityTurn(juanitaSession, "USER", juanitaText, personaId = "juanita-1")
+            store.appendContinuityTurn(joseSession, "USER", joseText, personaId = "jose-1")
+            assertTrue(store.buildContinuityContext(juanitaSession, personaId = "juanita-1").contains(juanitaText))
+            assertTrue(!store.buildContinuityContext(juanitaSession, personaId = "jose-1").contains(juanitaText))
+            assertTrue(store.buildContinuityContext(joseSession, personaId = "jose-1").contains(joseText))
+            assertTrue(!store.buildContinuityContext(joseSession, personaId = "juanita-1").contains(joseText))
+            assertTrue(store.carryForwardLatestContinuitySnapshot("juanita-next", "juanita-1").contains(juanitaText))
+            assertTrue(!store.buildContinuityContext("juanita-next", personaId = "jose-1").contains(juanitaText))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun encryptedEpisodicRecallIndexPersistsUpdatesIncrementallyAndRebuildsAfterDeletion() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "episodic-index-" + UUID.randomUUID()
+        val firstPhrase = "Ricordo sentiero vulcanico Tenerife " + UUID.randomUUID()
+        val secondPhrase = "Ricordo laboratorio astronomico notturno " + UUID.randomUUID()
+        val indexFile = File(context.filesDir, "conversation_recall_index.enc")
+        try {
+            store.appendConversationTurn(sessionId, "USER", firstPhrase, personaId = "juanita-1")
+            val firstHits = store.searchArchivedTurns(firstPhrase, personaId = "juanita-1")
+            assertTrue("Initial recall should find the archived event", firstHits.any { it.turn.text == firstPhrase })
+            assertTrue("A persistent encrypted episodic index should be created", indexFile.isFile)
+            assertFalse("The derived index must never contain transcript plaintext",
+                String(indexFile.readBytes(), Charsets.UTF_8).contains(firstPhrase))
+
+            val restoredStore = EncryptedMemoryStore(isolatedContext())
+            assertTrue("The index should remain reusable after recreating the store",
+                restoredStore.searchArchivedTurns(firstPhrase, personaId = "juanita-1").any { it.turn.text == firstPhrase })
+
+            // Once an index exists, appending a new journal frame updates it incrementally.
+            restoredStore.appendConversationTurn(sessionId, "USER", secondPhrase, personaId = "juanita-1")
+            assertTrue("A newly appended event must become searchable through the updated index",
+                restoredStore.searchArchivedTurns(secondPhrase, personaId = "juanita-1").any { it.turn.text == secondPhrase })
+
+            restoredStore.deleteConversation(sessionId)
+            assertTrue("Deleting the source conversation must invalidate the index and remove its hits",
+                restoredStore.searchArchivedTurns(firstPhrase, personaId = "juanita-1").isEmpty())
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun feminineCharactersShareDurableFactsButMasculineCharactersAndPrivateEpisodesStaySeparate() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sharedFeminine = "Fatto del gruppo femminile ${UUID.randomUUID()}"
+        val sharedMasculine = "Fatto del gruppo maschile ${UUID.randomUUID()}"
+        val privateCanaryEpisode = "Episodio privato canario ${UUID.randomUUID()}"
+        val legacyGlobalFact = "Memoria condivisa legacy ${UUID.randomUUID()}"
+        try {
+            store.addMemory(sharedFeminine, personaId = "shared:feminine")
+            store.addMemory(sharedMasculine, personaId = "shared:masculine")
+            store.addMemory(privateCanaryEpisode, personaId = "juanita-canaria")
+            store.addMemory(legacyGlobalFact, personaId = "shared")
+
+            val canaryContext = store.buildAssistantContext(
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombianContext = store.buildAssistantContext(
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val joseContext = store.buildAssistantContext(
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+
+            assertTrue(canaryContext.contains(sharedFeminine))
+            assertTrue(colombianContext.contains(sharedFeminine))
+            assertFalse(joseContext.contains(sharedFeminine))
+            assertTrue(joseContext.contains(sharedMasculine))
+            assertFalse(canaryContext.contains(sharedMasculine))
+            assertTrue(canaryContext.contains(privateCanaryEpisode))
+            assertFalse(colombianContext.contains(privateCanaryEpisode))
+            assertFalse(joseContext.contains(privateCanaryEpisode))
+            assertTrue(canaryContext.contains(legacyGlobalFact))
+            assertTrue(joseContext.contains(legacyGlobalFact))
+
+            val canaryRecall = store.buildRelevantRecallContext(
+                sharedFeminine,
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombianRecall = store.buildRelevantRecallContext(
+                sharedFeminine,
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val joseRecall = store.buildRelevantRecallContext(
+                sharedFeminine,
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+            assertTrue(canaryRecall.contains(sharedFeminine))
+            assertTrue(colombianRecall.contains(sharedFeminine))
+            assertFalse(joseRecall.contains(sharedFeminine))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun automaticallyCuratedFactsAreSavedToAndRecalledOnlyWithinTheirCharacterGroup() {
+        val store = EncryptedMemoryStore(isolatedContext())
+        val feminineFact = "Fatto automatico femminile ${UUID.randomUUID()}"
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val saved = store.addAutomaticMemory(
+                feminineFact,
+                "project",
+                0.96f,
+                confirmedByUser = true,
+                memoryScopeId = "shared:feminine"
+            ) ?: throw AssertionError("Expected the automatic memory to be persisted")
+
+            assertEquals("shared:feminine", saved.personaId)
+            val canary = store.buildAssistantContext(
+                personaId = "juanita-canaria",
+                memoryScopeId = "shared:feminine"
+            )
+            val colombian = store.buildAssistantContext(
+                personaId = "juanita-colombiana",
+                memoryScopeId = "shared:feminine"
+            )
+            val jose = store.buildAssistantContext(
+                personaId = "jose",
+                memoryScopeId = "shared:masculine"
+            )
+            assertTrue(canary.contains(feminineFact))
+            assertTrue(colombian.contains(feminineFact))
+            assertFalse(jose.contains(feminineFact))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun pendingAutomaticMemoryBatchesAreIsolatedAndCanBeClearedIndependently() {
+        val store = EncryptedMemoryStore(isolatedContext())
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val version = store.memoryClearVersion
+            val feminineTurn = "USER: coda femminile ${UUID.randomUUID()}"
+            val masculineTurn = "USER: coda maschile ${UUID.randomUUID()}"
+
+            assertEquals(1, store.enqueuePendingAutomaticMemoryTurn(feminineTurn, version, "shared:feminine"))
+            assertEquals(1, store.enqueuePendingAutomaticMemoryTurn(masculineTurn, version, "shared:masculine"))
+            assertEquals(listOf(feminineTurn), store.readPendingAutomaticMemoryTurns(version, "shared:feminine"))
+            assertEquals(listOf(masculineTurn), store.readPendingAutomaticMemoryTurns(version, "shared:masculine"))
+
+            store.removeProcessedAutomaticMemoryTurns(listOf(feminineTurn), version, "shared:feminine")
+            assertTrue(store.readPendingAutomaticMemoryTurns(version, "shared:feminine").isEmpty())
+            assertEquals(listOf(masculineTurn), store.readPendingAutomaticMemoryTurns(version, "shared:masculine"))
+
+            store.clearPendingAutomaticMemoryTurns(version, "shared:masculine")
+            assertTrue(store.readPendingAutomaticMemoryTurns(version, "shared:masculine").isEmpty())
+        } finally {
+            store.clearAll()
+        }
+    }
+
+    @Test
+    fun sessionStartContextUsesOnlyNewestBoundedTurnsForSelectedIdentity() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "bounded-context-${UUID.randomUUID()}"
+        val start = System.currentTimeMillis()
+        val juanitaTurns = (1..4).map { "JUANITA_PRIVATE_TURN_$it" }
+        val joseTurns = (1..4).map { "JOSE_PRIVATE_TURN_$it" }
+        try {
+            store.setConversationArchiveEnabled(true)
+            repeat(4) { index ->
+                store.appendConversationTurn(
+                    sessionId, "USER", juanitaTurns[index],
+                    start + index * 2L, personaId = "identity-juanita"
+                )
+                store.appendConversationTurn(
+                    sessionId, "USER", joseTurns[index],
+                    start + index * 2L + 1L, personaId = "identity-jose"
+                )
+            }
+            // Corrupt the oldest source frame. A bounded recent-context read must not
+            // decrypt it when the selected identity already has enough newer turns.
+            val journal = File(context.filesDir, "conversation_archive/$sessionId.journal")
+            val oldestFrame = journal.listFiles { file -> file.isFile && file.name.endsWith(".enc") }
+                ?.minByOrNull { it.name } ?: throw AssertionError("Expected archived journal frames")
+            oldestFrame.writeBytes(byteArrayOf(1, 2, 3, 4))
+
+            val contextPacket = store.buildAssistantContext(
+                maxTurns = 2,
+                personaId = "identity-juanita"
+            )
+
+            assertTrue("The newest Juanita episode must be included", contextPacket.contains(juanitaTurns[3]))
+            assertTrue("The preceding Juanita episode must be included", contextPacket.contains(juanitaTurns[2]))
+            assertFalse("Older Juanita episodes must be outside the bounded context", contextPacket.contains(juanitaTurns[0]))
+            assertFalse("Another identity's private episode must never enter this context", joseTurns.any { contextPacket.contains(it) })
+        } finally {
+            store.deleteConversation(sessionId)
+            store.clearAll()
+        }
+    }
+
+    private fun isolatedContext(): Context {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val directory = File(target.cacheDir, "shared-memory-test").apply {
+            mkdirs()
+        }
+        return object : ContextWrapper(target) {
+            override fun getFilesDir(): File = directory
+            override fun getApplicationContext(): Context = this
+            override fun getSharedPreferences(name: String, mode: Int) =
+                target.getSharedPreferences("test_shared_memory_${name}", mode)
+        }
+    }
+
+    @Test
+    fun automaticallyExtractedMemoriesAreAvailableAsProvisionalContextUntilConfirmed() {
+        val context = isolatedContext()
+        val store = EncryptedMemoryStore(context)
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            val pending = store.addAutomaticMemory(
+                "Preferisce risposte concise e naturali",
+                "communication",
+                0.96f,
+                confirmedByUser = false
+            ) ?: throw AssertionError("Expected provisional memory")
+            assertFalse("Extraction must not silently mark a fact as user-confirmed", pending.confirmedByUser)
+
+            val provisionalContext = store.buildAssistantContext()
+            assertTrue("Opted-in automatic memories should support continuity before confirmation",
+                provisionalContext.contains(pending.text))
+            assertTrue("The assistant must receive an explicit provisional label",
+                provisionalContext.contains("automatically-extracted, provisional"))
+
+            assertTrue(store.confirmMemory(pending.id))
+            val restored = EncryptedMemoryStore(isolatedContext()).listMemories().single { it.id == pending.id }
+            assertTrue("Explicit approval must persist across store recreation", restored.confirmedByUser)
+            val confirmedContext = store.buildAssistantContext()
+            assertTrue(confirmedContext.contains(pending.text))
+            assertTrue("The context must distinguish user approval from automatic extraction",
+                confirmedContext.contains("user-confirmed"))
+        } finally {
+            store.clearAll()
+        }
+    }
+
+}

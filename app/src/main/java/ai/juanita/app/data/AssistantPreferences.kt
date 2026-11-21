@@ -1,6 +1,7 @@
 package ai.juanita.app.data
 
 import android.content.Context
+import java.util.UUID
 
 /**
  * Device-local user settings for the assistant identity and speech preferences.
@@ -29,9 +30,34 @@ class AssistantPreferences(context: Context) {
         get() = storage.getString(KEY_LIVE_VOICE, DEFAULT_LIVE_VOICE) ?: DEFAULT_LIVE_VOICE
         set(value) { storage.edit().putString(KEY_LIVE_VOICE, value).apply() }
 
+    /** Null keeps the legacy single-persona runtime active. */
+    var activeDigitalIdentityId: String?
+        get() = storage.getString(KEY_ACTIVE_DIGITAL_IDENTITY, null)?.takeIf { value ->
+            runCatching { UUID.fromString(value) }.isSuccess
+        }
+        set(value) {
+            if (value == null) {
+                storage.edit().remove(KEY_ACTIVE_DIGITAL_IDENTITY).apply()
+            } else {
+                UUID.fromString(value)
+                storage.edit().putString(KEY_ACTIVE_DIGITAL_IDENTITY, value).apply()
+            }
+        }
+
     var assistantName: String
         get() = storage.getString(KEY_ASSISTANT_NAME, DEFAULT_ASSISTANT_NAME) ?: DEFAULT_ASSISTANT_NAME
         set(value) { storage.edit().putString(KEY_ASSISTANT_NAME, value.trim()).apply() }
+
+    /** FEMMINILE or MASCHILE; existing installations remain Juanita by default. */
+    var assistantGender: String
+        get() = storage.getString(KEY_ASSISTANT_GENDER, DEFAULT_ASSISTANT_GENDER)
+            ?.takeIf { it == "MASCHILE" || it == "FEMMINILE" } ?: DEFAULT_ASSISTANT_GENDER
+        set(value) {
+            storage.edit().putString(
+                KEY_ASSISTANT_GENDER,
+                if (value == "MASCHILE") "MASCHILE" else "FEMMINILE"
+            ).apply()
+        }
 
     /** Separate opt-in: notification message bodies may be sent to Gemini only on explicit request. */
     var irony: Float get() = getTrait(KEY_IRONY, 0.75f); set(value) = setTrait(KEY_IRONY, value)
@@ -54,7 +80,9 @@ class AssistantPreferences(context: Context) {
         private const val KEY_WAKE_PHRASE = "wake_phrase"
         private const val KEY_DIALECT_ID = "dialect_id"
         private const val KEY_ASSISTANT_NAME = "assistant_name"
+        private const val KEY_ASSISTANT_GENDER = "assistant_gender"
         private const val KEY_LIVE_VOICE = "live_voice_name"
+        private const val KEY_ACTIVE_DIGITAL_IDENTITY = "active_digital_identity_id"
         private const val KEY_IRONY = "trait_irony"
         private const val KEY_SWEETNESS = "trait_sweetness"
         private const val KEY_SENSUALITY = "trait_sensuality"
@@ -69,6 +97,7 @@ class AssistantPreferences(context: Context) {
         const val DEFAULT_WAKE_PHRASE = "Hola Juanita"
         const val DEFAULT_DIALECT_ID = "canarian"
         const val DEFAULT_ASSISTANT_NAME = "Juanita"
+        const val DEFAULT_ASSISTANT_GENDER = "FEMMINILE"
         const val DEFAULT_LIVE_VOICE = "Kore"
     }
 }

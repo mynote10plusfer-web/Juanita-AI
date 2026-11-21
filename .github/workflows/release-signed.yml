@@ -2,15 +2,25 @@ name: Signed Android Release
 
 on:
   push:
+    branches: [ "main", "feature/onboarding-alarm-voice-notifications-preview-0.11.2" ]
+  pull_request:
     branches: [ "main" ]
+    paths:
+      - "app/**"
+      - ".github/workflows/release-signed.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: juanita-signed-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     name: Build permanently signed release APK
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 58
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,7 +40,11 @@ jobs:
             echo "All signing secrets are configured."
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Signed release skipped: one or more JUANITA signing secrets are missing. The Android APK workflow still builds a debug APK, but it cannot update an installed release."
+            if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" && "${GITHUB_EVENT_NUMBER:-}" == "58" ]]; then
+              echo "::error::The cumulative production PR requires the permanent signing secrets; refusing to build an unsigned candidate."
+              exit 1
+            fi
+            echo "::warning::Signed release skipped because one or more permanent signing secrets are missing."
           fi
 
       - name: Set up JDK 17
@@ -64,12 +78,14 @@ jobs:
           JUANITA_SIGNING_KEY_PASSWORD: ${{ secrets.JUANITA_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
 
-      - name: Verify APK signature and permanent certificate
+      - name: Verify APK signature, production package and update version
         if: steps.signing.outputs.ready == 'true'
         shell: bash
         run: |
+          set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
           "$APKSIGNER" verify --verbose "$APK"
           CERT_SHA256=$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print toupper($2); exit}')
           EXPECTED_CERT_SHA256="9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1"
@@ -80,24 +96,19 @@ jobs:
             exit 1
           fi
           echo "Permanent signing certificate matches the known-good release."
-          BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
-          EXPECTED_APPLICATION_ID=$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)
-          EXPECTED_VERSION_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' app/build.gradle.kts | head -n1)
-          EXPECTED_VERSION_NAME=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)
-          if [[ -z "$EXPECTED_APPLICATION_ID" || -z "$EXPECTED_VERSION_CODE" || -z "$EXPECTED_VERSION_NAME" ]]; then
-            echo "::error::Could not read application ID/version metadata from app/build.gradle.kts."
-            exit 1
-          fi
-          if (( EXPECTED_VERSION_CODE <= 32 )); then
-            echo "::error::Update versionCode must be greater than the previous production release (32)."
-            exit 1
-          fi
-          grep -F "package: name='$EXPECTED_APPLICATION_ID' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" <<< "$BADGING" >/dev/null || {
-            echo "::error::APK metadata does not match Gradle configuration."
+          BADGING=$("$AAPT" dump badging "$APK")
+          grep -F "package: name='ai.juanita.app' " <<< "$BADGING" >/dev/null || {
+            echo "::error::APK package must be exactly ai.juanita.app."
             exit 1
           }
-          echo "Application ID and monotonically increasing update version verified: $EXPECTED_APPLICATION_ID / $EXPECTED_VERSION_NAME ($EXPECTED_VERSION_CODE)."
-
+          APK_VERSION_CODE=$(sed -nE "s/.*versionCode='([0-9]+)'.*/\\1/p" <<< "$BADGING" | head -n1)
+          APK_VERSION_NAME=$(sed -nE "s/.*versionName='([^']+)'.*/\\1/p" <<< "$BADGING" | head -n1)
+          if [[ -z "$APK_VERSION_CODE" || -z "$APK_VERSION_NAME" ]] || (( APK_VERSION_CODE <= 55 )); then
+            echo "::error::APK metadata is missing or versionCode is not greater than the current candidate baseline (55)."
+            echo "Actual package metadata: ${BADGING}"
+            exit 1
+          fi
+          echo "Verified update-compatible production APK: ai.juanita.app versionCode=$APK_VERSION_CODE versionName=$APK_VERSION_NAME."
       - name: Upload signed APK
         if: steps.signing.outputs.ready == 'true'
         uses: actions/upload-artifact@v4

@@ -24,9 +24,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +40,9 @@ import androidx.compose.ui.unit.sp
 import ai.juanita.app.memory.ImprovementReport
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class CapabilityRow(
     val name: String,
@@ -55,8 +60,8 @@ private val capabilityRows = listOf(
     CapabilityRow("Profili visivi e riconoscimento del volto", "RICERCA / NON IMPLEMENTATO", "La foto di un profilo non equivale al riconoscimento live. Un eventuale confronto video richiederà consenso biometrico separato, verifica legale UE e test locali."),
     CapabilityRow("Ritratto animato e sincronizzazione labiale", "NON IMPLEMENTATA", "Il ritratto attuale ha solo un movimento leggero. Non esistono ancora animazione facciale reale e lip-sync."),
     CapabilityRow("Creazione automatica di nuovi ritratti", "NON IMPLEMENTATA", "Avatar Studio salva profili e descrizioni, ma non genera ancora immagini."),
-    CapabilityRow("Riconoscimento della parola di attivazione", "NON IMPLEMENTATO", "La frase è configurabile ma non è collegata a un motore wake-word."),
-    CapabilityRow("Voce e riconoscimento completamente offline", "PIANIFICATA", "Servono modelli locali compatibili con italiano, spagnolo, ceco e inglese e prove di prestazioni."),
+    CapabilityRow("Riconoscimento della parola di attivazione", "INTEGRATO NEL CODICE · DA VALIDARE", "Sherpa-ONNX riconosce offline le frasi supportate e passa il microfono a Gemini Live. Accuratezza, falsi positivi, background e consumi richiedono prove sui telefoni reali."),
+    CapabilityRow("Voce e conversazione completamente offline", "NON IMPLEMENTATA", "La parola di attivazione è locale; la conversazione Gemini Live richiede rete. Non va presentata come assistente vocale interamente offline."),
     CapabilityRow("Filtro intelligente delle chiamate cellulari", "RICERCA / NON IMPLEMENTATO", "Android consente screening limitato dei metadati; la conversazione audio bidirezionale non è garantita dalle API di screening."),
     CapabilityRow("Modalità LIFE e notifiche", "PIANIFICATA", "Promemoria e integrazioni con notifiche, calendario e messaggi richiedono moduli e permessi separati."),
     CapabilityRow("Ricerca web e archivio di conoscenze", "NON IMPLEMENTATA NELL'APP", "La ricerca mirata e le note con fonti sono una fase futura; non va dichiarato che Juanita abbia studiato qualcosa senza una ricerca effettiva.")
@@ -90,6 +95,13 @@ internal fun ImprovementLabSection(
     var confirmDelete by remember { mutableStateOf(false) }
     var exportPayload by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("I rapporti restano cifrati sul dispositivo finché non scegli di esportarli.") }
+    var storageBusy by remember { mutableStateOf(false) }
+    val ioScope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { onRefresh() } }
+            .onSuccess { reports = it }
+            .onFailure { message = "Lettura rapporti non riuscita: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+    }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri == null) {
             message = "Esportazione annullata."
@@ -139,15 +151,29 @@ internal fun ImprovementLabSection(
                 OutlinedTextField(value = acceptance, onValueChange = { acceptance = it }, label = { Text("Come verifichiamo che funziona?") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
                 Button(
                     onClick = {
-                        val saved = onSave(title.trim(), type, area.trim(), observed.trim(), evidence.trim(), expected.trim(), acceptance.trim())
-                        reports = listOf(saved) + reports
-                        title = ""; observed = ""; evidence = ""; expected = ""; acceptance = ""
-                        message = "Rapporto salvato in forma cifrata sul telefono."
+                        if (!storageBusy) {
+                            storageBusy = true
+                            val values = listOf(title.trim(), type, area.trim(), observed.trim(), evidence.trim(), expected.trim(), acceptance.trim())
+                            ioScope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) {
+                                        onSave(values[0], values[1], values[2], values[3], values[4], values[5], values[6])
+                                    }
+                                }.onSuccess { saved ->
+                                    reports = listOf(saved) + reports
+                                    title = ""; observed = ""; evidence = ""; expected = ""; acceptance = ""
+                                    message = "Rapporto salvato in forma cifrata sul telefono."
+                                }.onFailure { failure ->
+                                    message = "Salvataggio non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                }
+                                storageBusy = false
+                            }
+                        }
                     },
-                    enabled = title.isNotBlank() && observed.isNotBlank() && expected.isNotBlank() && acceptance.isNotBlank(),
+                    enabled = !storageBusy && title.isNotBlank() && observed.isNotBlank() && expected.isNotBlank() && acceptance.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
-                ) { Text("Salva rapporto") }
+                ) { Text(if (storageBusy) "Salvataggio…" else "Salva rapporto") }
                 Text(message, color = Color(0xFF9A9DA4), fontSize = 11.sp)
             }
         }
@@ -156,7 +182,15 @@ internal fun ImprovementLabSection(
             Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("RAPPORTI SALVATI · ${reports.size}", color = gold, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { reports = onRefresh() }) { Text("Aggiorna", color = gold) }
+                    TextButton(onClick = {
+                        if (!storageBusy) ioScope.launch {
+                            storageBusy = true
+                            runCatching { withContext(Dispatchers.IO) { onRefresh() } }
+                                .onSuccess { reports = it }
+                                .onFailure { message = "Aggiornamento non riuscito: ${it.localizedMessage ?: it.javaClass.simpleName}" }
+                            storageBusy = false
+                        }
+                    }) { Text("Aggiorna", color = gold) }
                 }
                 if (reports.isNotEmpty()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -215,7 +249,22 @@ internal fun ImprovementLabSection(
         title = { Text("Eliminare i rapporti selezionati?") },
         text = { Text("Saranno eliminati ${selectedIds.size} rapporti locali. L'archivio delle conversazioni e i ricordi personali non verranno modificati.") },
         confirmButton = {
-            TextButton(onClick = { onDelete(selectedIds); reports = reports.filterNot { it.id in selectedIds }; selectedIds = emptySet(); confirmDelete = false }) {
+            TextButton(enabled = !storageBusy, onClick = {
+                val ids = selectedIds
+                confirmDelete = false
+                ioScope.launch {
+                    storageBusy = true
+                    runCatching { withContext(Dispatchers.IO) { onDelete(ids) } }
+                        .onSuccess {
+                            reports = reports.filterNot { it.id in ids }
+                            selectedIds = emptySet()
+                        }
+                        .onFailure { failure ->
+                            message = "Eliminazione non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                        }
+                    storageBusy = false
+                }
+            }) {
                 Text("Elimina", color = Color(0xFFE6A0A0))
             }
         },

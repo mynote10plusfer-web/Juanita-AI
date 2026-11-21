@@ -3,12 +3,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.gms.google-services")
+    id("io.gitlab.arturbosch.detekt")
 }
 
 val signingStoreFile = providers.environmentVariable("JUANITA_SIGNING_STORE_FILE").orNull
 val signingStorePassword = providers.environmentVariable("JUANITA_SIGNING_STORE_PASSWORD").orNull
 val signingKeyAlias = providers.environmentVariable("JUANITA_SIGNING_KEY_ALIAS").orNull
 val signingKeyPassword = providers.environmentVariable("JUANITA_SIGNING_KEY_PASSWORD").orNull
+val configuredVersionCode = providers.environmentVariable("JUANITA_VERSION_CODE").orNull?.toIntOrNull() ?: 56
+val configuredVersionName = providers.environmentVariable("JUANITA_VERSION_NAME").orNull ?: "0.11.17"
 
 android {
     namespace = "ai.juanita.app"
@@ -19,8 +22,8 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = 39
-        versionName = "0.11.0"
+        versionCode = configuredVersionCode
+        versionName = configuredVersionName
     }
 
     signingConfigs {
@@ -36,7 +39,6 @@ android {
 
     buildTypes {
         getByName("debug") {
-            // Keep debug installs isolated from the permanently signed production package.
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
@@ -45,6 +47,7 @@ android {
             isMinifyEnabled = false
             if (!signingStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
         }
+
     }
 
     buildFeatures { compose = true; buildConfig = true }
@@ -63,6 +66,7 @@ dependencies {
     implementation("com.google.firebase:firebase-appcheck-playintegrity")
     debugImplementation("com.google.firebase:firebase-appcheck-debug")
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("com.github.k2-fsa.sherpa-onnx:sherpa-onnx:v1.13.8")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("androidx.camera:camera-core:1.4.1")
     implementation("androidx.camera:camera-camera2:1.4.1")
@@ -77,6 +81,29 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.6.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    baseline = file("$rootDir/config/detekt/baseline.xml")
+    parallel = true
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "17"
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        sarif.required.set(true)
+        md.required.set(true)
+    }
+}
+
+tasks.withType<io.gitlab.arturbosch.detekt.DetektCreateBaselineTask>().configureEach {
+    jvmTarget = "17"
 }

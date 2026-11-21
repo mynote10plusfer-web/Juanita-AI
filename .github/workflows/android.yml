@@ -2,13 +2,21 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability", "integration/unified-rollup-2026-11-18" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "feature/conversational-reflection", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability" ]
   workflow_dispatch:
+    inputs:
+      detekt_bootstrap:
+        description: "Generate and commit the initial Detekt baseline (run once)"
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: android-build-${{ github.ref }}
+  # Keep only the newest validation run for a branch/PR.
+  # Phase C1-C3 plus shared-memory/single-active-character invariants are validated.
   cancel-in-progress: true
 
 permissions:
@@ -16,7 +24,7 @@ permissions:
 
 jobs:
   build:
-    name: Build debug APK
+    name: Build CI debug variant (tests only)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -33,11 +41,35 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Build debug APK
+      - name: Build debug variant for CI tests only
         run: gradle --no-daemon :app:assembleDebug
+
+      - name: Run JVM unit tests
+        run: gradle --no-daemon :app:testDebugUnitTest
 
       - name: Compile Android instrumentation tests
         run: gradle --no-daemon :app:assembleDebugAndroidTest
+
+      # Run only when explicitly requested from Actions. The baseline is committed
+      # by the separate least-privilege job below; normal PR runs never regenerate it.
+      - name: Generate initial Detekt baseline
+        if: github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true
+        run: gradle --no-daemon :app:detektBaseline
+
+      - name: Run Detekt Kotlin analysis
+        if: (github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true) || hashFiles('config/detekt/baseline.xml') != ''
+        run: gradle --no-daemon :app:detekt
+
+      - name: Upload Detekt report and optional bootstrap baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: Juanita-AI-detekt-report
+          path: |
+            config/detekt/baseline.xml
+            app/build/reports/detekt/**
+          if-no-files-found: warn
+          retention-days: 7
+
 
       - name: Verify debug APK package identity
         shell: bash
@@ -51,10 +83,203 @@ jobs:
           }
           echo "Debug package identity verified: ai.juanita.app.debug"
 
-      - name: Upload APK
+
+  instrumentation:
+    name: Run Android instrumentation tests (API 31)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        # API 31 is the stable CI emulator baseline. API 35 has repeatedly
+        # failed at emulator/process startup in this runner and is validated
+        # on the physical Android 15 Samsung device instead.
+        api-level: [31]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Run instrumentation tests on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          # These tests use Android framework APIs only; Google Play services are not required.
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-boot-timeout: 300
+          # Start ADB before the runner's boot polling; its launcher calls adb directly.
+          pre-emulator-launch-script: adb start-server
+          # Avoid the runner's failing post-boot animation/ADB settings command.
+          disable-animations: false
+          # The action executes each script line separately; keep conditionals on one line.
+          script: |
+            set -eu
+            echo "Waiting for Android emulator transport..."
+            timeout 60s adb wait-for-device
+            echo "ADB state: $(adb get-state)"
+            echo "Boot completed: $(adb shell getprop sys.boot_completed)"
+            if gradle --no-daemon :app:connectedDebugAndroidTest; then echo "Android instrumentation tests completed successfully."; else result=$?; echo "Instrumentation failed; collecting emulator diagnostics..."; adb devices -l || true; adb logcat -d -b all -t 1200 || true; exit "$result"; fi
+
+  commit-detekt-baseline:
+    name: Commit initial Detekt baseline
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.detekt_bootstrap == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Download generated baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: Juanita-AI-detekt-report
+          path: .
+
+      - name: Commit baseline only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s config/detekt/baseline.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config/detekt/baseline.xml
+          if git diff --cached --quiet; then
+            echo "Detekt baseline is already up to date."
+          else
+            git commit -m "build: establish Detekt baseline"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+  wake-model:
+    name: Validate offline wake model and Juanita/José tokenizers
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install canonical SentencePiece tokenizer
+        run: python -m pip install --disable-pip-version-check sentencepiece==0.2.1
+
+      - name: Download immutable Spanish KWS model revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL_ID="jguerrisi/sherpa-onnx-kws-zipformer-es-3M-2026-08-08"
+          REVISION="d4fa6bd"
+          BASE="https://huggingface.co/${MODEL_ID}/resolve/${REVISION}"
+          mkdir -p wake-model
+          files=(
+            "encoder-epoch-20-avg-2-chunk-16-left-64.onnx"
+            "decoder-epoch-20-avg-2-chunk-16-left-64.onnx"
+            "joiner-epoch-20-avg-2-chunk-16-left-64.onnx"
+            "tokens.txt"
+            "bpe.model"
+          )
+          for file in "${files[@]}"; do
+            echo "Downloading ${file}"
+            curl --fail --location --retry 3 --retry-all-errors \
+              --connect-timeout 20 --max-time 600 \
+              "${BASE}/${file}" -o "wake-model/${file}"
+            test -s "wake-model/${file}"
+          done
+          printf '%s\n' "${MODEL_ID}" > wake-model/model-id.txt
+          printf '%s\n' "${REVISION}" > wake-model/model-revision.txt
+          echo "21661e7892f33bd7495bea5f319f6edf45eed681c1f5afbc0a275b5d30625838  wake-model/bpe.model" | sha256sum --check -
+
+      - name: Generate and validate Juanita and José BPE keywords
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import sentencepiece as spm
+
+          root = Path("wake-model")
+          processor = spm.SentencePieceProcessor(model_file=str(root / "bpe.model"))
+          tokens = (root / "tokens.txt").read_text(encoding="utf-8").splitlines()
+          vocabulary = {line.split()[0] for line in tokens if line.strip()}
+          phrase_specs = [
+              ("Hola Juanita", "keywords.txt", "keywords.phrase",
+               "c659a6266b71b069bad7e04ec3b7d12c895c54b83a98317da581c39448a54e9d"),
+              ("Hola José", "keywords-jose.txt", "keywords-jose.phrase",
+               "0e98af9cae972913f790ade9066049251c764e7303359c77c119966d6f48bb64"),
+          ]
+          phrase_manifests = []
+          for phrase, keyword_name, phrase_name, expected_hash in phrase_specs:
+              normalized = phrase.casefold()
+              pieces = processor.encode(normalized, out_type=str)
+              if not pieces or any(piece == "<unk>" for piece in pieces):
+                  raise SystemExit(f"Unsupported SentencePiece phrase: {phrase}")
+              missing = [piece for piece in pieces if piece not in vocabulary]
+              if missing:
+                  raise SystemExit(f"BPE pieces absent from sherpa tokens.txt for {phrase}: {missing!r}")
+              tag = normalized.replace(" ", "_").replace("é", "e")
+              keyword_line = f"{' '.join(pieces)} :1.0 #0.20 @{tag}\n"
+              actual_hash = hashlib.sha256(keyword_line.encode("utf-8")).hexdigest()
+              if actual_hash != expected_hash:
+                  raise SystemExit(f"Canonical keyword bytes changed for {phrase}: {actual_hash}")
+              (root / keyword_name).write_text(keyword_line, encoding="utf-8")
+              (root / phrase_name).write_text(phrase + "\n", encoding="utf-8")
+              phrase_manifests.append({
+                  "phrase": phrase,
+                  "normalized_phrase": normalized,
+                  "bpe_pieces": pieces,
+                  "keyword_file": keyword_name,
+                  "keyword_sha256": actual_hash,
+                  "keyword_line": keyword_line.rstrip("\n"),
+              })
+
+          files = {}
+          for path in sorted(root.iterdir()):
+              if path.is_file() and path.name != "integrity.json":
+                  files[path.name] = {
+                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                      "bytes": path.stat().st_size,
+                  }
+          manifest = {
+              "model_id": "jguerrisi/sherpa-onnx-kws-zipformer-es-3M-2026-08-08",
+              "revision": "d4fa6bd",
+              "license": "Apache-2.0",
+              "sample_rate_hz": 16000,
+              "feature_dim": 80,
+              "phrase": "Hola Juanita",
+              "phrases": phrase_manifests,
+              "files": files,
+          }
+          (root / "integrity.json").write_text(
+              json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(manifest, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Upload verified wake-model bundle
         uses: actions/upload-artifact@v4
         with:
-          name: Juanita-AI-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Juanita-WakeModel-validation
+          path: wake-model/
           if-no-files-found: error
           retention-days: 14

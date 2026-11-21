@@ -17,39 +17,40 @@ import java.util.Locale
 
 /** Builds factual device-local morning context. Missing access is never reported as an empty day. */
 object MorningBriefingContext {
-    fun build(context: Context): String {
+    fun build(context: Context, languageTag: String = Locale.getDefault().toLanguageTag()): String {
         val now = ZonedDateTime.now()
-        val locale = Locale.forLanguageTag("it-IT")
+        val locale = Locale.forLanguageTag(languageTag).takeIf { it.language.isNotBlank() } ?: Locale.getDefault()
         val date = now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", locale))
         val time = now.format(DateTimeFormatter.ofPattern("HH:mm", locale))
         val zone = now.zone.id
         val nextAlarm = runCatching { context.getSystemService(AlarmManager::class.java).nextAlarmClock }.getOrNull()
         val systemAlarmText = nextAlarm?.let {
             val alarmTime = java.time.Instant.ofEpochMilli(it.triggerTime).atZone(ZoneId.systemDefault())
-            "Prossima sveglia Android comunicata dal sistema: " +
-                alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'alle' HH:mm", locale)) + "."
-        } ?: "Android non comunica una prossima sveglia esterna a Juanita."
-        val calendarText = readCalendar(context, now)
-        val weatherText = readWeather(context)
+            "Next Android alarm reported by the system: " +
+                alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'at' HH:mm", locale)) + "."
+        } ?: "Android reports no upcoming external alarm."
+        val calendarText = readCalendar(context, now, locale)
+        val weatherText = readWeather(context, locale)
         return """
-            CONTESTO PER IL RISVEGLIO — dati locali raccolti sul dispositivo:
-            Oggi è $date. Ora locale: $time. Fuso orario: $zone.
+            MORNING BRIEFING CONTEXT — device-local data:
+            LOCAL DATE: $date. LOCAL TIME: $time. TIME ZONE: $zone.
             $systemAlarmText
-            CALENDARIO: $calendarText
-            METEO: $weatherText
+            CALENDAR: $calendarText
+            WEATHER: $weatherText
 
-            Parla in italiano naturale, con la voce Gemini Live già selezionata dall'utente.
-            Apri con un buongiorno molto dolce, rassicurante e luminoso, senza frasi robotiche.
-            Pronuncia il giorno, la data e l'ora; poi riassumi brevemente meteo e appuntamenti.
-            Se un dato non è disponibile, dichiaralo: non inventare previsioni o impegni.
-            Distingui la sveglia Android da quella di Juanita. Non leggere emoji ad alta voce.
-            Concludi con una frase affettuosa e lascia spazio alla risposta, senza interrogare.
+            REQUIRED WAKE-UP LANGUAGE: $languageTag. Use this language consistently.
+            The Gemini Live voice is selected from the user's active identity profile.
+            Open with a very warm, reassuring and uplifting good morning greeting; avoid robotic phrasing.
+            Say the weekday, date and local time, then briefly summarize weather and calendar events.
+            If a fact is unavailable, say so; never invent forecasts or appointments.
+            Distinguish the Android alarm from Juanita's alarm. Do not read emoji aloud.
+            End with an affectionate sentence and leave room for the user's reply without asking a string of questions.
         """.trimIndent()
     }
 
-    private fun readCalendar(context: Context, now: ZonedDateTime): String {
+    private fun readCalendar(context: Context, now: ZonedDateTime, locale: Locale): String {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) != PackageManager.PERMISSION_GRANTED) {
-            return "Calendario non accessibile: permesso non concesso. Non dedurre che non ci siano appuntamenti."
+            return "Calendar unavailable: permission not granted. Do not assume there are no events."
         }
         val start = now.toLocalDate().atStartOfDay(now.zone).toInstant().toEpochMilli()
         val end = now.toLocalDate().plusDays(1).atStartOfDay(now.zone).toInstant().toEpochMilli()
@@ -64,16 +65,16 @@ object MorningBriefingContext {
                 val beginIndex = cursor.getColumnIndex(CalendarContract.Instances.BEGIN)
                 val locationIndex = cursor.getColumnIndex(CalendarContract.Instances.EVENT_LOCATION)
                 while (cursor.moveToNext() && events.size < 12) {
-                    val title = cursor.getString(titleIndex)?.takeIf { it.isNotBlank() } ?: "Appuntamento"
+                    val title = cursor.getString(titleIndex)?.takeIf { it.isNotBlank() } ?: "Calendar event"
                     val begin = java.time.Instant.ofEpochMilli(cursor.getLong(beginIndex)).atZone(now.zone)
-                        .format(DateTimeFormatter.ofPattern("HH:mm", Locale.ITALIAN))
+                        .format(DateTimeFormatter.ofPattern("HH:mm", locale))
                     val place = if (locationIndex >= 0) cursor.getString(locationIndex)?.takeIf { it.isNotBlank() } else null
                     events += if (place == null) "$begin — $title" else "$begin — $title, $place"
                 }
             }
-            if (events.isEmpty()) "Nessun evento trovato oggi nel calendario autorizzato."
+            if (events.isEmpty()) "No events found today in the authorized calendar."
             else events.joinToString("; ")
-        }.getOrElse { "Calendario temporaneamente non leggibile (${it.javaClass.simpleName}); non assumere che sia vuoto." }
+        }.getOrElse { "Calendar temporarily unreadable (${it.javaClass.simpleName}); do not assume it is empty." }
     }
 
     private data class ModelWeather(
@@ -87,16 +88,55 @@ object MorningBriefingContext {
         val rainChance: Double
     )
 
-    private fun readWeather(context: Context): String {
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (!fine && !coarse) return "Meteo non disponibile: manca il permesso di posizione."
-        val location = runCatching {
-            val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
-                .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-                .maxByOrNull { it.time }
-        }.getOrNull() ?: return "Meteo non disponibile: il telefono non ha una posizione recente."
+    fun readWeather(
+        context: Context,
+        locale: Locale = Locale.getDefault(),
+        locality: String = ""
+    ): String {
+        val requestedLocality = locality.trim().take(120)
+        val coordinates: Pair<Double, Double>
+        val placeLabel: String
+        if (requestedLocality.isNotBlank()) {
+            val encoded = java.net.URLEncoder.encode(requestedLocality, "UTF-8")
+            val geocodeConnection = (URL("https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=1&language=en&format=json").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4000
+                readTimeout = 4000
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "JuanitaAI-Android")
+            }
+            val resolved = try {
+                val json = JSONObject(geocodeConnection.inputStream.bufferedReader().use { it.readText() })
+                val result = json.optJSONArray("results")?.optJSONObject(0)
+                    ?: return "Weather unavailable: could not resolve the locality '$requestedLocality'. Ask the user to specify a nearby city or region."
+                val lat = result.optDouble("latitude", Double.NaN)
+                val lon = result.optDouble("longitude", Double.NaN)
+                if (!lat.isFinite() || !lon.isFinite()) return "Weather unavailable: geocoding returned no valid coordinates for '$requestedLocality'."
+                Triple(lat, lon, listOf(result.optString("name"), result.optString("admin1"), result.optString("country")).filter { it.isNotBlank() }.distinct().joinToString(", "))
+            } catch (failure: Exception) {
+                return "Weather unavailable: locality lookup failed (${failure.javaClass.simpleName})."
+            } finally {
+                geocodeConnection.disconnect()
+            }
+            coordinates = resolved.first to resolved.second
+            placeLabel = resolved.third
+        } else {
+            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!fine && !coarse) return "Weather unavailable: location permission is missing. Ask the user for a town or city; a locality can be checked without GPS."
+            val location = runCatching {
+                val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+                    .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+                    .maxByOrNull { it.time }
+            }.getOrNull() ?: return "Weather unavailable: the phone has no recent location fix. Ask the user for a town or city."
+            val fixAgeMs = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
+            if (fixAgeMs > 2 * 60 * 60 * 1000L) {
+                return "Weather unavailable: the last phone location is stale (${fixAgeMs / 60_000L} minutes old). Ask the user for a locality."
+            }
+            coordinates = location.latitude to location.longitude
+            placeLabel = "current phone location"
+        }
 
         val models = listOf(
             "ecmwf_ifs025" to "ECMWF",
@@ -106,8 +146,8 @@ object MorningBriefingContext {
         val results = models.mapNotNull { (modelId, label) ->
             runCatching {
                 // Open-Meteo coordinates are rounded to four decimals to avoid unnecessary precision.
-                val lat = String.format(Locale.US, "%.4f", location.latitude)
-                val lon = String.format(Locale.US, "%.4f", location.longitude)
+                val lat = String.format(Locale.US, "%.4f", coordinates.first)
+                val lon = String.format(Locale.US, "%.4f", coordinates.second)
                 val url = URL(
                     "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&models=$modelId" +
                         "&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m" +
@@ -137,7 +177,7 @@ object MorningBriefingContext {
                 } finally { connection.disconnect() }
             }.getOrNull()
         }
-        if (results.isEmpty()) return "Meteo non disponibile: nessuno dei modelli meteorologici ha risposto."
+        if (results.isEmpty()) return "Weather unavailable: none of the weather models responded."
 
         fun average(selector: (ModelWeather) -> Double): Double {
             val values = results.map(selector).filter { it.isFinite() }
@@ -147,16 +187,17 @@ object MorningBriefingContext {
         val spread = if (temperatures.size > 1) temperatures.maxOrNull()!! - temperatures.minOrNull()!! else 0.0
         val sources = results.joinToString(", ") { it.model }
         val confidenceNote = if (results.size >= 2 && spread <= 3.0) {
-            "I modelli sono abbastanza concordi sulla temperatura attuale."
+            "The models broadly agree on the current temperature."
         } else if (results.size >= 2) {
-            "I modelli divergono di circa ${String.format(Locale.ITALIAN, "%.1f", spread)} gradi: segnala l'intervallo, senza presentare la media come certezza."
+            "The models differ by about ${String.format(locale, "%.1f", spread)} degrees: report the range and do not present the average as certain."
         } else {
-            "È disponibile un solo modello: il dato non è stato confrontato."
+            "Only one model is available; the result has not been cross-checked."
         }
-        return "Open-Meteo, confronto di ${results.size} modelli ($sources): temperatura media attuale ${String.format(Locale.ITALIAN, "%.1f", average { it.temperature })}°C; " +
-            "percepita media ${String.format(Locale.ITALIAN, "%.1f", average { it.feelsLike })}°C; vento medio ${String.format(Locale.ITALIAN, "%.0f", average { it.wind })} km/h; " +
-            "minima media ${String.format(Locale.ITALIAN, "%.1f", average { it.minimum })}°C, massima media ${String.format(Locale.ITALIAN, "%.1f", average { it.maximum })}°C; " +
-            "probabilità media di pioggia ${String.format(Locale.ITALIAN, "%.0f", average { it.rainChance })}%. $confidenceNote"
+        val checkedAt = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+        return "Weather for $placeLabel. Open-Meteo, comparison of ${results.size} models ($sources), checked at $checkedAt; current average temperature ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
+            "average feels-like temperature ${String.format(locale, "%.1f", average { it.feelsLike })}°C; average wind ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
+            "average low ${String.format(locale, "%.1f", average { it.minimum })}°C, average high ${String.format(locale, "%.1f", average { it.maximum })}°C; " +
+            "average precipitation probability ${String.format(locale, "%.0f", average { it.rainChance })}%. $confidenceNote"
     }
 
 }

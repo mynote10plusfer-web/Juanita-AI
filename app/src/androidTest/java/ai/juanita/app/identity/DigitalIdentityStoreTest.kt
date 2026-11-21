@@ -1,0 +1,396 @@
+package ai.juanita.app.identity
+
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import java.io.File
+import java.util.UUID
+
+@RunWith(AndroidJUnit4::class)
+class DigitalIdentityStoreTest {
+    private lateinit var testDirectory: File
+    private lateinit var store: DigitalIdentityStore
+
+    @Before
+    fun setUp() {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        testDirectory = File(target.cacheDir, "digital-identity-test-${UUID.randomUUID()}").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        store = DigitalIdentityStore(isolatedContext())
+    }
+
+    @After
+    fun tearDown() {
+        testDirectory.deleteRecursively()
+    }
+
+    @Test
+    fun identitiesPersistIndependentlyAcrossStoreRecreation() {
+        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Andalucía", "Sevilla", "Andaluz")
+
+        store.create(juanita)
+        store.create(jose)
+
+        val reloaded = DigitalIdentityStore(isolatedContext()).list().associateBy { it.id }
+        assertEquals(2, reloaded.size)
+        assertEquals("Paisa", reloaded[juanita.id]?.origin?.community)
+        assertEquals(IdentityPresentation.MASCULINE, reloaded[jose.id]?.presentation)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, reloaded[juanita.id]?.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, reloaded[jose.id]?.memoryNamespace)
+    }
+
+    @Test
+    fun identityContentsAreEncryptedAtRest() {
+        val identity = identity("NomeRiservatoJuanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        store.create(identity)
+        val encryptedFile = File(File(testDirectory, "juanita_digital_identities"), "${identity.id}.identity.enc")
+        val storedBytes = encryptedFile.readText()
+
+        assertFalse(storedBytes.contains("NomeRiservatoJuanita"))
+        assertFalse(storedBytes.contains("Colombia"))
+        assertNotNull(store.get(identity.id))
+    }
+
+    @Test
+    fun updatingOrDeletingOneIdentityDoesNotChangeAnother() {
+        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
+        store.create(juanita)
+        store.create(jose)
+
+        store.update(juanita.copy(biography = "Biografia personale di Juanita"))
+        assertEquals("Biografia personale di Juanita", store.get(juanita.id)?.biography)
+        assertEquals("José", store.get(jose.id)?.displayName)
+
+        assertEquals(true, store.delete(juanita.id))
+        assertNull(store.get(juanita.id))
+        assertNotNull(store.get(jose.id))
+        assertEquals(1, store.list().size)
+    }
+
+    @Test
+    fun regionalOriginAndCharacterTraitsRemainSeparateWhileMemoryNamespaceIsShared() {
+        val juanita = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+            .copy(personality = IdentityPersonality(warmth = 0.95f, humour = 0.8f))
+        val jose = identity("José", IdentityPresentation.MASCULINE, "ES", "España", "Andalucía", "Sevilla", "Andaluz")
+            .copy(personality = IdentityPersonality(warmth = 0.35f, humour = 0.2f))
+        store.create(juanita)
+        store.create(jose)
+
+        store.update(juanita.copy(
+            origin = CulturalOrigin("ES", "España", "Canarias", "Tenerife", "Canario"),
+            personality = juanita.personality.copy(warmth = 0.99f)
+        ))
+
+        val updatedJuanita = store.get(juanita.id)!!
+        val unchangedJose = store.get(jose.id)!!
+        assertEquals("Canarias", updatedJuanita.origin.region)
+        assertEquals(0.99f, updatedJuanita.personality.warmth, 0.001f)
+        assertEquals("Andalucía", unchangedJose.origin.region)
+        assertEquals(0.35f, unchangedJose.personality.warmth, 0.001f)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, updatedJuanita.memoryNamespace)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, unchangedJose.memoryNamespace)
+    }
+
+    @Test
+    fun userCanCreateIndependentCollectionsOfAnySizeForBothCharacterFamilies() {
+        val juanitas = (1..5).map { index ->
+            identity("Juanita $index", IdentityPresentation.FEMININE, "CO", "Colombia", "Region $index")
+        }
+        val jose = (1..4).map { index ->
+            identity("José $index", IdentityPresentation.MASCULINE, "ES", "España", "Region $index")
+        }
+
+        (juanitas + jose).forEach(store::create)
+
+        val saved = store.list()
+        assertEquals(9, saved.size)
+        assertEquals(5, saved.count { it.presentation == IdentityPresentation.FEMININE })
+        assertEquals(4, saved.count { it.presentation == IdentityPresentation.MASCULINE })
+        assertEquals(juanitas.map { it.displayName }.toSet(), saved.filter { it.presentation == IdentityPresentation.FEMININE }.map { it.displayName }.toSet())
+        assertTrue(saved.all { it.memoryNamespace == SHARED_IDENTITY_MEMORY_NAMESPACE })
+    }
+
+    @Test
+    fun duplicateGetsIndependentIdAndArchiveRestoreNeverDeletesSharedProfileData() {
+        val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(biography = "Biografia originale")
+        store.create(original)
+
+        val duplicate = store.duplicate(original.id, "Juanita Canaria")
+        assertTrue(duplicate.id != original.id)
+        assertEquals("Juanita Canaria", duplicate.displayName)
+        assertEquals("Biografia originale", duplicate.biography)
+
+        store.setArchived(original.id, true)
+        assertTrue(store.get(original.id)!!.archived)
+        assertFalse(store.get(duplicate.id)!!.archived)
+
+        store.setArchived(original.id, false)
+        assertFalse(store.get(original.id)!!.archived)
+        assertEquals(2, store.list().size)
+        assertEquals(SHARED_IDENTITY_MEMORY_NAMESPACE, store.get(original.id)!!.memoryNamespace)
+    }
+
+    @Test
+    fun unreadableIdentityFailsClosedAndPreservesItsFile() {
+        val identity = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        store.create(identity)
+        val encryptedFile = File(File(testDirectory, "juanita_digital_identities"), "${identity.id}.identity.enc")
+        encryptedFile.writeText("not-valid-ciphertext")
+
+        assertThrows(IllegalStateException::class.java) { store.get(identity.id) }
+        assertEquals("not-valid-ciphertext", encryptedFile.readText())
+    }
+
+
+    @Test
+    fun expandedCharacterTraitsPersistAcrossStoreRecreation() {
+        val original = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia").copy(
+            voiceName = "Sulafat",
+            biography = "Una biografia di prova persistente.",
+            personality = IdentityPersonality(
+                irony = 0.93f, sweetness = 0.84f, sensuality = 0.72f, friendliness = 0.88f,
+                warmth = 0.91f, humour = 0.82f, curiosity = 0.73f, expressiveness = 0.64f,
+                formality = 0.15f, empathy = 0.88f, seriousness = 0.42f, directness = 0.77f,
+                sociability = 0.69f, spontaneity = 0.83f, patience = 0.92f, optimism = 0.71f,
+                assertiveness = 0.58f, playfulness = 0.86f, discretion = 0.79f
+            )
+        )
+        store.create(original)
+        val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
+        assertEquals("Sulafat", restored.voiceName)
+        assertEquals("Una biografia di prova persistente.", restored.biography)
+        assertEquals(0.93f, restored.personality.irony, 0.001f)
+        assertEquals(0.84f, restored.personality.sweetness, 0.001f)
+        assertEquals(0.72f, restored.personality.sensuality, 0.001f)
+        assertEquals(0.88f, restored.personality.friendliness, 0.001f)
+        assertEquals(0.77f, restored.personality.directness, 0.001f)
+        assertEquals(0.69f, restored.personality.sociability, 0.001f)
+        assertEquals(0.83f, restored.personality.spontaneity, 0.001f)
+        assertEquals(0.92f, restored.personality.patience, 0.001f)
+        assertEquals(0.71f, restored.personality.optimism, 0.001f)
+        assertEquals(0.58f, restored.personality.assertiveness, 0.001f)
+        assertEquals(0.86f, restored.personality.playfulness, 0.001f)
+        assertEquals(0.79f, restored.personality.discretion, 0.001f)
+    }
+
+    @Test
+    fun changingVoiceFromSettingsPersistsOnlyForTheSelectedCharacter() {
+        val juanita = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val anotherJuanita = identity("Juanita Canaria", IdentityPresentation.FEMININE, "ES", "España")
+        store.create(juanita)
+        store.create(anotherJuanita)
+
+        store.update(juanita.copy(voiceName = "Sulafat"))
+        val reopened = DigitalIdentityStore(isolatedContext())
+        assertEquals("Sulafat", reopened.get(juanita.id)?.voiceName)
+        assertEquals("Kore", reopened.get(anotherJuanita.id)?.voiceName)
+    }
+
+    @Test
+    fun regionalTtsVoiceAndTargetPersistPerCharacterWithoutChangingLiveVoice() {
+        val paisa = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(voiceName = "Kore", regionalTtsVoiceName = "Leda", regionalTtsTargetId = "paisa-medellin")
+        val canarian = identity("Jose Canario", IdentityPresentation.MASCULINE, "ES", "España")
+            .copy(voiceName = "Achird", regionalTtsVoiceName = "Puck", regionalTtsTargetId = "canario-tenerife")
+        store.create(paisa)
+        store.create(canarian)
+
+        val reopened = DigitalIdentityStore(isolatedContext())
+        val restoredPaisa = reopened.get(paisa.id)!!
+        val restoredCanarian = reopened.get(canarian.id)!!
+
+        assertEquals("Kore", restoredPaisa.voiceName)
+        assertEquals("Leda", restoredPaisa.regionalTtsVoiceName)
+        assertEquals("paisa-medellin", restoredPaisa.regionalTtsTargetId)
+        assertEquals("Achird", restoredCanarian.voiceName)
+        assertEquals("Puck", restoredCanarian.regionalTtsVoiceName)
+        assertEquals("canario-tenerife", restoredCanarian.regionalTtsTargetId)
+    }
+
+    @Test
+    fun invalidRegionalTtsVoiceOrTargetIsRejected() {
+        val base = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        assertThrows(IllegalArgumentException::class.java) {
+            store.create(base.copy(regionalTtsVoiceName = "UnknownVoice"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store.create(base.copy(regionalTtsVoiceName = "Leda", regionalTtsTargetId = "unknown-region"))
+        }
+    }
+
+    @Test
+    fun newIdentityReceivesDefinedCharacterDefaults() {
+        val original = identity("José", IdentityPresentation.MASCULINE, "ES", "España")
+        store.create(original)
+        val restored = DigitalIdentityStore(isolatedContext()).get(original.id)!!
+        assertEquals(0.55f, restored.personality.directness, 0.001f)
+        assertEquals(0.6f, restored.personality.sociability, 0.001f)
+        assertEquals(0.75f, restored.personality.discretion, 0.001f)
+    }
+
+
+    @Test
+    fun systemInstructionTurnsCharacterTraitsIntoBehaviorAndRejectsStereotypes() {
+        val profile = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+            .copy(personality = IdentityPersonality(directness = 0.9f, patience = 0.8f, playfulness = 0.2f, warmth = 0.91f))
+        val instruction = profile.toSystemInstruction()
+        assertTrue("Missing system-instruction fragment: directness 90", instruction.contains("directness 90"))
+        assertTrue("Missing system-instruction fragment: warmth 91", instruction.contains("warmth 91"))
+        assertTrue("Missing system-instruction fragment: irony 50", instruction.contains("irony 50"))
+        assertTrue("Missing system-instruction fragment: sweetness 70", instruction.contains("sweetness 70"))
+        assertTrue("Missing system-instruction fragment: sensuality 50", instruction.contains("sensuality 50"))
+        assertTrue("Missing system-instruction fragment: patience 80", instruction.contains("patience 80"))
+        assertTrue("Missing system-instruction fragment: expressiveness 70", instruction.contains("expressiveness 70"))
+        assertTrue("Missing system-instruction fragment: formality 30", instruction.contains("formality 30"))
+        assertTrue("Missing system-instruction fragment: empathy 80", instruction.contains("empathy 80"))
+        assertTrue("Missing system-instruction fragment: playfulness 20", instruction.contains("playfulness 20"))
+        assertTrue("Missing system-instruction fragment: does not determine personality", instruction.contains("does not determine personality"))
+        assertTrue("Missing system-instruction fragment: same encrypted knowledge", instruction.contains("same encrypted knowledge"))
+        assertTrue("Missing system-instruction fragment: never merges individual personalities", instruction.contains("never merges individual personalities"))
+        assertTrue("Missing system-instruction fragment: without aggression", instruction.contains("without aggression"))
+        assertTrue("Missing system-instruction fragment: never turn warmth or empathy into flattery", instruction.contains("never turn warmth or empathy into flattery"))
+        assertTrue("Missing system-instruction fragment: NATURAL HUMAN CONVERSATION — ACTIVE EXPRESSION ENGINE", instruction.contains("NATURAL HUMAN CONVERSATION — ACTIVE EXPRESSION ENGINE"))
+        assertTrue("Missing system-instruction fragment: Treat the inference as provisional", instruction.contains("Treat the inference as provisional"))
+        assertTrue("Missing system-instruction fragment: SPOKEN EXPRESSION AND PROSODY", instruction.contains("SPOKEN EXPRESSION AND PROSODY"))
+        assertTrue("Missing system-instruction fragment: Do not add spoken labels", instruction.contains("Do not add spoken labels"))
+        assertTrue("Missing system-instruction fragment: vary natural openings", instruction.contains("vary natural openings"))
+        assertTrue("Missing system-instruction fragment: Never claim precise pitch or prosody control", instruction.contains("Never claim precise pitch or prosody control"))
+        assertTrue("Missing system-instruction fragment: CONTEXTUAL SOCIAL AND PSYCHOLOGICAL REASONING", instruction.contains("CONTEXTUAL SOCIAL AND PSYCHOLOGICAL REASONING"))
+        assertTrue("Missing system-instruction fragment: separate: what was directly reported", instruction.contains("separate: what was directly reported"))
+        assertTrue("Missing system-instruction fragment: Do not automatically take sides", instruction.contains("Do not automatically take sides"))
+        assertTrue("Missing system-instruction fragment: honest, respectful communication", instruction.replace(Regex("\\s+"), " ").contains("honest, respectful communication"))
+        assertTrue("Missing system-instruction fragment: ordinary chat stays ordinary", instruction.contains("ordinary chat stays ordinary"))
+        assertTrue("Missing system-instruction fragment: Never store an inferred mood", instruction.contains("Never store an inferred mood"))
+        assertTrue("Missing system-instruction fragment: intellectually humble", instruction.contains("intellectually humble"))
+    }
+
+    @Test
+    fun paisaIdentityGetsItsOwnRegionalSpeechAndMeasuredPacingWithoutAnApprovedDossier() {
+        val paisa = identity("Juanita Paisa", IdentityPresentation.FEMININE, "CO", "Colombia", "Antioquia", "Medellín", "Paisa")
+        val instruction = paisa.toSystemInstruction()
+
+        assertTrue("Missing system-instruction fragment: CONTEMPORARY PAISA / MEDELLÍN", instruction.contains("CONTEMPORARY PAISA / MEDELLÍN"))
+        assertTrue("Missing system-instruction fragment: vos sos, tenés, querés", instruction.contains("vos sos, tenés, querés"))
+        assertTrue("Missing system-instruction fragment: Do not repeat pues as a verbal tic", instruction.contains("Do not repeat pues as a verbal tic"))
+        assertTrue("Missing system-instruction fragment: calm, measured conversational pace", instruction.contains("calm, measured conversational pace"))
+        assertFalse(instruction.contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+    }
+
+    @Test
+    fun canarianIdentityDoesNotInheritPaisaSpeechInstructions() {
+        val canarian = identity("Juanita Canaria", IdentityPresentation.FEMININE, "ES", "España", "Canarias", "Tenerife", "Canario")
+        val instruction = canarian.toSystemInstruction()
+
+        assertTrue("Missing system-instruction fragment: REGIONAL SPEECH — CANARY ISLANDS", instruction.contains("REGIONAL SPEECH — CANARY ISLANDS"))
+        assertFalse(instruction.contains("CONTEMPORARY PAISA / MEDELLÍN"))
+    }
+
+    @Test
+    fun culturalCatalogIsSourceBackedOfflineAndRequiresExplicitApproval() {
+        val dossiers = CulturalDossierCatalog.dossiers
+        assertEquals(2, dossiers.size)
+        dossiers.forEach { dossier ->
+            assertTrue(dossier.summary.isNotBlank())
+            assertTrue(dossier.sources.size >= 3)
+            dossier.sources.forEach { source ->
+                assertTrue(source.title.isNotBlank())
+                assertTrue(source.publisher.isNotBlank())
+                assertTrue(source.url.startsWith("https://"))
+                assertTrue(source.confidence in 0f..1f)
+                assertTrue("Every source must declare its geographic scope", source.geographicScope.isNotBlank())
+            }
+            assertNull(dossier.approvedAtMillis)
+        }
+
+        val base = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        assertFalse(base.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+        val approved = base.copy(culturalDossier = dossiers.first().copy(approvedAtMillis = 123L))
+        assertTrue(approved.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+        assertTrue(approved.toSystemInstruction().contains("Vos, tú e usted"))
+    }
+
+    @Test
+    fun approvedCulturalDossierPersistsEncryptedAndCanBeRevoked() {
+        val base = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+        val approved = base.copy(culturalDossier = CulturalDossierCatalog.dossiers.first().copy(approvedAtMillis = 456L))
+        store.create(approved)
+        val restored = DigitalIdentityStore(isolatedContext()).get(base.id)!!
+        assertEquals(456L, restored.culturalDossier?.approvedAtMillis)
+        assertEquals(CulturalDossierCatalog.dossiers.first().sources.size, restored.culturalDossier?.sources?.size)
+        assertEquals(
+            CulturalDossierCatalog.dossiers.first().sources.map { it.geographicScope },
+            restored.culturalDossier?.sources?.map { it.geographicScope }
+        )
+        assertTrue(restored.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+
+        store.update(restored.copy(culturalDossier = null))
+        val revoked = DigitalIdentityStore(isolatedContext()).get(base.id)!!
+        assertNull(revoked.culturalDossier)
+        assertFalse(revoked.toSystemInstruction().contains("USER-APPROVED CULTURAL RESEARCH CONTEXT"))
+    }
+
+    @Test
+    fun sameRegionalDossierAppliesToMasculineAndFeminineIdentitiesWithoutChangingTheirPresentation() {
+        val dossier = CulturalDossierCatalog.dossiers.first().copy(approvedAtMillis = 123L)
+        val feminine = identity("Juanita", IdentityPresentation.FEMININE, "CO", "Colombia")
+            .copy(culturalDossier = dossier)
+        val masculine = identity("Jose", IdentityPresentation.MASCULINE, "CO", "Colombia")
+            .copy(culturalDossier = dossier)
+
+        val feminineInstruction = feminine.toSystemInstruction()
+        val masculineInstruction = masculine.toSystemInstruction()
+        assertTrue(feminineInstruction.contains("Vos, tú e usted"))
+        assertTrue(masculineInstruction.contains("Vos, tú e usted"))
+        assertTrue(feminineInstruction.contains("feminine grammatical self-reference"))
+        assertTrue(masculineInstruction.contains("masculine grammatical self-reference"))
+        assertTrue(feminineInstruction.contains("distinctly feminine woman character"))
+        assertTrue(feminineInstruction.contains("feminine identity in self-reference, language, conversational presence"))
+        assertTrue(masculineInstruction.contains("distinctly masculine man character"))
+        assertTrue(masculineInstruction.contains("masculine identity in self-reference, language, conversational presence"))
+        assertTrue(feminineInstruction.contains("never as a caricature"))
+        assertTrue(masculineInstruction.contains("never as a caricature"))
+        assertEquals(feminine.culturalDossier, masculine.culturalDossier)
+        assertEquals(feminine.origin, masculine.origin)
+    }
+
+    private fun identity(
+        name: String,
+        presentation: IdentityPresentation,
+        countryCode: String,
+        countryName: String,
+        region: String = "",
+        locality: String = "",
+        community: String = ""
+    ) = DigitalIdentity(
+        id = UUID.randomUUID().toString(),
+        displayName = name,
+        presentation = presentation,
+        origin = CulturalOrigin(countryCode, countryName, region, locality, community),
+        preferredLanguageTag = if (countryCode == "CO") "es-CO" else "es-ES",
+        languages = listOf("es", "es")
+    )
+
+    private fun isolatedContext(): Context {
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        return object : ContextWrapper(target) {
+            override fun getFilesDir(): File = testDirectory
+            override fun getApplicationContext(): Context = this
+        }
+    }
+}
