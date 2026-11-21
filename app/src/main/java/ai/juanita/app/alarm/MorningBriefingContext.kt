@@ -88,19 +88,54 @@ object MorningBriefingContext {
         val rainChance: Double
     )
 
-    fun readWeather(context: Context, locale: Locale = Locale.getDefault()): String {
-        val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        if (!fine && !coarse) return "Weather unavailable: location permission is missing."
-        val location = runCatching {
-            val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-            listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
-                .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-                .maxByOrNull { it.time }
-        }.getOrNull() ?: return "Weather unavailable: the phone has no recent location fix."
-        val fixAgeMs = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
-        if (fixAgeMs > 2 * 60 * 60 * 1000L) {
-            return "Weather unavailable: the last phone location is stale (${fixAgeMs / 60_000L} minutes old). Ask the user to open Juanita with location enabled or provide a locality."
+    fun readWeather(
+        context: Context,
+        locale: Locale = Locale.getDefault(),
+        locality: String = ""
+    ): String {
+        val requestedLocality = locality.trim().take(120)
+        val coordinates: Pair<Double, Double>
+        val placeLabel: String
+        if (requestedLocality.isNotBlank()) {
+            val encoded = java.net.URLEncoder.encode(requestedLocality, "UTF-8")
+            val geocodeConnection = (URL("https://geocoding-api.open-meteo.com/v1/search?name=$encoded&count=1&language=en&format=json").openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4000
+                readTimeout = 4000
+                requestMethod = "GET"
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "JuanitaAI-Android")
+            }
+            val resolved = try {
+                val json = JSONObject(geocodeConnection.inputStream.bufferedReader().use { it.readText() })
+                val result = json.optJSONArray("results")?.optJSONObject(0)
+                    ?: return "Weather unavailable: could not resolve the locality '$requestedLocality'. Ask the user to specify a nearby city or region."
+                val lat = result.optDouble("latitude", Double.NaN)
+                val lon = result.optDouble("longitude", Double.NaN)
+                if (!lat.isFinite() || !lon.isFinite()) return "Weather unavailable: geocoding returned no valid coordinates for '$requestedLocality'."
+                Triple(lat, lon, listOf(result.optString("name"), result.optString("admin1"), result.optString("country")).filter { it.isNotBlank() }.distinct().joinToString(", "))
+            } catch (failure: Exception) {
+                return "Weather unavailable: locality lookup failed (${failure.javaClass.simpleName})."
+            } finally {
+                geocodeConnection.disconnect()
+            }
+            coordinates = resolved.first to resolved.second
+            placeLabel = resolved.third
+        } else {
+            val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!fine && !coarse) return "Weather unavailable: location permission is missing. Ask the user for a town or city; a locality can be checked without GPS."
+            val location = runCatching {
+                val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
+                    .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+                    .maxByOrNull { it.time }
+            }.getOrNull() ?: return "Weather unavailable: the phone has no recent location fix. Ask the user for a town or city."
+            val fixAgeMs = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
+            if (fixAgeMs > 2 * 60 * 60 * 1000L) {
+                return "Weather unavailable: the last phone location is stale (${fixAgeMs / 60_000L} minutes old). Ask the user for a locality."
+            }
+            coordinates = location.latitude to location.longitude
+            placeLabel = "current phone location"
         }
 
         val models = listOf(
@@ -111,8 +146,8 @@ object MorningBriefingContext {
         val results = models.mapNotNull { (modelId, label) ->
             runCatching {
                 // Open-Meteo coordinates are rounded to four decimals to avoid unnecessary precision.
-                val lat = String.format(Locale.US, "%.4f", location.latitude)
-                val lon = String.format(Locale.US, "%.4f", location.longitude)
+                val lat = String.format(Locale.US, "%.4f", coordinates.first)
+                val lon = String.format(Locale.US, "%.4f", coordinates.second)
                 val url = URL(
                     "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&models=$modelId" +
                         "&current=temperature_2m,apparent_temperature,precipitation,wind_speed_10m" +
@@ -159,7 +194,7 @@ object MorningBriefingContext {
             "Only one model is available; the result has not been cross-checked."
         }
         val checkedAt = java.time.ZonedDateTime.now().format(java.time.format.DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-        return "Open-Meteo, comparison of ${results.size} models ($sources), checked at $checkedAt; current average temperature ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
+        return "Weather for $placeLabel. Open-Meteo, comparison of ${results.size} models ($sources), checked at $checkedAt; current average temperature ${String.format(locale, "%.1f", average { it.temperature })}°C; " +
             "average feels-like temperature ${String.format(locale, "%.1f", average { it.feelsLike })}°C; average wind ${String.format(locale, "%.0f", average { it.wind })} km/h; " +
             "average low ${String.format(locale, "%.1f", average { it.minimum })}°C, average high ${String.format(locale, "%.1f", average { it.maximum })}°C; " +
             "average precipitation probability ${String.format(locale, "%.0f", average { it.rainChance })}%. $confidenceNote"
