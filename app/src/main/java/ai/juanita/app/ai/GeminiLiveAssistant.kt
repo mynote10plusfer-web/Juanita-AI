@@ -113,7 +113,7 @@ class GeminiLiveAssistant {
         onDiagnosticEvent: (event: String, detail: String) -> Unit = { _, _ -> },
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
-        onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
+        onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." },
         onWeatherRequest: (String) -> String = { "Weather service unavailable in this session." }
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
