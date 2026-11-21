@@ -93,6 +93,9 @@ class JuanitaVoiceService : Service() {
     private var wakeWordRequested = false
     private var wakeDetector: SherpaOfflineWakeWordDetector? = null
     private var wakeSetupJob: Job? = null
+    /** Bounded recovery for transient offline recognizer/audio failures. */
+    private var wakeRecoveryJob: Job? = null
+    private var wakeRecoveryAttempt = 0
     /** Last user-selected Live configuration, reused only after an explicit wake hit. */
     private var wakeStartIntent: Intent? = null
     /** Main-thread-confined lifecycle gate: one session can own audio resources at a time. */
@@ -283,6 +286,9 @@ class JuanitaVoiceService : Service() {
                 _wakeWordEnabled.value = false
                 _wakeWordStatus.value = "Ascolto automatico disattivato"
                 wakeSetupJob?.cancel()
+                wakeRecoveryJob?.cancel()
+                wakeRecoveryJob = null
+                wakeRecoveryAttempt = 0
                 if (lifecycleState == VoiceLifecycleState.IDLE && stopJob?.isActive != true) {
                     serviceScope.launch {
                         stopWakeDetector()
@@ -1264,20 +1270,7 @@ class JuanitaVoiceService : Service() {
                             }
                         },
                         onFailure = { error ->
-                            serviceScope.launch {
-                                val failedDetector = wakeDetector
-                                wakeDetector = null
-                                if (failedDetector != null) {
-                                    withContext(Dispatchers.IO) { failedDetector.close() }
-                                }
-                                wakeWordRequested = false
-                                wakeStartIntent = null
-                                _wakeWordEnabled.value = false
-                                _wakeWordStatus.value = "Ascolto offline sospeso: ${error.localizedMessage ?: error.javaClass.simpleName}"
-                                voiceDiagnostics.event("wake.failure", _wakeWordStatus.value)
-                                stopForeground(STOP_FOREGROUND_REMOVE)
-                                stopSelf()
-                            }
+                            scheduleWakeRecovery(error, source = "detector")
                         }
                     )
                 }
@@ -1287,22 +1280,62 @@ class JuanitaVoiceService : Service() {
                 }
                 wakeDetector = detector
                 withContext(Dispatchers.IO) { detector.start() }
+                wakeRecoveryJob?.cancel()
+                wakeRecoveryJob = null
+                wakeRecoveryAttempt = 0
                 _wakeWordStatus.value = "Ascolto offline attivo · $configuredPhrase"
                 updateNotification(_wakeWordStatus.value)
                 voiceDiagnostics.event("wake.armed", "modelRevision=${WakeWordModelInstaller.MODEL_REVISION}")
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                wakeWordRequested = false
-                wakeStartIntent = null
-                _wakeWordEnabled.value = false
-                _wakeWordStatus.value = "Wake word non disponibile: ${error.localizedMessage ?: error.javaClass.simpleName}"
-                voiceDiagnostics.event("wake.setup.failure", _wakeWordStatus.value)
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
                 Log.e("JuanitaVoiceService", "Unable to arm offline wake-word detector", error)
+                scheduleWakeRecovery(error, source = "setup")
             } finally {
                 wakeSetupJob = null
+            }
+        }
+    }
+
+    /**
+     * Recover from transient offline recognizer/audio failures without silently
+     * opting the user out or retrying forever. The detector is closed before
+     * every retry; after the bounded attempts the foreground notification stays
+     * visible and clearly reports that listening is suspended.
+     */
+    private fun scheduleWakeRecovery(error: Throwable, source: String) {
+        wakeRecoveryJob?.cancel()
+        wakeRecoveryJob = serviceScope.launch {
+            val failedDetector = wakeDetector
+            wakeDetector = null
+            if (failedDetector != null) {
+                runCatching { withContext(Dispatchers.IO) { failedDetector.close() } }
+                    .onFailure { voiceDiagnostics.event("wake.release.failure", it.javaClass.simpleName) }
+            }
+            if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
+
+            val reason = error.localizedMessage?.takeIf { it.isNotBlank() }
+                ?: error.javaClass.simpleName
+            voiceDiagnostics.event("wake.failure", "source=$source; reason=$reason")
+            if (wakeRecoveryAttempt >= WAKE_RECOVERY_DELAYS_MS.size) {
+                _wakeWordEnabled.value = true // still opted in, but not falsely reported as listening
+                _wakeWordStatus.value = "Ascolto offline sospeso dopo ${WAKE_RECOVERY_DELAYS_MS.size} tentativi. Apri Juanita e riattiva l'ascolto. Motivo: $reason"
+                updateNotification(_wakeWordStatus.value)
+                voiceDiagnostics.event("wake.recovery.exhausted", "source=$source")
+                wakeRecoveryJob = null
+                return@launch
+            }
+
+            val attempt = wakeRecoveryAttempt + 1
+            val waitMs = WAKE_RECOVERY_DELAYS_MS[wakeRecoveryAttempt]
+            wakeRecoveryAttempt = attempt
+            _wakeWordStatus.value = "Errore ascolto offline · recupero $attempt/${WAKE_RECOVERY_DELAYS_MS.size} tra ${waitMs / 1000}s"
+            updateNotification(_wakeWordStatus.value)
+            voiceDiagnostics.event("wake.recovery.scheduled", "attempt=$attempt; delayMs=$waitMs")
+            delay(waitMs)
+            if (wakeWordRequested && lifecycleState == VoiceLifecycleState.IDLE) {
+                wakeRecoveryJob = null
+                startWakeDetector()
             }
         }
     }
@@ -1621,6 +1654,8 @@ class JuanitaVoiceService : Service() {
     override fun onDestroy() {
         voiceDiagnostics.event("service.destroyed", "lifecycle=$lifecycleState")
         wakeWordRequested = false
+        wakeRecoveryJob?.cancel()
+        wakeRecoveryJob = null
         _wakeWordEnabled.value = false
         if (screenPowerReceiverRegistered) {
             runCatching { unregisterReceiver(screenPowerReceiver) }
@@ -1684,6 +1719,7 @@ class JuanitaVoiceService : Service() {
         const val EXTRA_IDENTITY_ID = "extra_digital_identity_id"
         private const val CHANNEL_ID = "juanita_voice_session"
         private const val NOTIFICATION_ID = 4101
+        private val WAKE_RECOVERY_DELAYS_MS = longArrayOf(2_000L, 5_000L, 15_000L)
         private const val CPU_WAKELOCK_TIMEOUT_MS = 15 * 60 * 1_000L
         private const val CPU_WAKELOCK_RENEW_INTERVAL_MS = 5 * 60 * 1_000L
 
