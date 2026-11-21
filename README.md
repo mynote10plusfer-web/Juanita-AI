@@ -2,9 +2,17 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current cumulative integration candidate: 0.11.12 (versionCode 51) — PR #58, draft
+## Stable production baseline: 0.11.12 (versionCode 51)
 
-The unified candidate is based on the most advanced 0.11.12 battery/thermal and voice line, then adds identity-group memory isolation, scoped automatic learning, and the offline Sherpa-ONNX wake-word foundation. It retains the existing six-tab layout, encrypted archive and memory system, regional voice/TTS paths, alarms, image search, and battery/thermal safeguards. The wake-word detector is not yet connected to the Live service: model provisioning, explicit opt-in, serialized microphone handoff and physical-device tests remain pending. PR #58 is draft/unmerged; CI and physical Note10+ / S22 Ultra verification are required before an APK is offered. Version 0.11.12 / code 51 is candidate metadata, not a claim of release readiness. Never install a debug APK as an in-place production update.
+Production application ID: `ai.juanita.app`, protected by the permanent signing certificate.
+
+## Current development candidate — PR #58: 0.11.14 (versionCode 53)
+
+The cumulative integration branch is the sole active development line. Its signed Release workflow builds the production package and verifies the permanent certificate, exact application ID and monotonically increasing version before uploading an APK artifact. Debug is used only as an internal CI test target; no debug APK is published for installation.
+
+Current candidate includes identity-aware encrypted memory and archive, native Gemini Live voice, offline wake phrase source integration, reliability/battery safeguards, alarms, vision/image search, and conversational weather. The new route estimate is an experimental base route using public OpenStreetMap/OSRM data: no live traffic, no motorcycle-specific routing and no turn-by-turn navigation. It is not release-accepted until exact-head CI and device tests pass.
+
+Do not uninstall an older `.debug` installation containing personal memory/archive until encrypted export/import or a verified migration is available. Android treats `ai.juanita.app.debug` and `ai.juanita.app` as separate apps with separate private data.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
@@ -26,7 +34,7 @@ This candidate adds opt-in Android notification reading, increments versionCode,
 - Android Keystore-backed AES-256-GCM memory. Full text transcripts from both sides of every Gemini Live conversation are archived automatically by default, locally, in encrypted per-session files; archive survives app/process restarts and is independent of curated personal facts. Raw microphone audio is never archived. Archive can be paused, assigned manual/7/30/90-day retention, and individual conversations can be deleted; manual retention is the default. The app restores the latest 60 archived turns plus curated facts and a grounded autobiographical continuity profile into a new Live session (bounded by the model context budget). A Gemini Live function tool can search older archived sessions on demand and return a small relevant excerpt before answering. Automatic curated personal-memory extraction is enabled by default, separately, and uses a retryable encrypted queue; it now captures meaningful non-sensitive experiences, milestones, relevant people/context and project decisions as well as stable facts. Extraction still requires successful Gemini transcription and a successful model response; inspect the in-app memory status and memory list to verify each step. A local lexical archive-search tool now lets Gemini retrieve relevant older conversations before answering; it ranks phrase/token matches and recency. Vector/embedding-based multilingual semantic search and a dedicated editable biography screen remain future work.
 - CameraX front/rear camera preview and optional 1 FPS image frames to the active Gemini Live session are implemented in 0.9.0; physical-device testing is pending.
 - The Altro tab includes a local capability catalogue and Improvement Lab. User-authored engineering reports are encrypted on-device, can be previewed, exported as ordinary UTF-8 .txt files and deleted. Automatic gap detection is a later phase.
-- GitHub Actions builds a debug APK and a permanently signed release APK.
+- GitHub Actions compiles the debug variant only for CI tests and builds the permanently signed production Release APK; no debug APK artifact is uploaded for installation.
 
 ## AI provider and cost constraints
 
@@ -36,7 +44,7 @@ The user selected Firebase Spark/free tier with Firebase AI Logic and Gemini Dev
 
 The Android app initializes Firebase App Check. Debug builds use the Firebase App Check debug provider; release builds use Play Integrity. The debug provider requires registering its generated debug token in Firebase Console. Release App Check registration and distribution settings must be completed before distributing the signed release build. Do not publish debug tokens, signing credentials or private keys.
 
-For a pre-release conversation test, prefer the debug build and Firebase's documented debug-provider flow. A production Play Integrity registration is still required before distributing the signed release build.
+The debug provider is reserved for internal CI/developer diagnostics only; do not install debug APKs as the ongoing user app. The user-facing candidate is the signed production Release. Play Integrity registration and distribution settings must be verified before wider distribution.
 
 ## Notification reader — deferred
 

@@ -114,7 +114,8 @@ class GeminiLiveAssistant {
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." },
-        onWeatherRequest: (String) -> String = { "Weather service unavailable in this session." }
+        onWeatherRequest: (String) -> String = { "Weather service unavailable in this session." },
+        onRouteRequest: (origin: String, destination: String) -> String = { _, _ -> "Route service unavailable in this session." }
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
         this.onDiagnosticEvent = onDiagnosticEvent
@@ -190,6 +191,12 @@ class GeminiLiveAssistant {
                     You also have getCurrentWeather. Call it for questions about current weather, temperature,
                     rain, wind or conditions at the user's current location. Report only the returned facts;
                     if location or network is unavailable, ask the user for a locality or explain the limitation.
+                    You also have getRouteEstimate. Use it only when the user explicitly asks for a road route or base travel time between named places.
+                    Pass the destination; leave origin blank only when the user explicitly asks to start from their current phone location.
+                    The requested origin/destination coordinates are sent to the public OSRM demo routing service using OpenStreetMap data;
+                    do not call it for unrelated questions or when the user has asked not to share location. This is a best-effort standard car route,
+                    not live-traffic-adjusted, not motorcycle-specific, and not turn-by-turn navigation. Always describe it as a base estimate
+                    and state that live traffic was not checked. If a place is ambiguous, ask the user to clarify instead of guessing.
                     You also have getCurrentDateTime. Call it whenever the user asks for the current
                     date/time or when a time-sensitive answer depends on the present moment. Never
                     rely on a stale session-start timestamp for the current time. Interpret dates in
@@ -270,6 +277,14 @@ class GeminiLiveAssistant {
                             parameters = mapOf("locality" to Schema.string("Optional town/city/region explicitly named by the user. Leave blank to use current phone location."))
                         ),
                         FunctionDeclaration(
+                            name = "getRouteEstimate",
+                            description = "Calculate a best-effort base road route and driving-time estimate from OpenStreetMap data through the public OSRM demo. Use only after an explicit route request. It sends the requested place coordinates to the public routing service. This is not live traffic, not a motorcycle-specific profile, and not turn-by-turn navigation. Leave origin blank only when the user explicitly says to start from current phone location; destination is required. Ask the user to disambiguate places if the result is ambiguous.",
+                            parameters = mapOf(
+                                "origin" to Schema.string("Starting town/place/address explicitly supplied by the user. Leave blank only for an explicitly requested current phone location."),
+                                "destination" to Schema.string("Required destination town/place/address supplied by the user.")
+                            )
+                        ),
+                        FunctionDeclaration(
                             name = "getCurrentDateTime",
                             description = "Return the exact current date, time, UTC offset and time-zone ID from the Android device clock. Use for current-time and time-sensitive questions.",
                             parameters = emptyMap()
@@ -348,7 +363,20 @@ class GeminiLiveAssistant {
         )
         // Prepare reusable callbacks before opening the single active session.
         this.functionCallHandler = { functionCall ->
-                if (functionCall.name == "getCurrentWeather") {
+                if (functionCall.name == "getRouteEstimate") {
+                    val result = runCatching {
+                        runBlocking(Dispatchers.IO) {
+                            val origin = functionCall.args["origin"]?.jsonPrimitive?.content.orEmpty().trim().take(160)
+                            val destination = functionCall.args["destination"]?.jsonPrimitive?.content.orEmpty().trim().take(160)
+                            onRouteRequest(origin, destination)
+                        }
+                    }.getOrElse { "Route lookup failed: ${it.javaClass.simpleName}" }
+                    FunctionResponsePart(
+                        functionCall.name,
+                        JsonObject(mapOf("route_estimate" to JsonPrimitive(result.take(5000)))),
+                        functionCall.id
+                    )
+                } else if (functionCall.name == "getCurrentWeather") {
                     val result = runCatching {
                         runBlocking(Dispatchers.IO) {
                             val locality = functionCall.args["locality"]?.jsonPrimitive?.content.orEmpty().trim().take(120)

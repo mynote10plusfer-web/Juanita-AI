@@ -2,6 +2,16 @@
 
 **Documento operativo corrente per PR #58.** Questa sezione prevale sulle sequenze e sugli stati storici riportati più avanti. Le voci datate successive sono cronologia, non istruzioni che possono sovrascrivere questa baseline.
 
+## Stato operativo verificato — 2026-11-21
+- Corsia unica: PR #58, `integration/unified-rollup-2026-11-18`, draft/open/unmerged. Nessun merge o release pubblica senza approvazione esplicita.
+- Candidate production: `ai.juanita.app`, `0.11.14`, `versionCode 53`, firma permanente già esistente. La Release deve verificare package, certificate SHA-256 e versione prima di caricare l'artefatto.
+- Non distribuire APK debug/QA. La variante debug può essere compilata internamente per i test, ma non viene caricata come artefatto installabile; il workflow QA firmato con suffisso `.debug` è stato rimosso dalla corsia PR.
+- `getCurrentWeather` è collegata nel sorgente Live; collaudo fisico ancora pendente.
+- `getRouteEstimate` è il primo slice del routing globale: geocoding Open-Meteo + OSRM/OpenStreetMap per distanza e tempo base. Non fornisce traffico live, percorso specifico moto o navigazione turn-by-turn. Endpoint demo best-effort, soltanto on-demand e uso non commerciale a basso volume; il provider deve poter essere sostituito prima di una distribuzione ampia.
+- OpenStreetMap non è una fonte di traffico live. Non dichiarare congestione/ETA traffic-aware senza feed attuale verificato; gli incidenti mensili del Cabildo non sono un feed in tempo reale.
+- Export/import cifrato dell'archivio e memoria per trasferimento da package `.debug` a `ai.juanita.app` non è ancora implementato. Non disinstallare la vecchia app debug finché i dati non sono esportati/migrati e verificati.
+- Restano obbligatori CI esatta, test JVM/strumentali e prove fisiche Note10+ Android 12 e S22 Ultra Android 15 per wake-word, background, handoff microfono, falsi positivi, batteria e termica.
+
 
 ## Informazioni contestuali in tempo reale — Meteo, traffico e percorsi (richiesta utente 2026-11-19)
 
@@ -19,7 +29,7 @@ Questa funzione è un servizio geografico globale, non una funzione locale per T
 
 ### Diagnosi dello stato attuale
 - La posizione del dispositivo è già acquisita solo in foreground con permesso Android e inserita nel contesto iniziale della sessione; questo NON equivale a un servizio meteo o traffico.
-- Nel ramo cumulativo esiste `MorningBriefingContext.readWeather()`, invocato dal briefing della sveglia mattutina. Non risulta collegato come funzione invocabile nelle normali conversazioni Gemini Live: per questo Juanita può non rispondere alle domande meteo generali anche se la posizione è autorizzata.
+- Verifica del sorgente PR #58 (2026-11-21): `getCurrentWeather` è già dichiarata nei function tools Gemini Live, gestita dal callback e collegata da `JuanitaVoiceService` a `MorningBriefingContext.readWeather()`. La funzione è quindi collegata a livello sorgente alle conversazioni Live normali; test esatti CI e prova fisica restano da completare. La precedente nota di mancato collegamento è superata.
 - Il meteo della sveglia usa Open-Meteo e tre centri modello tramite un singolo provider. La posizione è letta dai last-known provider Android; va controllata l'età del fix e va mostrato l'orario di aggiornamento. Non descrivere tre modelli dello stesso provider come tre fonti API indipendenti.
 - Non esiste ancora un motore di percorso/traffico conversazionale integrato né una stima di ETA consapevole del traffico. Le informazioni di posizione da sole non forniscono né percorso né congestione.
 
@@ -38,11 +48,11 @@ Esempio: «Devo andare dalla mia posizione a Los Cristianos. Dimmi se c'è traff
 - Dati di posizione: solo foreground e consenso esplicito; nessun tracciamento continuo o cronologia di spostamenti. Non inviare coordinate precise a servizi non necessari.
 
 ### Sequenza di consegna
-1. Ripristinare e verificare la diagnostica/build attualmente bloccata da errore Kotlin, quindi testare la funzione meteo esistente della sveglia.
-2. Rendere il meteo una funzione conversazionale on-demand di Gemini Live, con test per permesso negato, fix assente/scaduto, rete assente, timeout, provider parziale e modelli discordanti.
-3. Integrare geocoding e routing con tempi base chiaramente etichettati.
-4. Collegare fonti ufficiali/automatizzabili per incidenti e traffico; soltanto dopo aver dimostrato dati live affidabili abilitare ETA corretta per congestione.
-5. Test end-to-end: posizione attuale → Los Cristianos, località manuale, deviazioni/incidenti, traffico assente, meteo lungo il tragitto, rete assente e risposta vocale.
+1. Superare la CI esatta e verificare la Release di produzione firmata `ai.juanita.app`; la variante debug resta soltanto un target interno di test e non viene distribuita come APK installabile.
+2. Collaudare sul telefono `getCurrentWeather` già collegata a Gemini Live: permesso negato, posizione assente/scaduta, rete assente, timeout, provider parziale e modelli discordanti.
+3. Prima implementazione di `getRouteEstimate`: geocoding globale on-demand, percorso stradale base e tempo OSRM chiaramente etichettato; nessun traffico live, nessun profilo moto e nessuna promessa turn-by-turn. La richiesta invia origine/destinazione al provider pubblico solo dopo una richiesta esplicita dell'utente.
+4. Aggiungere adattatori regionali per incidenti/traffico soltanto quando esiste una fonte ufficiale, automatizzabile, con termini e timestamp verificati. I dati mensili di incidenti non sono traffico live; la disponibilità va dichiarata per area.
+5. Test end-to-end: posizione attuale → destinazione, località manuale, ambiguità geocoding, percorso senza traffico, feed locale disponibile/non disponibile, meteo lungo il tragitto, rete assente e risposta vocale.
 
 ### Criteri di accettazione
 - La richiesta meteo ordinaria funziona in una conversazione Live, non soltanto nel briefing della sveglia.
@@ -63,7 +73,7 @@ Esempio: «Devo andare dalla mia posizione a Los Cristianos. Dimmi se c'è traff
 - La modifica del 2026-11-20 è implementata in prima passata in `MorningBriefingContext` e `AlarmRingingActivity`; build, test automatici e prova fisica audio multilingue restano obbligatori prima di dichiararla completata.
 
 ## Invarianti di progetto
-- Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Head iniziale di questa esecuzione: `f4e0df39532444ef94823e9f4a5f75f3430f5fa3`.
+- Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Prima di ogni edit/build rileggere l'HEAD corrente dalla PR; non usare SHA storici come target.
 - PR #58 resta draft/open/unmerged. Nessun merge, release o modifica a `main` senza approvazione esplicita.
 - Release stabile protetta: v0.11.12, versionCode 51, applicationId `ai.juanita.app`; debug ID `ai.juanita.app.debug`. Non cambiare firma, chiavi, package ID, schema cifrato o dati utente.
 - Nessun servizio/API a pagamento, nessun Firebase Blaze, nessun raw audio conservato.
@@ -236,7 +246,7 @@ Revised delivery order:
 The Avatar tab may remain visible as a placeholder/metadata area, but it must not take engineering priority or introduce background CPU/GPU/network load while reliability is being established. This decision supersedes earlier roadmap sequences that placed avatar work before the Organizer/Agenda.
 
 
-Last updated: 2026-11-11 — stable baseline v0.11.12 / versionCode 51. Current development candidate: PR #40, branch feature/shared-memory-single-active-persona. PR #40 is draft/open/unmerged. New microphone shutdown, reconnect serialization and character-switch mitigations have been committed; exact-head CI is pending. Physical Samsung verification and permanent-signature upgrade verification remain pending. Stable v0.11.12 remains untouched. Keep ai.juanita.app, the permanent signing certificate, local data and upgrade path unchanged. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
+Last updated: 2026-11-21 — stable baseline v0.11.12 / versionCode 51; current cumulative candidate PR #58 is draft/open/unmerged, candidate 0.11.14 / versionCode 53. Production package and permanent signing certificate remain unchanged. Exact-head CI, signed Release verification and physical Samsung acceptance are required. Do not install debug APK as the user app or uninstall the old debug installation before encrypted archive/memory export-import is implemented and verified. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
 
 ## 2026-11-11 — character voice preview, obsolete mic test removal and session identity
 

@@ -820,6 +820,13 @@ class JuanitaVoiceService : Service() {
                                         locality
                                     )
                                 },
+                                onRouteRequest = { origin, destination ->
+                                    ai.juanita.app.route.RoadRouteContext.getRouteEstimate(
+                                        applicationContext,
+                                        origin,
+                                        destination
+                                    )
+                                },
                             )
                             if (profilePromptKey != null) {
                                 getSharedPreferences("juanita_profile_guidance", MODE_PRIVATE).edit()

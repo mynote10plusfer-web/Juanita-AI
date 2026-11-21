@@ -10,8 +10,8 @@ val signingStoreFile = providers.environmentVariable("JUANITA_SIGNING_STORE_FILE
 val signingStorePassword = providers.environmentVariable("JUANITA_SIGNING_STORE_PASSWORD").orNull
 val signingKeyAlias = providers.environmentVariable("JUANITA_SIGNING_KEY_ALIAS").orNull
 val signingKeyPassword = providers.environmentVariable("JUANITA_SIGNING_KEY_PASSWORD").orNull
-val testVersionCode = providers.environmentVariable("JUANITA_TEST_VERSION_CODE").orNull?.toIntOrNull() ?: 52
-val testVersionName = providers.environmentVariable("JUANITA_TEST_VERSION_NAME").orNull ?: "0.11.13"
+val configuredVersionCode = providers.environmentVariable("JUANITA_VERSION_CODE").orNull?.toIntOrNull() ?: 53
+val configuredVersionName = providers.environmentVariable("JUANITA_VERSION_NAME").orNull ?: "0.11.14"
 
 android {
     namespace = "ai.juanita.app"
@@ -22,8 +22,8 @@ android {
         minSdk = 26
         targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        versionCode = testVersionCode
-        versionName = testVersionName
+        versionCode = configuredVersionCode
+        versionName = configuredVersionName
     }
 
     signingConfigs {
@@ -48,15 +48,6 @@ android {
             if (!signingStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
         }
 
-        create("qa") {
-            initWith(getByName("release"))
-            // Stable, separately installed test package; signed with the permanent certificate.
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-test"
-            isDebuggable = false
-            isMinifyEnabled = false
-            if (!signingStoreFile.isNullOrBlank()) signingConfig = signingConfigs.getByName("release")
-        }
     }
 
     buildFeatures { compose = true; buildConfig = true }
