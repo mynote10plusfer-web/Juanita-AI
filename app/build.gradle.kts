@@ -10,8 +10,8 @@ val signingStoreFile = providers.environmentVariable("JUANITA_SIGNING_STORE_FILE
 val signingStorePassword = providers.environmentVariable("JUANITA_SIGNING_STORE_PASSWORD").orNull
 val signingKeyAlias = providers.environmentVariable("JUANITA_SIGNING_KEY_ALIAS").orNull
 val signingKeyPassword = providers.environmentVariable("JUANITA_SIGNING_KEY_PASSWORD").orNull
-val configuredVersionCode = providers.environmentVariable("JUANITA_VERSION_CODE").orNull?.toIntOrNull() ?: 53
-val configuredVersionName = providers.environmentVariable("JUANITA_VERSION_NAME").orNull ?: "0.11.14"
+val configuredVersionCode = providers.environmentVariable("JUANITA_VERSION_CODE").orNull?.toIntOrNull() ?: 54
+val configuredVersionName = providers.environmentVariable("JUANITA_VERSION_NAME").orNull ?: "0.11.15"
 
 android {
     namespace = "ai.juanita.app"
