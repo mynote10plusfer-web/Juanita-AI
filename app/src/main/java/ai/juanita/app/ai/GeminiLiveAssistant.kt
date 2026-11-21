@@ -114,6 +114,7 @@ class GeminiLiveAssistant {
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
+        onWeatherRequest: () -> String = { "Weather service unavailable in this session." }
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
         this.onDiagnosticEvent = onDiagnosticEvent
@@ -186,6 +187,9 @@ class GeminiLiveAssistant {
                     when the app sends the completed findings as a follow-up message, base your visual opinion on
                     those findings. If no relevant image is found, say so; never pretend you saw an image.
                     Do not call it for every ordinary question or for sensitive/private-person image searches.
+                    You also have getCurrentWeather. Call it for questions about current weather, temperature,
+                    rain, wind or conditions at the user's current location. Report only the returned facts;
+                    if location or network is unavailable, ask the user for a locality or explain the limitation.
                     You also have getCurrentDateTime. Call it whenever the user asks for the current
                     date/time or when a time-sensitive answer depends on the present moment. Never
                     rely on a stale session-start timestamp for the current time. Interpret dates in
@@ -259,6 +263,11 @@ class GeminiLiveAssistant {
                             parameters = mapOf(
                                 "query" to Schema.string("Specific subject to search for, including make/model/year or place when the user supplied those details.")
                             )
+                        ),
+                        FunctionDeclaration(
+                            name = "getCurrentWeather",
+                            description = "Fetch current weather for the phone's authorized, recent location using the free Open-Meteo service. Call whenever the user asks about current weather, temperature, rain, wind or conditions here. If the location permission or a fresh location is unavailable, report that and ask for a locality; never guess weather.",
+                            parameters = emptyMap()
                         ),
                         FunctionDeclaration(
                             name = "getCurrentDateTime",
@@ -339,7 +348,16 @@ class GeminiLiveAssistant {
         )
         // Prepare reusable callbacks before opening the single active session.
         this.functionCallHandler = { functionCall ->
-                if (functionCall.name == "getCurrentDateTime") {
+                if (functionCall.name == "getCurrentWeather") {
+                    val result = runCatching {
+                        runBlocking(Dispatchers.IO) { onWeatherRequest() }
+                    }.getOrElse { "Weather lookup failed: ${it.javaClass.simpleName}" }
+                    FunctionResponsePart(
+                        functionCall.name,
+                        JsonObject(mapOf("current_weather" to JsonPrimitive(result.take(5000)))),
+                        functionCall.id
+                    )
+                } else if (functionCall.name == "getCurrentDateTime") {
                     val now = ZonedDateTime.now()
                     val value = "Current local date/time: ${now.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)}; zone: ${now.zone.id}; localized: ${now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, HH:mm:ss zzzz", Locale.getDefault()))}"
                     FunctionResponsePart(functionCall.name, JsonObject(mapOf("current_datetime" to JsonPrimitive(value))), functionCall.id)
