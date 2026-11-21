@@ -64,12 +64,14 @@ jobs:
           JUANITA_SIGNING_KEY_PASSWORD: ${{ secrets.JUANITA_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
 
-      - name: Verify APK signature and permanent certificate
+      - name: Verify APK signature, production package and update version
         if: steps.signing.outputs.ready == 'true'
         shell: bash
         run: |
+          set -euo pipefail
           APK="app/build/outputs/apk/release/app-release.apk"
           APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
           "$APKSIGNER" verify --verbose "$APK"
           CERT_SHA256=$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print toupper($2); exit}')
           EXPECTED_CERT_SHA256="9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1"
@@ -80,28 +82,19 @@ jobs:
             exit 1
           fi
           echo "Permanent signing certificate matches the known-good release."
-          BADGING=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")
-          EXPECTED_APPLICATION_ID=$(sed -nE 's/^[[:space:]]*applicationId = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)
-          EXPECTED_VERSION_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' app/build.gradle.kts | head -n1)
-          EXPECTED_VERSION_NAME=$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*/\1/p' app/build.gradle.kts | head -n1)
-          if [[ -z "$EXPECTED_APPLICATION_ID" || -z "$EXPECTED_VERSION_CODE" || -z "$EXPECTED_VERSION_NAME" ]]; then
-            echo "::error::Could not read application ID/version metadata from app/build.gradle.kts."
-            exit 1
-          fi
-          if [[ "$EXPECTED_APPLICATION_ID" != "ai.juanita.app" ]]; then
-            echo "::error::This release workflow must build the production application ID ai.juanita.app."
-            exit 1
-          fi
-          if (( EXPECTED_VERSION_CODE <= 51 )); then
-            echo "::error::Update versionCode must be greater than the current cumulative production baseline (51)."
-            exit 1
-          fi
-          grep -F "package: name='$EXPECTED_APPLICATION_ID' versionCode='$EXPECTED_VERSION_CODE' versionName='$EXPECTED_VERSION_NAME'" <<< "$BADGING" >/dev/null || {
-            echo "::error::APK metadata does not match Gradle configuration."
+          BADGING=$("$AAPT" dump badging "$APK")
+          grep -F "package: name='ai.juanita.app' " <<< "$BADGING" >/dev/null || {
+            echo "::error::APK package must be exactly ai.juanita.app."
             exit 1
           }
-          echo "Application ID and monotonically increasing update version verified: $EXPECTED_APPLICATION_ID / $EXPECTED_VERSION_NAME ($EXPECTED_VERSION_CODE)."
-
+          APK_VERSION_CODE=$(sed -nE "s/.*versionCode='([0-9]+)'.*/\\1/p" <<< "$BADGING" | head -n1)
+          APK_VERSION_NAME=$(sed -nE "s/.*versionName='([^']+)'.*/\\1/p" <<< "$BADGING" | head -n1)
+          if [[ -z "$APK_VERSION_CODE" || -z "$APK_VERSION_NAME" ]] || (( APK_VERSION_CODE <= 51 )); then
+            echo "::error::APK metadata is missing or versionCode is not greater than the current production baseline (51)."
+            echo "Actual package metadata: ${BADGING}"
+            exit 1
+          fi
+          echo "Verified update-compatible production APK: ai.juanita.app versionCode=$APK_VERSION_CODE versionName=$APK_VERSION_NAME."
       - name: Upload signed APK
         if: steps.signing.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
