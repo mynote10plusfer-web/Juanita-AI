@@ -3,14 +3,24 @@ name: Signed Android Release
 on:
   push:
     branches: [ "main", "feature/onboarding-alarm-voice-notifications-preview-0.11.2", "integration/unified-rollup-2026-11-18" ]
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "app/**"
+      - ".github/workflows/release-signed.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: juanita-signed-release-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   release:
     name: Build permanently signed release APK
+    if: github.event_name != 'pull_request' || github.event.pull_request.number == 58
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -30,7 +40,11 @@ jobs:
             echo "All signing secrets are configured."
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Signed release skipped: one or more JUANITA signing secrets are missing. The Android APK workflow still builds a debug APK, but it cannot update an installed release."
+            if [[ "${GITHUB_EVENT_NAME:-}" == "pull_request" && "${GITHUB_EVENT_NUMBER:-}" == "58" ]]; then
+              echo "::error::The cumulative production PR requires the permanent signing secrets; refusing to build an unsigned candidate."
+              exit 1
+            fi
+            echo "::warning::Signed release skipped because one or more permanent signing secrets are missing."
           fi
 
       - name: Set up JDK 17
