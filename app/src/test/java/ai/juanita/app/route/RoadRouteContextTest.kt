@@ -58,6 +58,15 @@ class RoadRouteContextTest {
     }
 
     @Test
+    fun routeLocationMustBeFreshAndAccurate() {
+        assertTrue(isRouteLocationAcceptable(30_000L, 100f))
+        assertTrue(isRouteLocationAcceptable(120_000L, 5_000f))
+        assertTrue(!isRouteLocationAcceptable(120_001L, 100f))
+        assertTrue(!isRouteLocationAcceptable(30_000L, 5_001f))
+        assertTrue(!isRouteLocationAcceptable(30_000L, Float.NaN))
+    }
+
+    @Test
     fun distanceAndDurationAreReadableAndRoundedUp() {
         assertEquals("1.5 km", RouteText.formatDistance(1499.0, Locale.US))
         assertEquals("999 m", RouteText.formatDistance(999.0, Locale.US))

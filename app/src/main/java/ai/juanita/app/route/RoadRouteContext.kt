@@ -5,7 +5,11 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
-import android.location.LocationManager
+import com.google.android.gms.location.CurrentLocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.android.gms.tasks.Tasks
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
@@ -17,6 +21,7 @@ import java.text.Normalizer
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
@@ -83,6 +88,9 @@ private fun normalizePlaceText(value: String): String =
         .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
         .trim()
 
+internal fun isRouteLocationAcceptable(ageMillis: Long, accuracyMeters: Float): Boolean =
+    ageMillis in 0L..120_000L && accuracyMeters.isFinite() && accuracyMeters >= 0f && accuracyMeters <= 5_000f
+
 internal object RouteText {
     fun formatDistance(meters: Double, locale: Locale = Locale.getDefault()): String {
         if (!meters.isFinite() || meters < 0.0) return "distance unavailable"
@@ -113,7 +121,6 @@ object RoadRouteContext {
     private const val GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
     private const val OSRM_URL = "https://router.project-osrm.org/route/v1/driving"
     private const val USER_AGENT = "JuanitaAI/0.11.14 (https://github.com/mynote10plusfer-web/Juanita-AI)"
-    private const val LOCATION_MAX_AGE_MS = 30L * 60L * 1000L
     private const val ROUTE_CACHE_TTL_MS = 5L * 60L * 1000L
     private const val GEOCODE_CACHE_TTL_MS = 24L * 60L * 60L * 1000L
 
@@ -144,9 +151,12 @@ object RoadRouteContext {
             String.format(Locale.US, "%.4f,%.4f", start.longitude, start.latitude),
             String.format(Locale.US, "%.4f,%.4f", end.longitude, end.latitude)
         ).joinToString(";")
+        val usesCurrentLocation = isCurrentLocationQuery(originText) || isCurrentLocationQuery(destinationText)
         val now = SystemClock.elapsedRealtime()
-        synchronized(cacheLock) {
-            routeCache[key]?.takeIf { now - it.storedAt < ROUTE_CACHE_TTL_MS }?.let { return it.value }
+        if (!usesCurrentLocation) {
+            synchronized(cacheLock) {
+                routeCache[key]?.takeIf { now - it.storedAt < ROUTE_CACHE_TTL_MS }?.let { return it.value }
+            }
         }
 
         return try {
@@ -167,9 +177,11 @@ object RoadRouteContext {
             val checkedAt = ZonedDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             val roadText = if (roads.isEmpty()) "" else " Main roads: ${roads.joinToString(", ")}."
             val result = "Base road route from ${start.label} to ${end.label}: ${RouteText.formatDistance(distance)}; estimated standard-car driving time ${RouteText.formatDuration(duration)}. This is not adjusted for live traffic, is not motorcycle-specific, and is not turn-by-turn navigation. Traffic was not checked. Checked at $checkedAt. Source: OSRM public demo and OpenStreetMap contributors (ODbL); place lookup: Open-Meteo Geocoding.$roadText"
-            synchronized(cacheLock) {
-                routeCache[key] = RouteCacheEntry(SystemClock.elapsedRealtime(), result)
-                while (routeCache.size > 12) routeCache.remove(routeCache.keys.first())
+            if (!usesCurrentLocation) {
+                synchronized(cacheLock) {
+                    routeCache[key] = RouteCacheEntry(SystemClock.elapsedRealtime(), result)
+                    while (routeCache.size > 12) routeCache.remove(routeCache.keys.first())
+                }
             }
             result
         } catch (_: Exception) {
@@ -248,14 +260,30 @@ object RoadRouteContext {
         val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
         val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (!fine && !coarse) return null
-        val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
-        val location = listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
-            .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-            .maxByOrNull { it.time } ?: return null
-        val age = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
-        if (age > LOCATION_MAX_AGE_MS || !location.latitude.isFinite() || !location.longitude.isFinite()) return null
-        if (location.hasAccuracy() && location.accuracy > 10_000f) return null
-        return location
+        val cancellation = CancellationTokenSource()
+        return try {
+            val request = CurrentLocationRequest.Builder()
+                .setPriority(if (fine) Priority.PRIORITY_HIGH_ACCURACY else Priority.PRIORITY_BALANCED_POWER_ACCURACY)
+                .setMaxUpdateAgeMillis(60_000L)
+                .setDurationMillis(10_000L)
+                .build()
+            val location = Tasks.await(
+                LocationServices.getFusedLocationProviderClient(context).getCurrentLocation(request, cancellation.token),
+                12,
+                TimeUnit.SECONDS
+            ) ?: return null
+            val age = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
+            val accuracy = if (location.hasAccuracy()) location.accuracy else Float.NaN
+            if (location.latitude.isFinite() && location.longitude.isFinite() && isRouteLocationAcceptable(age, accuracy)) {
+                location
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        } finally {
+            cancellation.cancel()
+        }
     }
 
     private fun isCurrentLocationQuery(query: String): Boolean {
