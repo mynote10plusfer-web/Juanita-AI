@@ -803,6 +803,9 @@ class JuanitaVoiceService : Service() {
                                 onAlarmCommand = { name, arguments ->
                                     ai.juanita.app.alarm.AlarmVoiceCommandHandler(applicationContext).execute(name, arguments)
                                 },
+                                onWeatherRequest = {
+                                    ai.juanita.app.alarm.MorningBriefingContext.readWeather(applicationContext, java.util.Locale.getDefault())
+                                },
                             )
                             if (profilePromptKey != null) {
                                 getSharedPreferences("juanita_profile_guidance", MODE_PRIVATE).edit()
