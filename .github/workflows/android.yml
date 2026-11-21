@@ -88,11 +88,13 @@ jobs:
         run: |
           set -euo pipefail
           APK="app/build/outputs/apk/debug/app-debug.apk"
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
-          CERT_SHA256="$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print toupper($2); exit}')"
+          APKSIGNER="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          CERT_OUTPUT="$("$APKSIGNER" verify --print-certs "$APK" 2>&1)"
+          CERT_SHA256="$(awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print toupper($2); exit}' <<< "$CERT_OUTPUT")"
           if [[ -z "$CERT_SHA256" ]]; then
-            echo "::error::Could not read the internal debug APK signer fingerprint."
-            exit 1
+            echo "::warning::Debug signer fingerprint could not be parsed; diagnostic only, not a build blocker."
+            printf '%s\n' "$CERT_OUTPUT"
+            exit 0
           fi
           echo "Internal debug signer SHA-256 (diagnostic only): $CERT_SHA256"
 
