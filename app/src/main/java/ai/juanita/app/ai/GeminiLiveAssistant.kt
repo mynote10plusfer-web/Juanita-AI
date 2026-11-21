@@ -114,7 +114,7 @@ class GeminiLiveAssistant {
         onContinuityContext: suspend (recentTranscript: String) -> String = { it },
         initialPrompt: String = "",
         onAlarmCommand: (name: String, arguments: Map<String, String>) -> String = { _, _ -> "La gestione delle sveglie non è disponibile in questa sessione." }
-        onWeatherRequest: () -> String = { "Weather service unavailable in this session." }
+        onWeatherRequest: (String) -> String = { "Weather service unavailable in this session." }
     ) = recoveryMutex.withLock recoveryLock@ { lifecycleMutex.withLock lifecycleLock@ {
         stopSessionLocked()
         this.onDiagnosticEvent = onDiagnosticEvent
@@ -266,8 +266,8 @@ class GeminiLiveAssistant {
                         ),
                         FunctionDeclaration(
                             name = "getCurrentWeather",
-                            description = "Fetch current weather for the phone's authorized, recent location using the free Open-Meteo service. Call whenever the user asks about current weather, temperature, rain, wind or conditions here. If the location permission or a fresh location is unavailable, report that and ask for a locality; never guess weather.",
-                            parameters = emptyMap()
+                            description = "Fetch current weather using free Open-Meteo. If the user names a locality, pass it; otherwise use the phone's authorized, recent location. If neither is available, ask the user for a locality. Never guess weather.",
+                            parameters = mapOf("locality" to Schema.string("Optional town/city/region explicitly named by the user. Leave blank to use current phone location."))
                         ),
                         FunctionDeclaration(
                             name = "getCurrentDateTime",
@@ -350,7 +350,10 @@ class GeminiLiveAssistant {
         this.functionCallHandler = { functionCall ->
                 if (functionCall.name == "getCurrentWeather") {
                     val result = runCatching {
-                        runBlocking(Dispatchers.IO) { onWeatherRequest() }
+                        runBlocking(Dispatchers.IO) {
+                            val locality = functionCall.args["locality"]?.jsonPrimitive?.content.orEmpty().trim().take(120)
+                            onWeatherRequest(locality)
+                        }
                     }.getOrElse { "Weather lookup failed: ${it.javaClass.simpleName}" }
                     FunctionResponsePart(
                         functionCall.name,
