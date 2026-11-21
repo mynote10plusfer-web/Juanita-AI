@@ -62,14 +62,14 @@ jobs:
         run: |
           set -euo pipefail
           export JUANITA_TEST_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))
-          gradle --no-daemon :app:assembleTestRelease
+          gradle --no-daemon :app:assembleQa
           gradle --no-daemon :app:testDebugUnitTest
 
       - name: Verify package, version and permanent certificate
         shell: bash
         run: |
           set -euo pipefail
-          APK="app/build/outputs/apk/testRelease/app-testRelease.apk"
+          APK="app/build/outputs/apk/qa/app-qa.apk"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n1)"
           "$APKSIGNER" verify --verbose "$APK"
@@ -95,6 +95,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Juanita-AI-signed-test-update
-          path: app/build/outputs/apk/testRelease/app-testRelease.apk
+          path: app/build/outputs/apk/qa/app-qa.apk
           if-no-files-found: error
           retention-days: 30
