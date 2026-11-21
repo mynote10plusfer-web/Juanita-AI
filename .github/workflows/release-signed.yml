@@ -6,7 +6,8 @@ on:
   pull_request:
     branches: [ "main" ]
     paths:
-      - "app/**"
+      - "app/src/main/**"
+      - "app/build.gradle.kts"
       - ".github/workflows/release-signed.yml"
   workflow_dispatch:
 

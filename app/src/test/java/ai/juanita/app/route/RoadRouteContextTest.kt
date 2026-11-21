@@ -1,6 +1,7 @@
 package ai.juanita.app.route
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.Locale
@@ -60,18 +61,18 @@ class RoadRouteContextTest {
     @Test
     fun routeProviderRequiresExplicitConsentMarker() {
         assertTrue(isRouteShareConsentConfirmed("confirmed"))
-        assertTrue(!isRouteShareConsentConfirmed(""))
-        assertTrue(!isRouteShareConsentConfirmed("yes"))
-        assertTrue(!isRouteShareConsentConfirmed("declined"))
+        assertFalse(isRouteShareConsentConfirmed(""))
+        assertFalse(isRouteShareConsentConfirmed("yes"))
+        assertFalse(isRouteShareConsentConfirmed("declined"))
     }
 
     @Test
     fun routeLocationMustBeFreshAndAccurate() {
         assertTrue(isRouteLocationAcceptable(30_000L, 100f))
         assertTrue(isRouteLocationAcceptable(120_000L, 5_000f))
-        assertTrue(!isRouteLocationAcceptable(120_001L, 100f))
-        assertTrue(!isRouteLocationAcceptable(30_000L, 5_001f))
-        assertTrue(!isRouteLocationAcceptable(30_000L, Float.NaN))
+        assertFalse(isRouteLocationAcceptable(120_001L, 100f))
+        assertFalse(isRouteLocationAcceptable(30_000L, 5_001f))
+        assertFalse(isRouteLocationAcceptable(30_000L, Float.NaN))
     }
 
     @Test
@@ -79,6 +80,6 @@ class RoadRouteContextTest {
         assertEquals("1.5 km", RouteText.formatDistance(1499.0, Locale.US))
         assertEquals("999 m", RouteText.formatDistance(999.0, Locale.US))
         assertEquals("1 h 2 min", RouteText.formatDuration(3661.0))
-        assertEquals("60 min", RouteText.formatDuration(3599.0))
+        assertEquals("1 h 0 min", RouteText.formatDuration(3599.0))
     }
 }

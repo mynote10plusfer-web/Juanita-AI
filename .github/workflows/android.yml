@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability", "integration/unified-rollup-2026-11-18" ]
+    branches: [ "main", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c2-cultural-dossiers", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability" ]
   pull_request:
     branches: [ "main", "feature/conversational-reflection", "feature/digital-character-engine-phase-c1", "feature/digital-character-engine-phase-c3-controlled-presence", "feature/shared-memory-single-active-persona", "experiment/regional-tts-a-b-test", "feature/juanita-vision-web-research", "feature/juanita-free-multisource-research", "feature/emotional-expression-battery-efficiency", "feature/memory-recall-reliability" ]
   workflow_dispatch:
@@ -82,6 +82,19 @@ jobs:
             exit 1
           }
           echo "Debug package identity verified: ai.juanita.app.debug"
+
+      - name: Verify debug APK signer fingerprint (diagnostic only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n1)"
+          CERT_SHA256="$("$APKSIGNER" verify --print-certs "$APK" | awk -F': ' '/Signer #1 certificate SHA-256 digest/ {print toupper($2); exit}')"
+          if [[ -z "$CERT_SHA256" ]]; then
+            echo "::error::Could not read the internal debug APK signer fingerprint."
+            exit 1
+          fi
+          echo "Internal debug signer SHA-256 (diagnostic only): $CERT_SHA256"
 
 
   instrumentation:
