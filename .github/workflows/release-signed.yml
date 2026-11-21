@@ -2,7 +2,7 @@ name: Signed Android Release
 
 on:
   push:
-    branches: [ "main", "feature/onboarding-alarm-voice-notifications-preview-0.11.2", "integration/unified-rollup-2026-11-18" ]
+    branches: [ "main", "feature/onboarding-alarm-voice-notifications-preview-0.11.2" ]
   pull_request:
     branches: [ "main" ]
     paths:
