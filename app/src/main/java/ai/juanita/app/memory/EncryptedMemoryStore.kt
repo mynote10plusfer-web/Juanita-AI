@@ -1066,23 +1066,25 @@ class EncryptedMemoryStore(context: Context) {
     /** Search both curated facts and full episodic history for a live conversational cue. */
     @Synchronized
     fun buildRelevantRecallContext(query: String, maxCharacters: Int = 4200, excludeSessionId: String? = null, personaId: String? = null, memoryScopeId: String? = null, activeSessionId: String? = null): String {
-        if (query.isBlank()) return ""
-        val terms = normalizeSearchText(query).split(' ').filter { it.length >= 3 && it !in SEARCH_STOP_WORDS }.distinct()
-        // Vague recall requests may have no useful keywords; recent-session context still applies.
-        val routedTopic = MemoryTopicClassifier.classify(query)
+        // Vague recall requests, including an empty query, must still recover the active session.
+        val recentTurns = activeSessionId?.let { recentActiveSessionTurns(it, personaId) }.orEmpty()
+        val hasSearchQuery = query.isNotBlank()
+        if (!hasSearchQuery && recentTurns.isEmpty()) return ""
+        val routedTopic = if (hasSearchQuery) MemoryTopicClassifier.classify(query) else "recent"
         // Build a conservative, query-scoped association graph. Direct evidence anchors
         // one-hop links to other memories sharing meaningful concepts; no source record
         // is modified and weak single-word coincidences are rejected by the engine.
-        val relevantMemories = MemoryAssociationEngine.rank(
-            query = query,
-            memories = indexedRecallableMemories(personaId, memoryScopeId),
-            routedTopic = routedTopic,
-            limit = 10
-        ).mapNotNull { ranked ->
-            readMemoryRecord(ranked.memory.id)?.let { ranked.copy(memory = it) }
-        }
-        val episodes = searchArchivedTurns(query, 8, excludeSessionId, personaId)
-        val recentTurns = activeSessionId?.let { recentActiveSessionTurns(it, personaId) }.orEmpty()
+        val relevantMemories = if (hasSearchQuery) {
+            MemoryAssociationEngine.rank(
+                query = query,
+                memories = indexedRecallableMemories(personaId, memoryScopeId),
+                routedTopic = routedTopic,
+                limit = 10
+            ).mapNotNull { ranked ->
+                readMemoryRecord(ranked.memory.id)?.let { ranked.copy(memory = it) }
+            }
+        } else emptyList()
+        val episodes = if (hasSearchQuery) searchArchivedTurns(query, 8, excludeSessionId, personaId) else emptyList()
         if (relevantMemories.isEmpty() && episodes.isEmpty() && recentTurns.isEmpty()) return ""
         return buildString {
             appendLine("RECALLED PERSONAL EXPERIENCES — retrieved from the shared encrypted local archive.")
