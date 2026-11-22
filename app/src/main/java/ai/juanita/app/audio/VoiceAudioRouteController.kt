@@ -29,6 +29,7 @@ class VoiceAudioRouteController(context: Context) {
     private var focusRequest: AudioFocusRequest? = null
     private var focusGranted = false
     private var onFocusLost: (() -> Unit)? = null
+    private var onRouteDiagnostic: ((String) -> Unit)? = null
     private var deviceCallbackRegistered = false
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
@@ -43,6 +44,7 @@ class VoiceAudioRouteController(context: Context) {
                     // A short notification/media interruption may request ducking. Keep the
                     // full-duplex Live session alive instead of tearing down its audio route.
                     Log.i(TAG, "Transient duck request received; keeping Live audio session active")
+                onRouteDiagnostic?.invoke("focus_duck=$change; session_kept=true")
                 }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
@@ -58,8 +60,10 @@ class VoiceAudioRouteController(context: Context) {
                         if (audioManager.mode == AudioManager.MODE_IN_COMMUNICATION) {
                             selectCommunicationDevice()
                         }
-                        Log.i(TAG, "Audio route after focus gain: mode=${audioManager.mode}, device=" +
-                            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) audioManager.communicationDevice?.productName else "legacy speakerphone"))
+                        val routeDetail = "focus_gain; mode=${audioManager.mode}; device=" +
+                            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) audioManager.communicationDevice?.productName else "legacy speakerphone")
+                        Log.i(TAG, "Audio route after focus gain: $routeDetail")
+                        onRouteDiagnostic?.invoke(routeDetail)
                     }
                 }
             }
@@ -69,10 +73,12 @@ class VoiceAudioRouteController(context: Context) {
     private val deviceCallback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) {
             selectCommunicationDevice()
+            reportRoute("devices_added")
         }
 
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) {
             selectCommunicationDevice()
+            reportRoute("devices_removed")
         }
     }
 
@@ -84,8 +90,10 @@ class VoiceAudioRouteController(context: Context) {
     fun begin(onAudioFocusLost: () -> Unit): Boolean {
         if (previousMode != null) return focusGranted
         onFocusLost = onAudioFocusLost
+        this.onRouteDiagnostic = onRouteDiagnostic
         if (!requestAudioFocus()) {
             onFocusLost = null
+            onRouteDiagnostic = null
             Log.w(TAG, "Audio focus was denied; refusing to start the Live microphone")
             return false
         }
@@ -122,6 +130,7 @@ class VoiceAudioRouteController(context: Context) {
                 "volumeStream=VOICE_CALL, AEC_available=${runCatching { AcousticEchoCanceler.isAvailable() }.getOrDefault(false)}, " +
                 "NS_available=${runCatching { NoiseSuppressor.isAvailable() }.getOrDefault(false)}. " +
                 "Effect availability does not prove attachment to Firebase's recorder.")
+            reportRoute("begin")
             return true
         } catch (error: Exception) {
             Log.w(TAG, "Could not enter Android communication audio mode", error)
@@ -181,7 +190,24 @@ class VoiceAudioRouteController(context: Context) {
             Log.w(TAG, "Android refused communication output route type=${selected.type}")
         } else {
             Log.i(TAG, "Communication output selected: ${selected.productName}/type=${selected.type}")
+            reportRoute("communication_device_selected")
         }
+    }
+
+    private fun reportRoute(reason: String) {
+        val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            audioManager.communicationDevice?.let { "${it.productName}/type=${it.type}/id=${it.id}" } ?: "none"
+        } else {
+            @Suppress("DEPRECATION")
+            if (audioManager.isSpeakerphoneOn) "legacy-speaker" else "legacy-earpiece"
+        }
+        val outputs = runCatching {
+            audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                .joinToString { "${it.productName}/type=${it.type}" }
+        }.getOrDefault("unavailable")
+        val detail = "reason=$reason; mode=${audioManager.mode}; communicationDevice=$device; outputs=[$outputs]"
+        Log.i(TAG, "Audio route state: $detail")
+        onRouteDiagnostic?.invoke(detail)
     }
 
     @Synchronized
@@ -220,6 +246,7 @@ class VoiceAudioRouteController(context: Context) {
                     .onSuccess { Log.i(TAG, "Voice route ended; restored AudioManager mode=$restoreMode") }
                     .onFailure { Log.w(TAG, "Could not restore previous Android audio mode", it) }
             }
+            reportRoute("end")
         } finally {
             if (focusGranted) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -231,6 +258,7 @@ class VoiceAudioRouteController(context: Context) {
             }
             focusRequest = null
             focusGranted = false
+            onRouteDiagnostic = null
         }
     }
 
