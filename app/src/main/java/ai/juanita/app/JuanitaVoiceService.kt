@@ -751,7 +751,7 @@ class JuanitaVoiceService : Service() {
                                     // Include earlier turns from this same conversation as well
                                     // as older sessions. The bounded continuity snapshot is not
                                     // a substitute for searchable full-session history.
-                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId)
+                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId, activeSessionId = conversationId)
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {
