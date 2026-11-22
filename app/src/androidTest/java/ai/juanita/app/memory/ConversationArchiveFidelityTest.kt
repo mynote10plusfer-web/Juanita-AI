@@ -159,6 +159,38 @@ class ConversationArchiveFidelityTest {
     }
 
     @Test
+    fun liveRecallReturnsRecentActiveSessionTurnsEvenWhenQueryHasNoMatchingKeywords() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "recent-recall-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        try {
+            store.appendContinuityTurn(
+                sessionId,
+                "USER",
+                "Ho appena detto che la riunione è alle diciotto e trenta."
+            )
+            store.appendContinuityTurn(
+                sessionId,
+                "ASSISTANT",
+                "Va bene, terrò presente l'orario delle diciotto e trenta."
+            )
+
+            val recalled = EncryptedMemoryStore(context).buildRelevantRecallContext(
+                query = "te l'ho appena detto",
+                activeSessionId = sessionId
+            )
+
+            assertTrue("Recent user information must be returned without lexical matching",
+                recalled.contains("la riunione è alle diciotto e trenta"))
+            assertTrue("The immediate assistant context should be included as well",
+                recalled.contains("terrò presente l'orario"))
+            assertTrue(recalled.contains("RECENT ACTIVE CONVERSATION"))
+        } finally {
+            store.clearContinuitySnapshot(sessionId)
+        }
+    }
+
+    @Test
     fun continuityWritesDoNotEnumerateOrDecryptIndependentMemoryFiles() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val sessionId = "continuity-isolation-" + UUID.randomUUID()
