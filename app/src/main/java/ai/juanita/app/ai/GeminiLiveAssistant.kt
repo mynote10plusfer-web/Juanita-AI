@@ -489,7 +489,7 @@ class GeminiLiveAssistant {
                         recentRecallJob = recoveryScope.launch(Dispatchers.IO) {
                             // Let the ordered transcript writer persist this utterance first, so the
                             // encrypted snapshot includes the cue and the preceding user/assistant turns.
-                            delay(250L)
+                            delay(100L)
                             val recalled = runCatching { onArchiveSearch(recallCue) }
                                 .getOrElse { "Recent memory retrieval failed: ${it.javaClass.simpleName}" }
                             val active = session
@@ -1158,13 +1158,13 @@ class GeminiLiveAssistant {
                 "appena detto", "minuti fa", "poco fa", "ti ho detto", "cosa ti ho detto",
                 "che cosa ti ho detto", "cosa avevamo deciso", "che cosa avevamo deciso",
                 "di cosa parlavamo", "quello che dicevo", "ricordi cosa", "ricordati cosa",
-                "ti ricordi", "ne abbiamo parlato", "l informazione di prima", "quella cosa di prima",
+                "ti ricordi", "ricordi", "ne abbiamo parlato", "l informazione di prima", "quella cosa di prima",
                 "what did i tell", "i just told you", "i just said", "a few minutes ago",
-                "what did we decide", "what were we talking about", "remember what",
+                "what did we decide", "what were we talking about", "remember what", "remember",
                 "do you remember", "we discussed", "earlier i said",
                 "te lo dije", "te lo acabo de decir", "hace un momento", "hace unos minutos",
                 "que te dije", "qué te dije", "que habiamos decidido", "qué habíamos decidido",
-                "de que hablabamos", "de qué hablábamos", "recuerdas lo que", "te acuerdas"
+                "de que hablabamos", "de qué hablábamos", "recuerdas lo que", "recuerdas", "te acuerdas"
             )
             return cues.any(normalized::contains)
         }
