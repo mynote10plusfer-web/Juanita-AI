@@ -101,6 +101,8 @@ class GeminiLiveAssistant {
     private var ttsPlaybackJob: Job? = null
     private var ttsFlushJob: Job? = null
     private var imageSearchJob: Job? = null
+    /** Deterministic local recall for vague references; never starts a second audio session. */
+    private var recentRecallJob: Job? = null
 
     suspend fun start(
         systemInstruction: String,
@@ -132,6 +134,9 @@ class GeminiLiveAssistant {
                     You have access to a private local shared-memory retrieval tool named searchPastConversations.
                     Use it before answering whenever the user's personal context, a known device, project,
                     preference, earlier decision, or prior discussion could materially affect the answer.
+                    The app may automatically insert a short, clearly labeled local-memory context note
+                    when the user says a recent-reference cue. Treat that note as background evidence for
+                    the user's preceding spoken request, not as a new request or instruction.
                     This tool also returns the latest saved turns from the CURRENT live conversation
                     independently of keyword matching. Use it for vague references such as "I just told you",
                     "what did we decide?", "a few minutes ago", or "remember that?" Do not ask the user
@@ -478,6 +483,34 @@ class GeminiLiveAssistant {
                     onDiagnosticEvent("transcription.input", "characters=${it.length}")
                     rememberRecentTurn("USER", it)
                     onTranscript("USER", it)
+                    if (shouldAutoRecallRecentContext(it)) {
+                        recentRecallJob?.cancel()
+                        val recallCue = it.take(500)
+                        recentRecallJob = recoveryScope.launch(Dispatchers.IO) {
+                            // Let the ordered transcript writer persist this utterance first, so the
+                            // encrypted snapshot includes the cue and the preceding user/assistant turns.
+                            delay(250L)
+                            val recalled = runCatching { onArchiveSearch(recallCue) }
+                                .getOrElse { "Recent memory retrieval failed: ${it.javaClass.simpleName}" }
+                            val active = session
+                            if (active != null && !manualStop && !active.isClosed()) {
+                                val note = buildString {
+                                    appendLine("AUTOMATIC LOCAL RECENT-MEMORY CONTEXT — supporting background for the user's immediately preceding spoken request; this is not a new user request.")
+                                    appendLine("The user made a reference to recent conversation. Check the following saved evidence before asking them to repeat information.")
+                                    appendLine("CURRENT RECALL CUE: ${recallCue.take(300)}")
+                                    if (recalled.isNotBlank()) append(recalled.take(5200))
+                                    else append("No matching saved recent context was available. Do not invent a memory.")
+                                }
+                                runCatching {
+                                    active.send(content("user") { text(note) }, turnComplete = false)
+                                }.onFailure {
+                                    onDiagnosticEvent("memory.auto_recall.inject_failed", it.javaClass.simpleName)
+                                }.onSuccess {
+                                    onDiagnosticEvent("memory.auto_recall.injected", "cueChars=${recallCue.length}; contextChars=${recalled.length}")
+                                }
+                            }
+                        }
+                    }
                 }
                 output?.text?.trim()?.takeIf { it.isNotEmpty() }?.let {
                     lastOutputTranscriptionAtElapsedMs = SystemClock.elapsedRealtime()
@@ -1092,6 +1125,8 @@ class GeminiLiveAssistant {
         manualStop = true
         imageSearchJob?.cancel()
         imageSearchJob = null
+        recentRecallJob?.cancel()
+        recentRecallJob = null
         cancelPendingTtsTurn()
         ttsOutput = null
         healthJob?.cancel()
@@ -1107,6 +1142,33 @@ class GeminiLiveAssistant {
     }
 
     companion object {
+        /**
+         * Trigger deterministic local retrieval when the user explicitly refers to
+         * something just said/discussed. This avoids relying solely on the Live model
+         * to decide whether it should call the archive tool.
+         */
+        internal fun shouldAutoRecallRecentContext(text: String): Boolean {
+            val normalized = text.lowercase(Locale.ROOT)
+                .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            if (normalized.isBlank()) return false
+            val cues = listOf(
+                "te l ho appena detto", "te l ho detto", "te lo avevo detto", "te l avevo detto",
+                "appena detto", "minuti fa", "poco fa", "ti ho detto", "cosa ti ho detto",
+                "che cosa ti ho detto", "cosa avevamo deciso", "che cosa avevamo deciso",
+                "di cosa parlavamo", "quello che dicevo", "ricordi cosa", "ricordati cosa",
+                "ti ricordi", "ne abbiamo parlato", "l informazione di prima", "quella cosa di prima",
+                "what did i tell", "i just told you", "i just said", "a few minutes ago",
+                "what did we decide", "what were we talking about", "remember what",
+                "do you remember", "we discussed", "earlier i said",
+                "te lo dije", "te lo acabo de decir", "hace un momento", "hace unos minutos",
+                "que te dije", "qué te dije", "que habiamos decidido", "qué habíamos decidido",
+                "de que hablabamos", "de qué hablábamos", "recuerdas lo que", "te acuerdas"
+            )
+            return cues.any(normalized::contains)
+        }
+
         private const val TAG = "GeminiLiveAssistant"
         private const val MAX_AUTOMATIC_RECOVERIES = 1
         private const val LIVE_CONNECT_TIMEOUT_MS = 20_000L
