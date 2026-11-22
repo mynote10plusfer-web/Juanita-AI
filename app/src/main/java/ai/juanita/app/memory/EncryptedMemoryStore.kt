@@ -1057,7 +1057,7 @@ class EncryptedMemoryStore(context: Context) {
                     java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT)
                         .format(java.util.Date(timestamp))
                 } else "recent"
-                add("- [$time; $role] ${text.take(650)}")
+                add("- [$time; $role] ${text.take(360)}")
             }
         }
         return values.takeLast(limit.coerceIn(1, 12))
