@@ -1,10 +1,16 @@
 # 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
 
+## Memory reliability slice — 2026-11-22
+- User reprioritized the next milestone to immediate/recent memory recall after hands-on testing: Juanita should not ask the user to repeat facts mentioned minutes earlier.
+- PR #58 code now supplies the latest eight saved turns from the active encrypted continuity snapshot whenever `searchPastConversations` is called, even when the query is vague or has no useful lexical terms. Older memories and archived episodes remain additional retrieval layers, not substitutes for working memory.
+- Added an Android instrumentation regression test for a vague recent-reference query. Exact-head CI is pending; no device result is claimed.
+- Remaining reliability gaps: the model must still invoke the recall tool when the request references prior context; transcript delivery is asynchronous; lexical/paraphrase retrieval for older sessions remains limited; extraction can lag and remains optional/consent-controlled. Next work is to make retrieval invocation/turn delivery dependable, surface retrieval failures distinctly, and expand regression coverage for correction, same-session recall, restart, and missing/corrupt data without changing the encryption schema or deleting user records.
+
 **Documento operativo corrente per PR #58.** Questa sezione prevale sulle sequenze e sugli stati storici riportati più avanti. Le voci datate successive sono cronologia, non istruzioni che possono sovrascrivere questa baseline.
 
 ## Stato operativo verificato — 2026-11-21
 - Corsia unica: PR #58, `integration/unified-rollup-2026-11-18`, draft/open/unmerged. Nessun merge o release pubblica senza approvazione esplicita.
-- Candidate production: `ai.juanita.app`, `0.11.14`, `versionCode 53`, firma permanente già esistente. La Release deve verificare package, certificate SHA-256 e versione prima di caricare l'artefatto.
+- Candidate production: `ai.juanita.app`, `0.11.17`, `versionCode 56`, firma permanente già esistente; latest signed artifact is a candidate only, not a physical-device acceptance. La Release deve verificare package, certificate SHA-256 e versione prima di caricare l'artefatto.
 - Non distribuire APK debug/QA. La variante debug può essere compilata internamente per i test, ma non viene caricata come artefatto installabile; il workflow QA firmato con suffisso `.debug` è stato rimosso dalla corsia PR.
 - `getCurrentWeather` è collegata nel sorgente Live; collaudo fisico ancora pendente.
 - `getRouteEstimate` è il primo slice del routing globale: geocoding Open-Meteo + OSRM/OpenStreetMap per distanza e tempo base. Non fornisce traffico live, percorso specifico moto o navigazione turn-by-turn. L'origine GPS usa una richiesta fused on-demand con fix massimo 2 minuti e accuratezza ≤5 km; i percorsi con GPS non vengono messi in cache. Prima di ogni uso, il modello deve ottenere consenso esplicito all'invio del nome della località a Open-Meteo Geocoding e delle coordinate risolte al servizio pubblico OSRM/OpenStreetMap; un gate nel function handler blocca la chiamata senza il marker `confirmed`. Endpoint demo best-effort, soltanto on-demand e uso non commerciale a basso volume; il provider deve poter essere sostituito prima di una distribuzione ampia.
