@@ -132,6 +132,10 @@ class GeminiLiveAssistant {
                     You have access to a private local shared-memory retrieval tool named searchPastConversations.
                     Use it before answering whenever the user's personal context, a known device, project,
                     preference, earlier decision, or prior discussion could materially affect the answer.
+                    This tool also returns the latest saved turns from the CURRENT live conversation
+                    independently of keyword matching. Use it for vague references such as "I just told you",
+                    "what did we decide?", "a few minutes ago", or "remember that?" Do not ask the user
+                    to repeat recent information before checking this recent-turn section.
                     The local retrieval system first routes the query to a likely subject area (for example
                     vehicles, projects/technology, home, wellbeing, work, relationships, travel or hobbies),
                     then ranks matching durable memories and broad conversation-history matches. Automatically
@@ -258,7 +262,7 @@ class GeminiLiveAssistant {
                     listOf(
                         FunctionDeclaration(
                             name = "searchPastConversations",
-                            description = "Search encrypted memories available to the active character group and that character's private conversation history, by subject first and then broader related topics. Use for relevant user facts, vehicles, projects, preferences, decisions and earlier discussions. Call before answering when prior user context may matter.",
+                            description = "Search encrypted memories available to the active character group and that character's private conversation history. Always include the latest saved turns from the current live session even if they do not match query keywords, then return relevant durable memories and older episodes. Use for relevant user facts, vehicles, projects, preferences, decisions and vague references to recent discussion. Call before answering when prior user context may matter.",
                             parameters = mapOf(
                                 "query" to Schema.string("Concise search terms, names, topics, or a short natural-language question.")
                             )
