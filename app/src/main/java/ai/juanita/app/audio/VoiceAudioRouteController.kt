@@ -34,12 +34,33 @@ class VoiceAudioRouteController(context: Context) {
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 Log.w(TAG, "Voice session lost audio focus: change=$change")
                 onFocusLost?.invoke()
             }
-            AudioManager.AUDIOFOCUS_GAIN -> Log.i(TAG, "Voice session regained audio focus")
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                // A short notification/media interruption may request ducking. Keep the
+                // full-duplex Live session alive instead of tearing down its audio route.
+                Log.i(TAG, "Transient duck request received; keeping Live audio session active")
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                Log.i(TAG, "Voice session regained audio focus")
+                synchronized(this) {
+                    if (previousMode != null) {
+                        // Some vendor audio stacks restore MODE_NORMAL after a transient interruption.
+                        // Re-enter communication mode only when no call/ringtone owns the mode.
+                        if (audioManager.mode == AudioManager.MODE_NORMAL) {
+                            runCatching { audioManager.mode = AudioManager.MODE_IN_COMMUNICATION }
+                                .onFailure { Log.w(TAG, "Could not restore communication mode after focus gain", it) }
+                        }
+                        if (audioManager.mode == AudioManager.MODE_IN_COMMUNICATION) {
+                            selectCommunicationDevice()
+                        }
+                        Log.i(TAG, "Audio route after focus gain: mode=${audioManager.mode}, device=" +
+                            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) audioManager.communicationDevice?.productName else "legacy speakerphone"))
+                    }
+                }
+            }
         }
     }
 
