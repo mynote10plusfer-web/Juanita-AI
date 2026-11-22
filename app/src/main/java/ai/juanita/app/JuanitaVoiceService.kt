@@ -644,12 +644,18 @@ class JuanitaVoiceService : Service() {
                             // The offline detector is the sole mic owner while idle. Release
                             // its AudioRecord and native decoder before Gemini Live opens audio.
                             stopWakeDetector()
-                            val audioFocusGranted = audioRouteController.begin {
-                                requestStop(
-                                    preserveContinuitySnapshot = true,
-                                    finalMessage = "Sessione vocale interrotta: priorità audio passata a un'altra app."
-                                )
-                            }
+                            val audioFocusGranted = audioRouteController.begin(
+                                onAudioFocusLost = {
+                                    voiceDiagnostics.event("audio.focus.lost", "sessionStop=focus_loss")
+                                    requestStop(
+                                        preserveContinuitySnapshot = true,
+                                        finalMessage = "Sessione vocale interrotta: priorità audio passata a un'altra app."
+                                    )
+                                },
+                                onRouteDiagnostic = { detail ->
+                                    voiceDiagnostics.event("audio.route", detail)
+                                }
+                            )
                             voiceDiagnostics.event("audio.focus", "granted=$audioFocusGranted")
             check(audioFocusGranted) {
                                 "Audio occupato da un'altra applicazione: microfono non avviato."
