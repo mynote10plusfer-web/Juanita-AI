@@ -87,7 +87,10 @@ class VoiceAudioRouteController(context: Context) {
      * start microphone capture. Focus loss is reported to the service for orderly shutdown.
      */
     @Synchronized
-    fun begin(onAudioFocusLost: () -> Unit): Boolean {
+    fun begin(
+        onAudioFocusLost: () -> Unit,
+        onRouteDiagnostic: (String) -> Unit = {}
+    ): Boolean {
         if (previousMode != null) return focusGranted
         onFocusLost = onAudioFocusLost
         this.onRouteDiagnostic = onRouteDiagnostic
