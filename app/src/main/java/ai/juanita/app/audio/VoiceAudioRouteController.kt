@@ -34,14 +34,16 @@ class VoiceAudioRouteController(context: Context) {
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS,
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                Log.w(TAG, "Voice session lost audio focus: change=$change")
-                onFocusLost?.invoke()
-            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // A short notification/media interruption may request ducking. Keep the
-                // full-duplex Live session alive instead of tearing down its audio route.
-                Log.i(TAG, "Transient duck request received; keeping Live audio session active")
+                if (shouldStopVoiceSessionForFocusChange(change)) {
+                    Log.w(TAG, "Voice session lost audio focus: change=$change")
+                    onFocusLost?.invoke()
+                } else {
+                    // A short notification/media interruption may request ducking. Keep the
+                    // full-duplex Live session alive instead of tearing down its audio route.
+                    Log.i(TAG, "Transient duck request received; keeping Live audio session active")
+                }
             }
             AudioManager.AUDIOFOCUS_GAIN -> {
                 Log.i(TAG, "Voice session regained audio focus")
@@ -233,6 +235,9 @@ class VoiceAudioRouteController(context: Context) {
     }
 
     companion object {
+        internal fun shouldStopVoiceSessionForFocusChange(change: Int): Boolean =
+            change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+
         private const val TAG = "JuanitaAudioRoute"
     }
 }
