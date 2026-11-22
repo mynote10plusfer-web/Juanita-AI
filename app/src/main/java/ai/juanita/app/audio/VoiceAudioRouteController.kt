@@ -96,7 +96,7 @@ class VoiceAudioRouteController(context: Context) {
         this.onRouteDiagnostic = onRouteDiagnostic
         if (!requestAudioFocus()) {
             onFocusLost = null
-            onRouteDiagnostic = null
+            this.onRouteDiagnostic = null
             Log.w(TAG, "Audio focus was denied; refusing to start the Live microphone")
             return false
         }
