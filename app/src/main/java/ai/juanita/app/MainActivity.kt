@@ -1304,17 +1304,26 @@ private fun JuanitaApp(
                     wakeLockHeld = cameraServiceBinder?.isCpuWakeLockHeld() ?: false,
                     liveSessionDurationMillis = { cameraServiceBinder?.diagnosticSessionDurationMillis() ?: 0L }
                 )
-                SettingsCard(panel, gold, "DIAGNOSTICA VOCALE") {
+                SettingsCard(panel, gold, "RAPPORTO DIAGNOSTICO COMPLETO") {
                     Text(
-                        "Registra gli eventi tecnici della conversazione per individuare blocchi del microfono, ricezione Gemini e sintesi vocale. Non salva le parole pronunciate, l'audio o le istruzioni private.",
+                        "Crea su richiesta un unico file TXT con versione app, dispositivo, istantanea energia/audio e registro eventi vocali. Nessun monitoraggio aggiuntivo, nessun cloud e nessun contenuto delle conversazioni.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp
                     )
                     Button(
                         onClick = {
                             runCatching {
-                                val diagnosticText = VoiceDiagnosticLog(context).exportText()
+                                val diagnosticText = DiagnosticReportBuilder.build(
+                                    context = context,
+                                    liveState = liveState,
+                                    wakeWordEnabled = wakeWordListeningEnabled,
+                                    wakeWordStatus = wakeWordStatus,
+                                    serviceBound = cameraServiceBinder != null,
+                                    serviceLifecycle = cameraServiceBinder?.diagnosticLifecycleState() ?: "NON COLLEGATO",
+                                    wakeLockHeld = cameraServiceBinder?.isCpuWakeLockHeld() ?: false,
+                                    liveSessionDurationMillis = cameraServiceBinder?.diagnosticSessionDurationMillis() ?: 0L
+                                )
                                 val exportDirectory = File(context.cacheDir, "diagnostics").apply { mkdirs() }
-                                val exportFile = File(exportDirectory, "juanita-voice-diagnostic.txt")
+                                val exportFile = File(exportDirectory, "juanita-diagnostic-report.txt")
                                 exportFile.writeText(diagnosticText)
                                 val uri = FileProvider.getUriForFile(
                                     context,
@@ -1323,19 +1332,19 @@ private fun JuanitaApp(
                                 )
                                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"
-                                    putExtra(Intent.EXTRA_SUBJECT, "Juanita AI - Log diagnostico vocale")
+                                    putExtra(Intent.EXTRA_SUBJECT, "Juanita AI - Rapporto diagnostico completo")
                                     putExtra(Intent.EXTRA_STREAM, uri)
                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                 }
-                                context.startActivity(Intent.createChooser(shareIntent, "Esporta log diagnostico"))
+                                context.startActivity(Intent.createChooser(shareIntent, "Condividi rapporto diagnostico"))
                             }.onFailure {
-                                Toast.makeText(context, "Esportazione log non riuscita: ${it.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, "Esportazione rapporto non riuscita: ${it.javaClass.simpleName}", Toast.LENGTH_LONG).show()
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = gold, contentColor = Color.Black)
                     ) {
-                        Text("Esporta log diagnostico (.txt)")
+                        Text("Genera e condividi rapporto (.txt)")
                     }
                 }
                 if (BuildConfig.DEBUG) AppCheckDebugPanel()
