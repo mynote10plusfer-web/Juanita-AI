@@ -2165,3 +2165,9 @@ Cross-cutting safeguards and acceptance criteria:
 - **Limite importante:** Silero viene eseguito continuamente sulle finestre da 512 campioni; non è ancora dimostrato che il suo costo sia inferiore al KWS che evita. Il prototipo misura il carico complessivo e il rapporto di attività, ma non autorizza a dichiarare un risparmio percentuale.
 - Prossimi gate: CI completa (APK debug, test JVM, compile instrumentation); poi prove su Note10+ Android 12 con entrambe le frasi, test rumore/moto/TV, confronto standby 1/4/8 ore e verifica temperatura/batteria. Solo dopo si valuta un front-end leggero aggiuntivo o l'abilitazione release.
 - Candidate cumulative: `0.11.13`, versionCode `52`; PR #58 resta draft e non viene unita a `main`.
+
+
+## Unified diagnostic TXT report — 2026-11-24
+- Added `DiagnosticReportBuilder` on PR #58 to combine the existing bounded voice event log with app ID/version/build, manufacturer/model, Android release/API, and a one-time snapshot of battery, battery temperature, charging, CPU estimate, RAM, thermal status, active recorders, Gemini Live, wake-word, service, WakeLock and session duration.
+- Replaced the voice-only export action in `Altro` with one Android share-sheet action: `Genera e condividi rapporto (.txt)`. Export is generated only after a user tap; no polling, network, cloud, additional permission or microphone access is introduced.
+- Added JVM regression tests for report sections, version/device metadata and privacy exclusions. CI on the exact updated PR head remains required; no APK or device validation is claimed until it completes.
