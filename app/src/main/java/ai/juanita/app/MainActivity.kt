@@ -1358,7 +1358,7 @@ private fun JuanitaApp(
 
                 SettingsCard(panel, gold, "STATO DEL PROGETTO") {
                     Text(status, color = Color(0xFFB9BBC1), fontSize = 13.sp)
-                    Text("Gemini Live e la wake word offline sono integrati nel candidato cumulativo. Build, test JVM, compilazione dei test strumentali, test strumentali API 31 e verifica del modello/tokenizer sono superati sull'HEAD corrente; restano le prove fisiche su Note10+ e S22 Ultra. La voce regionale cloud separata resta sospesa.",
+                    Text("Gemini Live e la wake word offline sono integrati nel candidato cumulativo. La wake word e il percorso audio richiedono ancora verifica fisica su Note10+ e S22 Ultra (falsi positivi, background, handoff microfono, batteria e termica). Lo stato di build e test può cambiare: verifica la GitHub Actions sull'HEAD esatto della PR #58; questo pannello non certifica una build. La TTS cloud separata resta sospesa.",
                         color = Color(0xFF9A9DA4), fontSize = 12.sp)
                 }
                 Text("Juanita AI • Versione ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
