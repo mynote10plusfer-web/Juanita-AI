@@ -162,6 +162,23 @@ class MemoryAssociationEngineTest {
         assertFalse(result.single().memory.confirmedByUser)
     }
 
+    @Test
+    fun recallsOfflineActivationWhenUserSaysWithoutInternetOrNetwork() {
+        val stored = memory(
+            "Offline wake phrase lets the voice assistant activate without touching the phone",
+            topic = "projects_technology"
+        )
+        val result = MemoryAssociationEngine.rank(
+            query = "Come attivo l'assistente senza rete?",
+            memories = listOf(stored),
+            routedTopic = "projects_technology"
+        )
+
+        assertEquals(1, result.size)
+        assertTrue(result.single().direct)
+        assertTrue(result.single().score >= 15)
+    }
+
     private fun memory(
         text: String,
         topic: String = "general",
