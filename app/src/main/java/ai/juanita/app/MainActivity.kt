@@ -68,7 +68,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import ai.juanita.app.ai.GeminiLiveAssistant
-import ai.juanita.app.diagnostics.VoiceDiagnosticLog
 import androidx.core.content.FileProvider
 import android.widget.Toast
 import java.io.File
