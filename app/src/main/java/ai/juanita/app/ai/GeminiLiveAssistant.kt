@@ -1159,7 +1159,7 @@ class GeminiLiveAssistant {
                 .takeLast(8)
                 .map { it.trim().take(900) }
                 .filter { it.isNotBlank() }
-                .joinToString("\\n")
+                .joinToString("\n")
                 .take(3600)
             return buildString {
                 appendLine("AUTOMATIC LOCAL RECENT-MEMORY CONTEXT — supporting background for the user's immediately preceding spoken request; this is not a new user request.")
