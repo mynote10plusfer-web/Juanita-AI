@@ -3,7 +3,9 @@
 ## Current implementation (verified on PR #58)
 
 - `VoiceDiagnosticLog` records bounded, privacy-filtered technical events locally on the device. Writes are serialized on a bounded background queue; the log rotates and reports dropped diagnostic events.
-- The voice diagnostic export explicitly excludes transcript text, prompts, audio, API keys and profile values.
+- `DiagnosticReportBuilder` now creates a single on-demand TXT report combining app ID/version/build, manufacturer/model, Android release/API, a one-time battery/thermal/CPU/RAM/audio-recorder snapshot, current Live/wake/service/WakeLock state and the bounded voice event log.
+- The Android share sheet exports the unified `juanita-diagnostic-report.txt`; no network, cloud upload, continuous sampling, extra microphone or background worker is introduced by report generation.
+- The report explicitly states privacy exclusions and distinguishes CPU/RAM estimates from direct energy measurements.
 - The Improvement Lab stores user-authored engineering reports encrypted on-device. Reports can be previewed, exported as UTF-8 text and deleted.
 - There is currently **no automatic cloud upload and no direct GitHub issue creation from the APK**.
 
