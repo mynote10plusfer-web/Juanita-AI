@@ -53,6 +53,19 @@ class RecentMemoryRecallCueTest {
     }
 
     @Test
+    fun automaticRecallClearlyReportsWhenBothSourcesAreEmpty() {
+        val note = GeminiLiveAssistant.buildAutomaticRecallContextNote(
+            cue = "Ricordi?",
+            retrievedContext = "",
+            recentLiveTurns = emptyList()
+        )
+
+        assertTrue(note.contains("No matching saved recent context was available"))
+        assertFalse(note.contains("RECENT LIVE TRANSCRIPT"))
+        assertFalse(note.contains("LOCAL ARCHIVE AND MEMORY SEARCH"))
+    }
+
+    @Test
     fun doesNotTriggerForOrdinaryConversation() {
         assertFalse(GeminiLiveAssistant.shouldAutoRecallRecentContext("Che tempo farà domani?"))
         assertFalse(GeminiLiveAssistant.shouldAutoRecallRecentContext("Raccontami una barzelletta"))
