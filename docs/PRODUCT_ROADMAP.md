@@ -6,6 +6,16 @@
 - Added an Android instrumentation regression test for a vague recent-reference query. Exact-head CI is pending; no device result is claimed.
 - Remaining reliability gaps: the model must still invoke the recall tool when the request references prior context; transcript delivery is asynchronous; lexical/paraphrase retrieval for older sessions remains limited; extraction can lag and remains optional/consent-controlled. Next work is to make retrieval invocation/turn delivery dependable, surface retrieval failures distinctly, and expand regression coverage for correction, same-session recall, restart, and missing/corrupt data without changing the encryption schema or deleting user records.
 
+## Memory recall reliability slice — 2026-11-24 (PR #58)
+
+- Starting exact HEAD: `e9a280a3875cfdee4aa2a0d07dc22e6d1e4da464`.
+- Added deterministic multilingual normalization for common “without internet/network” paraphrases so they can match an `offline` memory concept. This is a small lexical bridge, not semantic/neural understanding.
+- Fixed a timing weakness in automatic recent-reference recall: it now snapshots the bounded live transcript in memory immediately when a recall cue is detected and combines it with encrypted archive search results. The archive writer remains asynchronous; recall no longer relies on a 100 ms delay as the only way to recover the just-spoken turns.
+- Added unit regressions for live-turn fallback when archive persistence is late and for bounded combination of live/archive evidence.
+- Commits: `1f6f844` (paraphrase normalization), `e9a280a` (offline recall regression), `9ea2b10` and `56c1843` (timing-safe live context), `165c23e` (tests).
+- Current exact HEAD after this slice: `165c23e2a83fde767aafa93fe28f443125066502`. CI must be checked on this exact head; the signed Release workflow succeeded on the preceding head `e9a280a`, so that artifact is not evidence for the new source.
+- No physical Samsung test is claimed. This slice improves recent recall reliability only; vector/embedding search, contradiction resolution and human-level reasoning remain future work.
+
 **Documento operativo corrente per PR #58.** Questa sezione prevale sulle sequenze e sugli stati storici riportati più avanti. Le voci datate successive sono cronologia, non istruzioni che possono sovrascrivere questa baseline.
 
 ## Stato operativo verificato — 2026-11-21
