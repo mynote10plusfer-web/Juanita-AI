@@ -88,6 +88,13 @@ Esempio: «Devo andare dalla mia posizione a Los Cristianos. Dimmi se c'è traff
 - Test di accettazione: profilo italiano/voce A; spagnolo canario/voce B; ceco/voce C; profilo archiviato o mancante; modalità legacy senza profilo. Verificare voce passata al servizio, lingua del briefing, calendario e data locale, e che una modifica al profilo venga recepita alla successiva sveglia.
 - La modifica del 2026-11-20 è implementata in prima passata in `MorningBriefingContext` e `AlarmRingingActivity`; build, test automatici e prova fisica audio multilingue restano obbligatori prima di dichiararla completata.
 
+## Improvement feedback loop — requirement added 2026-11-24
+
+- The app already has privacy-filtered local voice diagnostics and an encrypted local Improvement Lab. The new design is documented in `docs/DIAGNOSTIC_FEEDBACK_LOOP.md`.
+- Next safe UI slice: preview a sanitized diagnostic bundle and share it only after the user taps Share. This can feed a GitHub issue from the phone without embedding a repository token.
+- Automatic cloud upload is **not enabled**. Evaluate a free-tier anonymous cloud inbox only after checking quota, security rules, retention/deletion and explicit opt-in. Never upload transcript/audio, prompts, personal memory, GPS or stable device identifiers.
+- Diagnostic reports are untrusted evidence. They may inform prioritization, but cannot autonomously edit source, change device settings, merge PRs or publish releases.
+
 ## Invarianti di progetto
 - Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Prima di ogni edit/build rileggere l'HEAD corrente dalla PR; non usare SHA storici come target.
 - PR #58 resta draft/open/unmerged. Nessun merge, release o modifica a `main` senza approvazione esplicita.
