@@ -117,12 +117,23 @@ internal object MemoryAssociationEngine {
             .map { CONCEPT_ALIASES[it] ?: it }
             .toSet()
 
-    private fun normalize(value: String): String =
-        java.text.Normalizer.normalize(value.lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
+    private fun normalize(value: String): String {
+        val normalized = java.text.Normalizer.normalize(
+            value.lowercase(java.util.Locale.ROOT),
+            java.text.Normalizer.Form.NFD
+        )
             .replace(Regex("\\p{Mn}+"), "")
             .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
             .trim()
             .replace(Regex("\\s+"), " ")
+
+        // Normalize common "no connection" paraphrases before token matching.
+        // This keeps retrieval deterministic and avoids broad, unsafe synonym expansion.
+        return normalized.replace(
+            Regex("\\b(senza rete|senza internet|sin conexion|sin internet|sin red|no internet|no network|without internet|without network)\\b"),
+            "offline"
+        )
+    }
 
     private const val MIN_SHARED_TERMS = 2
     private const val DISTINCTIVE_TERM_LENGTH = 8
