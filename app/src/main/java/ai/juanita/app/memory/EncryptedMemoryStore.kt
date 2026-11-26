@@ -837,8 +837,12 @@ class EncryptedMemoryStore(context: Context) {
                 val phraseBonus = if (phrase != null && entry.terms.joinToString(" ").contains(phrase)) 3.0 else 0.0
                 val density = matches.toDouble() / terms.size
                 val ageDays = ((System.currentTimeMillis() - entry.timestampMillis).coerceAtLeast(0L) / MILLIS_PER_DAY).toDouble()
-                val recency = 1.0 / (1.0 + ageDays / 45.0)
-                val score = phraseBonus + density * 4.0 + matches * 0.35 + recency * 0.25
+                // Recent evidence should win close lexical matches: the old 0.25
+                // recency ceiling was too weak against phrase/density bonuses and
+                // made newly archived details lose to older, repeatedly mentioned facts.
+                // A 14-day decay gives fresh turns a meaningful but bounded advantage.
+                val recency = 1.0 / (1.0 + ageDays / 14.0)
+                val score = phraseBonus + density * 4.0 + matches * 0.35 + recency * 2.0
                 Triple(entry, score, matches)
             }
             .sortedWith(compareByDescending<Triple<ArchiveRecallIndexEntry, Double, Int>> { it.second }
