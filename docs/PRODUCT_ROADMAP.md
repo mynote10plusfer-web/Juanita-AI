@@ -2196,3 +2196,8 @@ Cross-cutting safeguards and acceptance criteria:
 - Il tool di richiamo ora affianca ai risultati episodici i campi del profilo personale cifrato confermati dall'utente, così data di nascita, preferenze e dati personali non dipendono esclusivamente dalla ricerca lessicale o dalla coda di estrazione automatica.
 - I dati di nascita (data, ora, luogo) vengono aggiunti al contesto di richiamo soltanto quando la query riguarda nascita/astrologia; la località corrente non viene inclusa come residenza.
 - Da validare con test di richiamo profilo e CI esatta; nessuna modifica allo schema cifrato.
+
+
+## CI trigger — 2026-11-26 18:25 UTC
+- Astrologia e richiamo diretto del profilo sono stati aggiornati sulla PR #58; commit sorgente precedente: 41b17d44ad0dc1ec873b90a1f51be3d7017ca9dc.
+- Questa revisione richiede build/test Android sulla testa aggiornata. Fino al risultato della CI e al collaudo vocale sul dispositivo, lo stato è IMPLEMENTAZIONE IN VERIFICA, non APK pronto.
