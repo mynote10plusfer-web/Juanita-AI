@@ -754,10 +754,28 @@ class JuanitaVoiceService : Service() {
                                     }
                                 },
                                 onArchiveSearch = { query ->
-                                    // Include earlier turns from this same conversation as well
-                                    // as older sessions. The bounded continuity snapshot is not
-                                    // a substitute for searchable full-session history.
-                                    memoryStore.buildRelevantRecallContext(query, personaId = selectedIdentity?.id, memoryScopeId = selectedIdentity?.effectiveMemoryScopeId, activeSessionId = conversationId)
+                                    // Search episodic history and also expose the confirmed, current
+                                    // profile directly. Profile facts must not depend on lexical archive
+                                    // matching or delayed automatic-memory extraction.
+                                    val archive = memoryStore.buildRelevantRecallContext(
+                                        query,
+                                        personaId = selectedIdentity?.id,
+                                        memoryScopeId = selectedIdentity?.effectiveMemoryScopeId,
+                                        activeSessionId = conversationId
+                                    )
+                                    val profile = personalProfileStore.load()
+                                    val queryText = query.lowercase(java.util.Locale.ROOT)
+                                    val includeBirth = listOf("birth", "birthday", "nasc", "oroscop", "horosc", "astrolog", "ascendente", "ascendant", "luna", "moon", "tema natale", "natal chart")
+                                        .any { it in queryText }
+                                    val selected = profile.fields.filterKeys { key ->
+                                        key !in setOf(PersonalProfile.CURRENT_LOCALITY) &&
+                                            (key !in setOf(PersonalProfile.BIRTH_DATE, PersonalProfile.BIRTH_TIME, PersonalProfile.BIRTH_PLACE) || includeBirth)
+                                    }
+                                    val profileContext = if (selected.isEmpty()) "" else selected.entries.joinToString(
+                                        prefix = "\\nProfilo personale salvato (dati confermati dall'utente; non sono inferenze):\\n",
+                                        separator = "\\n"
+                                    ) { (key, field) -> "- $key: ${field.value}" }
+                                    listOf(archive, profileContext).filter { it.isNotBlank() }.joinToString("\\n")
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {

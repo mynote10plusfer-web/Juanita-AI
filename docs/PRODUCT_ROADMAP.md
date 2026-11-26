@@ -2190,3 +2190,9 @@ Cross-cutting safeguards and acceptance criteria:
 - Estesi i campi del profilo personale cifrato con ora e luogo di nascita; schema e file cifrato esistenti restano invariati e i campi aggiuntivi sono compatibili con i profili legacy.
 - Provider gratuiti senza chiave al momento della verifica: FreeHoroscopeAPI per testo giornaliero e CosmyDay per calcolo natale/posizioni; attribuzione richiesta. Disponibilità e schema risposta/geocoding vanno verificati con CI e test dispositivo. Astrologia presentata come interpretazione, non scienza.
 - Test JVM per i confini del segno solare aggiunti; nessun APK pronto dichiarato prima della CI esatta e della prova Live.
+
+
+## 2026-11-26 — Profilo confermato nel richiamo memoria
+- Il tool di richiamo ora affianca ai risultati episodici i campi del profilo personale cifrato confermati dall'utente, così data di nascita, preferenze e dati personali non dipendono esclusivamente dalla ricerca lessicale o dalla coda di estrazione automatica.
+- I dati di nascita (data, ora, luogo) vengono aggiunti al contesto di richiamo soltanto quando la query riguarda nascita/astrologia; la località corrente non viene inclusa come residenza.
+- Da validare con test di richiamo profilo e CI esatta; nessuna modifica allo schema cifrato.
