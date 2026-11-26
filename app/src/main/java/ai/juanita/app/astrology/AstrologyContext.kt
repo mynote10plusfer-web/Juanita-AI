@@ -46,7 +46,7 @@ object AstrologyContext {
 
     private fun fetchNatal(date: LocalDate, time: LocalTime, place: String): String {
         val location = requestJson(LOCATION_BASE + URLEncoder.encode(place, Charsets.UTF_8.name()))
-        val lat = location.optDouble("lat", Double.NaN); val lon = location.optDouble("lon", Double.NaN)
+        val lat = firstNumber(location, "lat", "latitude"); val lon = firstNumber(location, "lon", "lng", "longitude")
         if (!lat.isFinite() || !lon.isFinite()) return "La località di nascita non è stata risolta. Chiedi città e Paese più precisi."
         val payload = JSONObject().apply {
             put("year", date.year); put("month", date.monthValue); put("day", date.dayOfMonth)
@@ -54,6 +54,19 @@ object AstrologyContext {
         }
         val response = requestJson(NATAL_BASE, "POST", payload.toString())
         return "Tema natale per $date alle ${time.format(DateTimeFormatter.ofPattern("HH:mm"))}, località $place. Dati astrologici strutturati (posizioni, Luna, Ascendente, case e aspetti quando restituiti): ${response.toString(2).take(6000)}. Fonte: CosmyDay (cosmyday.com), attribuzione richiesta. L'ora è locale; l'interpretazione astrologica non è una previsione scientifica."
+    }
+
+    private fun firstNumber(json: JSONObject, vararg keys: String): Double {
+        for (key in keys) {
+            val value = json.opt(key)
+            val number = when (value) {
+                is Number -> value.toDouble()
+                is String -> value.toDoubleOrNull()
+                else -> null
+            }
+            if (number != null && number.isFinite()) return number
+        }
+        return Double.NaN
     }
 
     private fun requestJson(url: String, method: String = "GET", body: String? = null): JSONObject {

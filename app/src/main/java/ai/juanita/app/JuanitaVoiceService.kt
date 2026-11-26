@@ -772,10 +772,10 @@ class JuanitaVoiceService : Service() {
                                             (key !in setOf(PersonalProfile.BIRTH_DATE, PersonalProfile.BIRTH_TIME, PersonalProfile.BIRTH_PLACE) || includeBirth)
                                     }
                                     val profileContext = if (selected.isEmpty()) "" else selected.entries.joinToString(
-                                        prefix = "\\nProfilo personale salvato (dati confermati dall'utente; non sono inferenze):\\n",
-                                        separator = "\\n"
+                                        prefix = "\nProfilo personale salvato (dati confermati dall'utente; non sono inferenze):\n",
+                                        separator = "\n"
                                     ) { (key, field) -> "- $key: ${field.value}" }
-                                    listOf(archive, profileContext).filter { it.isNotBlank() }.joinToString("\\n")
+                                    listOf(archive, profileContext).filter { it.isNotBlank() }.joinToString("\n")
                                 },
                                 onContinuityContext = { recentTranscript ->
                                     withContext(Dispatchers.IO) {
