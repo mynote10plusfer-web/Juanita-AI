@@ -206,7 +206,7 @@ class GeminiLiveAssistant {
                     Before the first route lookup in each conversation, explain that the origin/destination place text is sent to Open-Meteo Geocoding and the resolved coordinates are sent to the public OSRM demo (OpenStreetMap); ask explicit consent to both transfers. Do not call until the user explicitly says yes. Set privacyConsent to "confirmed" only after that yes; never assume consent from the route request alone. Do not call if the user declines or asks not to share location. This is a best-effort standard car route,
                     not live-traffic-adjusted, not motorcycle-specific, and not turn-by-turn navigation. Always describe it as a base estimate
                     and state that live traffic was not checked. If a place is ambiguous, ask the user to clarify instead of guessing.
-                    You also have getAstrologyReading. Use it for horoscope, zodiac forecast, natal chart, Ascendant, Moon sign or planetary placements. For daily horoscope, use saved birth_date to determine the tropical Sun sign; ask if unavailable. For natal chart use saved birth_date, birth_time and birth_place. Before sending birth details to the external free astrology provider, explain the transfer and obtain explicit consent; call only after yes with privacyConsent confirmed. If birth time or place is missing, ask for it and do not fabricate Ascendant or houses. Astrology is an interpretive tradition, not scientifically validated prediction. Preserve provider attribution.
+                    You also have getAstrologyReading. Use it for daily/weekly/monthly horoscope, Moon phase, current transits, natal chart, Ascendant, Moon sign or planetary placements. For daily horoscope, use saved birth_date to determine the tropical Sun sign; ask if unavailable. For natal chart use saved birth_date, birth_time and birth_place. Before sending birth details to the external free astrology provider, explain the transfer and obtain explicit consent; call only after yes with privacyConsent confirmed. If birth time or place is missing, ask for it and do not fabricate Ascendant or houses. Astrology is an interpretive tradition, not scientifically validated prediction. Preserve provider attribution.
                     You also have getCurrentDateTime. Call it whenever the user asks for the current
                     date/time or when a time-sensitive answer depends on the present moment. Never
                     rely on a stale session-start timestamp for the current time. Interpret dates in
@@ -306,7 +306,7 @@ class GeminiLiveAssistant {
                             name = "getAstrologyReading",
                             description = "Retrieve the daily horoscope for the user's confirmed Sun sign, or calculate a natal chart with planetary positions, Moon sign, Ascendant, houses and aspects. For natal charts, first explain that birth date, exact birth time and birth locality will be sent to the free CosmyDay astrology API and obtain explicit consent. Never claim Ascendant or houses are exact without a reliable birth time. Daily horoscope only sends the zodiac sign.",
                             parameters = mapOf(
-                                "readingType" to Schema.string("Required: daily or natal."),
+                                "readingType" to Schema.string("Required: daily, weekly, monthly, moon, transit or natal."),
                                 "privacyConsent" to Schema.string("For natal only: exactly confirmed after the user explicitly agrees to transmit birth details to the public astrology provider. Otherwise do not perform the natal lookup.")
                             )
                         ),
@@ -416,7 +416,7 @@ class GeminiLiveAssistant {
                 } else if (functionCall.name == "getAstrologyReading") {
                     val readingType = functionCall.args["readingType"]?.jsonPrimitive?.content.orEmpty().trim().lowercase(Locale.ROOT)
                     val privacyConsent = functionCall.args["privacyConsent"]?.jsonPrimitive?.content.orEmpty().trim().lowercase(Locale.ROOT)
-                    val result = if (readingType !in setOf("daily", "natal")) "Astrology request rejected: readingType must be daily or natal."
+                    val result = if (readingType !in setOf("daily", "weekly", "monthly", "moon", "transit", "natal")) "Astrology request rejected: readingType must be daily or natal."
                     else if (readingType == "natal" && privacyConsent != "confirmed") "No natal chart was requested and no birth details were sent. Explain the birth-data transfer to the public provider and ask explicit consent."
                     else runCatching { runBlocking(Dispatchers.IO) { onAstrologyRequest(readingType, privacyConsent) } }.getOrElse { "Astrology lookup failed: ${it.javaClass.simpleName}" }
                     FunctionResponsePart(functionCall.name, JsonObject(mapOf("astrology_reading" to JsonPrimitive(result.take(7000)))), functionCall.id)

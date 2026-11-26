@@ -14,17 +14,23 @@ import java.util.Locale
 
 /** On-demand astrology data. Daily requests disclose only a zodiac sign; natal requests require explicit consent. */
 object AstrologyContext {
-    private const val DAILY_BASE = "https://freehoroscopeapi.com/api/v1/get-horoscope/daily?sign="
+    private const val HOROSCOPE_BASE = "https://freehoroscopeapi.com/api/v1/get-horoscope/"
+    private const val COSMYDAY_CONTENT = "https://api.cosmyday.com/content/"
     private const val NATAL_BASE = "https://api.cosmyday.com/natal"
     private const val LOCATION_BASE = "https://api.cosmyday.com/search-location?q="
 
     fun getReading(context: Context, readingType: String, privacyConsent: String): String {
         val profile = PersonalProfileStore(context).load()
+        val type = readingType.lowercase(Locale.ROOT)
+        if (type == "moon" || type == "transit") {
+            val data = requestJson(COSMYDAY_CONTENT + type)
+            return "Contenuto astrologico attuale ($type): ${data.toString(2).take(5000)}. Fonte: CosmyDay (cosmyday.com)."
+        }
         val dateText = profile.value(PersonalProfile.BIRTH_DATE)
             ?: return "Nel profilo cifrato non trovo la data di nascita. Chiedi all'utente di comunicarla esplicitamente e salvarla."
         val date = runCatching { LocalDate.parse(dateText) }.getOrElse { return "La data di nascita salvata non è valida nel formato YYYY-MM-DD." }
-        return when (readingType.lowercase(Locale.ROOT)) {
-            "daily" -> fetchDaily(sunSign(date))
+        return when (type) {
+            "daily", "weekly", "monthly" -> fetchHoroscope(type, sunSign(date))
             "natal" -> {
                 if (privacyConsent != "confirmed") return "Tema natale non richiesto: consenso privacy mancante."
                 val timeText = profile.value(PersonalProfile.BIRTH_TIME)
@@ -38,10 +44,12 @@ object AstrologyContext {
         }
     }
 
-    private fun fetchDaily(sign: String): String {
-        val data = requestJson(DAILY_BASE + sign).optJSONObject("data") ?: return "Il provider non ha restituito dati astrologici."
-        val horoscope = data.optString("horoscope").takeIf { it.isNotBlank() } ?: return "Il provider non ha restituito il testo dell'oroscopo."
-        return "Oroscopo giornaliero (${data.optString("date")}), segno solare $sign: $horoscope. Fonte: FreeHoroscopeAPI (freehoroscopeapi.com)."
+    private fun fetchHoroscope(period: String, sign: String): String {
+        val data = requestJson(HOROSCOPE_BASE + period + "?sign=" + sign).optJSONObject("data")
+            ?: return "Il provider non ha restituito dati astrologici."
+        val horoscope = data.optString("horoscope").takeIf { it.isNotBlank() }
+            ?: return "Il provider non ha restituito il testo dell'oroscopo."
+        return "Oroscopo $period (${data.optString("date")}), segno solare $sign: $horoscope. Fonte: FreeHoroscopeAPI (freehoroscopeapi.com)."
     }
 
     private fun fetchNatal(date: LocalDate, time: LocalTime, place: String): String {
