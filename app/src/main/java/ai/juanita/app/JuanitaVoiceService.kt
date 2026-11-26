@@ -665,11 +665,28 @@ class JuanitaVoiceService : Service() {
                             val commandTranscript = VoiceSessionCommandMatcher.TranscriptAccumulator()
                             val spokenCommandHandled = AtomicBoolean(false)
                             voiceDiagnostics.event("assistant.start.call", "audioOutput=native_gemini_live")
+                            // One-turn, in-memory consent gate: model arguments alone are not consent.
+                            val awaitingAstrologyConsent = AtomicBoolean(false)
+                            val astrologyConsentGranted = AtomicBoolean(false)
                             assistant.start(
                                 systemInstruction = sessionInstruction,
                                 voiceName = voice,
                                 onTranscript = { role, text ->
                                     voiceDiagnostics.event("transcript.callback", "role=$role; characters=${text.length}")
+                                    val transcriptText = text.trim().lowercase(java.util.Locale.ROOT)
+                                    if (role.equals("ASSISTANT", ignoreCase = true)) {
+                                        val asksBirthDataConsent =
+                                            (("cosmyday" in transcriptText || "astrology provider" in transcriptText || "servizio astrologico" in transcriptText) &&
+                                                ("dati di nascita" in transcriptText || "birth details" in transcriptText || "datos de nacimiento" in transcriptText)) &&
+                                                ("consent" in transcriptText || "acconsent" in transcriptText || "autorizz" in transcriptText || "¿aceptas" in transcriptText || "do you agree" in transcriptText)
+                                        if (asksBirthDataConsent) {
+                                            astrologyConsentGranted.set(false)
+                                            awaitingAstrologyConsent.set(true)
+                                        }
+                                    } else if (role.equals("USER", ignoreCase = true) && awaitingAstrologyConsent.compareAndSet(true, false)) {
+                                        val affirmative = transcriptText.matches(Regex("^(si|sí|yes|vale|ok|okay|consento|autorizzo|acconsento|de acuerdo|claro)[.!\\s]*$"))
+                                        astrologyConsentGranted.set(affirmative)
+                                    }
                                     if (alarmId != null &&
                                         (role.equals("ASSISTANT", ignoreCase = true) || role.equals("USER", ignoreCase = true))
                                     ) {
@@ -857,7 +874,15 @@ class JuanitaVoiceService : Service() {
                                     )
                                 },
                                 onAstrologyRequest = { readingType, privacyConsent ->
-                                    ai.juanita.app.astrology.AstrologyContext.getReading(applicationContext, readingType, privacyConsent)
+                                    if (readingType == "natal") {
+                                        if (privacyConsent != "confirmed" || !astrologyConsentGranted.compareAndSet(true, false)) {
+                                            "Tema natale non eseguito: non è stato rilevato un consenso esplicito appena dato alla richiesta di invio dei dati di nascita. Spiega la richiesta di consenso e attendi una risposta affermativa."
+                                        } else {
+                                            ai.juanita.app.astrology.AstrologyContext.getReading(applicationContext, readingType, "confirmed")
+                                        }
+                                    } else {
+                                        ai.juanita.app.astrology.AstrologyContext.getReading(applicationContext, readingType, "")
+                                    }
                                 },
                             )
                             if (profilePromptKey != null) {
