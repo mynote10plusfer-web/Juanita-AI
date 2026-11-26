@@ -791,6 +791,11 @@ class JuanitaVoiceService : Service() {
                                         val safeValue = when (key) {
                                             PersonalProfile.PREFERRED_NAME -> value.take(80)
                                             PersonalProfile.BIRTH_DATE -> value
+                                            PersonalProfile.BIRTH_TIME -> {
+                                                require(value.matches(Regex("\\d{2}:\\d{2}")) && value.substring(0, 2).toInt() in 0..23 && value.substring(3, 5).toInt() in 0..59) { "L'ora di nascita deve essere HH:mm." }
+                                                value
+                                            }
+                                            PersonalProfile.BIRTH_PLACE -> value.take(160)
                                             else -> value.take(500)
                                         }
                                         personalProfileStore.updateField(key, safeValue)
@@ -832,6 +837,9 @@ class JuanitaVoiceService : Service() {
                                         origin,
                                         destination
                                     )
+                                },
+                                onAstrologyRequest = { readingType, privacyConsent ->
+                                    ai.juanita.app.astrology.AstrologyContext.getReading(applicationContext, readingType, privacyConsent)
                                 },
                             )
                             if (profilePromptKey != null) {

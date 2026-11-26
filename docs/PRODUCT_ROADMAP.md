@@ -2182,3 +2182,11 @@ Cross-cutting safeguards and acceptance criteria:
 - Added `DiagnosticReportBuilder` on PR #58 to combine the existing bounded voice event log with app ID/version/build, manufacturer/model, Android release/API, and a one-time snapshot of battery, battery temperature, charging, CPU estimate, RAM, thermal status, active recorders, Gemini Live, wake-word, service, WakeLock and session duration.
 - Replaced the voice-only export action in `Altro` with one Android share-sheet action: `Genera e condividi rapporto (.txt)`. Export is generated only after a user tap; no polling, network, cloud, additional permission or microphone access is introduced.
 - Added JVM regression tests for report sections, version/device metadata and privacy exclusions. CI on the exact updated PR head remains required; no APK or device validation is claimed until it completes.
+
+
+## 2026-11-26 — Ripristino astrologia e profilo di nascita
+- La candidata PR #58 non dichiarava né gestiva un tool astrologico Live: il modello non poteva più richiamare un provider tramite l'app.
+- Aggiunto tool dedicato per oroscopo giornaliero e tema natale. Il giornaliero usa il segno solare derivato dalla data già salvata; il tema natale richiede data, ora e luogo esplicitamente salvati e consenso prima di inviare dati al provider.
+- Estesi i campi del profilo personale cifrato con ora e luogo di nascita; schema e file cifrato esistenti restano invariati e i campi aggiuntivi sono compatibili con i profili legacy.
+- Provider gratuiti senza chiave al momento della verifica: FreeHoroscopeAPI per testo giornaliero e CosmyDay per calcolo natale/posizioni; attribuzione richiesta. Disponibilità e schema risposta/geocoding vanno verificati con CI e test dispositivo. Astrologia presentata come interpretazione, non scienza.
+- Test JVM per i confini del segno solare aggiunti; nessun APK pronto dichiarato prima della CI esatta e della prova Live.
