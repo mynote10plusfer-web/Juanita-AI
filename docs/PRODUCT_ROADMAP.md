@@ -1,5 +1,16 @@
 # 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
 
+## Stato operativo e dialogo non ripetitivo — 2026-11-26
+- PR #58 resta l'unica linea cumulativa, draft/open/unmerged. HEAD verificato prima di questa slice: `0fd20f3fd16e005a67b4132a8acc93d084b1b917`; i commit successivi sono registrati nel branch e l'HEAD va sempre riletta dalla PR prima di ogni build o modifica.
+- L'elenco GitHub delle PR recenti conferma #58 aperta; #55–#57 e le precedenti PR di lavoro sono chiuse/non fuse e non vanno riaperte come linee di sviluppo parallele.
+- Richiesta utente: ridurre le formule e i modi di dire ripetuti in conversazione, mantenendo lingua, dialetto e personalità coerenti.
+- Aggiunta in `PersonaProfile.toSystemInstruction` una sezione anti-ripetizione: controllare il contesto recente, evitare aperture/riempitivi/chiusure usati consecutivamente, variare la struttura della risposta anziché ruotare sinonimi, non terminare sempre con una domanda e usare appellativi/umorismo con parsimonia.
+- Aggiunto test JVM in `PersonaProfileTest` per verificare che le istruzioni anti-ripetizione siano presenti. Commit applicativi: `e7e1c305e631fe721c3aff56ea5bbfd6a56921b3`; test: `ca60088e46b99e3a9355c8a6d74ecf4e3fdf33e1`.
+- Questa modifica orienta il modello ma non costituisce un contatore deterministico delle frasi: la naturalezza va valutata in conversazioni reali, confrontando le ultime risposte senza conservare audio o aggiungere log di transcript.
+- La Release firmata per l'HEAD precedente risultava riuscita; la CI Android era ancora in corso. I commit di questa slice richiedono CI esatta aggiornata. Nessun test fisico è stato eseguito da GitHub.
+- Le note storiche con HEAD `165c23e...` o altri SHA precedenti non rappresentano l'HEAD corrente; conservarle come cronologia, non come target di lavoro.
+
+
 ## Memory reliability slice — 2026-11-22
 - User reprioritized the next milestone to immediate/recent memory recall after hands-on testing: Juanita should not ask the user to repeat facts mentioned minutes earlier.
 - PR #58 code now supplies the latest eight saved turns from the active encrypted continuity snapshot whenever `searchPastConversations` is called, even when the query is vague or has no useful lexical terms. Older memories and archived episodes remain additional retrieval layers, not substitutes for working memory.
