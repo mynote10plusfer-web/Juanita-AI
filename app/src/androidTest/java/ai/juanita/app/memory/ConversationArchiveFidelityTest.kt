@@ -370,4 +370,39 @@ class ConversationArchiveFidelityTest {
     }
 
 
+
+    @Test
+    fun retrievalPrefersRecentTurnWhenOlderTurnHasSameKeywords() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "recency-ranking-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val query = "zebraverde progetto ricorrente"
+        val olderText = "zebraverde progetto ricorrente — decisione precedente."
+        val recentText = "zebraverde progetto ricorrente — decisione aggiornata."
+        try {
+            store.appendConversationTurn(
+                sessionId, "USER", olderText,
+                System.currentTimeMillis() - 120L * 24L * 60L * 60L * 1000L
+            )
+            store.appendConversationTurn(
+                sessionId, "USER", recentText,
+                System.currentTimeMillis()
+            )
+
+            val hits = EncryptedMemoryStore(context).searchArchivedTurns(
+                query = query,
+                limit = 2,
+                personaId = null
+            )
+
+            assertEquals(2, hits.size)
+            assertTrue(
+                "Recent matching information should rank ahead of an older turn with identical keywords",
+                hits.first().turn.text.contains("decisione aggiornata")
+            )
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
 }
