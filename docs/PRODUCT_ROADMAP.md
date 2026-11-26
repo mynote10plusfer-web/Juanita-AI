@@ -2201,3 +2201,8 @@ Cross-cutting safeguards and acceptance criteria:
 ## CI trigger — 2026-11-26 18:25 UTC
 - Astrologia e richiamo diretto del profilo sono stati aggiornati sulla PR #58; commit sorgente precedente: 41b17d44ad0dc1ec873b90a1f51be3d7017ca9dc.
 - Questa revisione richiede build/test Android sulla testa aggiornata. Fino al risultato della CI e al collaudo vocale sul dispositivo, lo stato è IMPLEMENTAZIONE IN VERIFICA, non APK pronto.
+
+
+## Consent gate hardening — 2026-11-26
+- Il consenso al tema natale non è accettato soltanto dal parametro del tool: il servizio richiede una risposta affermativa riconosciuta dopo che l'assistente ha esplicitamente menzionato il trasferimento dei dati di nascita al provider. Il consenso è in memoria volatile per la sessione e viene consumato al primo calcolo natale; non viene salvato.
+- Commit sorgente: 0cf0ca2af7eb35d73092a960ff6abb8e52b10c78. La successiva modifica documentale attiva la CI sul contenuto esatto della PR; build, test e firma restano in attesa del risultato.
