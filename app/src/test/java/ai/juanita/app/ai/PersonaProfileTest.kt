@@ -34,6 +34,16 @@ class PersonaProfileTest {
     }
 
     @Test
+    fun personaInstructionAvoidsRepeatedCatchphrasesAndMechanicalClosings() {
+        val instruction = PersonaProfile().toSystemInstruction("Italiano", "Italiano standard")
+
+        assertTrue(instruction.contains("ANTI-REPETITION AND ADAPTIVE WORDING"))
+        assertTrue(instruction.contains("Avoid repeating the same phrase"))
+        assertTrue(instruction.contains("Do not end every response with a question"))
+        assertTrue(instruction.contains("simple, specific language"))
+    }
+
+    @Test
     fun nonPaisaDialectsDoNotReceivePaisaInstructions() {
         val instruction = PersonaProfile().regionalDialectInstruction("Español canario")
 
