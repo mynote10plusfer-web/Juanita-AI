@@ -215,7 +215,14 @@ class GeminiLiveAssistant {
                     third-party private detail or sensitive information. Birth date must be normalized
                     to YYYY-MM-DD and saved only when the user explicitly gives it. Save only fields
                     the user actually stated; do not ask a list of questions to fill the profile.
-                    The user may correct any saved detail later.
+                    IMPORTANT RECENCY RULE: when the user clearly states or corrects a durable personal
+                    detail that fits one of these profile fields, call savePersonalProfile in the same
+                    turn with only that explicitly stated field. Do not wait for an automatic-memory
+                    batch, several more turns, or a later session. A correction replaces the old value.
+                    If a durable detail does not fit the profile schema, do not force it into an
+                    unrelated field; use the local conversation/archive retrieval tools for context
+                    and be transparent if it cannot be found later. Never claim a profile update
+                    succeeded until the tool response confirms it. The user may correct any saved detail later.
 
                     You can manage the user's local alarms with createAlarm, listAlarms, updateAlarm,
                     setAlarmEnabled and deleteAlarm. Use openDeviceAlarms to open the phone's
@@ -300,7 +307,7 @@ class GeminiLiveAssistant {
                         ),
                         FunctionDeclaration(
                             name = "savePersonalProfile",
-                            description = "Save only durable, non-sensitive personal details that the user explicitly stated about themselves in this conversation. Include only fields directly stated by the user; never infer, guess, or fill missing fields. Use ISO YYYY-MM-DD for an explicitly stated birth date.",
+                            description = "Immediately save or correct durable, non-sensitive personal profile details explicitly stated by the user in this conversation; do not defer to a multi-turn automatic-memory batch. Include only directly stated fields, never infer or fill missing fields. Use ISO YYYY-MM-DD for an explicitly stated birth date.",
                             parameters = mapOf(
                                 "preferred_name" to Schema.string("Name the user explicitly said they prefer to be called."),
                                 "birth_date" to Schema.string("Birth date explicitly stated by the user, normalized as YYYY-MM-DD."),
