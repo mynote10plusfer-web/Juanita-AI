@@ -76,7 +76,7 @@ object VoiceTermNormalizer {
         // Motorcycle model names are especially prone to ASR substitutions such as
         // "8S", "otto esse" or "8T". A clear user correction wins over the single
         // final letter, but only when the phrase identifies the GSX model family.
-        val gsxPrefix = Regex("""(?iu)^(.*?\b(?:suzuki\s+)?gsx)\s+(?:8|otto)(?:\s+(?:[a-z]+))?$""")
+        val gsxPrefix = Regex("""(?iu)^(.*?\b(?:suzuki\s+)?gsx)\s+(?:8|otto)(?:\s*[a-z]+)?$""")
             .find(previous)
         if (gsxPrefix != null) {
             val prefix = gsxPrefix.groupValues[1].trimEnd()
