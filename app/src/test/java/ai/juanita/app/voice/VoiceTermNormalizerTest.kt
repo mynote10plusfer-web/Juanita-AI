@@ -26,7 +26,7 @@ class VoiceTermNormalizerTest {
             correctionUtterance = "No, sono due ti"
         )
 
-        assertEquals("Suzuki GSX 8TT", correction?.canonical)
+        assertEquals("Suzuki GSX-8TT", correction?.canonical)
     }
 
     @Test
@@ -66,7 +66,7 @@ class VoiceTermNormalizerTest {
             correctionUtterance = "No, sono due T."
         )
 
-        assertEquals("Suzuki GSX 8TT", correction?.canonical)
+        assertEquals("Suzuki GSX-8TT", correction?.canonical)
     }
 
     @Test
