@@ -71,7 +71,7 @@ object VoiceTermNormalizer {
         } ?: return null
 
         val previous = previousUserUtterance.trim().trimEnd('.', ',', '!', '?', ';', ':')
-        val repeated = "\${letter.uppercaseChar()}\${letter.uppercaseChar()}"
+        val repeated = "${letter.uppercaseChar()}${letter.uppercaseChar()}"
 
         // Motorcycle model names are especially prone to ASR substitutions such as
         // "8S", "otto esse" or "8T". A clear user correction wins over the single
@@ -80,7 +80,7 @@ object VoiceTermNormalizer {
             .find(previous)
         if (gsxPrefix != null) {
             val prefix = gsxPrefix.groupValues[1].trimEnd()
-            return ConfirmedVoiceTermCorrection(previous, "\${prefix}-8\${repeated}")
+            return ConfirmedVoiceTermCorrection(previous, "${prefix}-8${repeated}")
         }
 
         val lastTokenMatch = Regex("""([\p{L}\p{N}]+)$""").find(previous) ?: return null
@@ -92,7 +92,7 @@ object VoiceTermNormalizer {
             spokenLetter != null -> {
                 val numericPrefix = Regex("""(?iu)\botto$""").find(prefix)
                 if (numericPrefix != null) {
-                    prefix.dropLast(4).trimEnd() + " 8\${repeated}"
+                    prefix.dropLast(4).trimEnd() + " 8${repeated}"
                 } else {
                     prefix + (if (prefix.isBlank()) "" else " ") + repeated
                 }
