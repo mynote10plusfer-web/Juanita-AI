@@ -40,6 +40,22 @@ class VoiceTermNormalizerTest {
     }
 
     @Test
+    fun handlesPunctuationAtEndOfPreviouslyRecognizedPhrase() {
+        val correction = VoiceTermNormalizer.extractExplicitDoubleLetterCorrection(
+            previousUserUtterance = "Suzuki GSX 8T.",
+            correctionUtterance = "No, sono due T."
+        )
+
+        assertEquals("Suzuki GSX 8TT", correction?.canonical)
+    }
+
+    @Test
+    fun persistsAndRestoresConfirmedCorrectionsWithoutChangingThem() {
+        val original = ConfirmedVoiceTermCorrection("Suzuki GSX 8T", "Suzuki GSX-8TT")
+        assertEquals(original, ConfirmedVoiceTermCorrection.fromStorageText(original.toStorageText()))
+    }
+
+    @Test
     fun appliesOnlyTheConfirmedPhraseAlias() {
         val correction = ConfirmedVoiceTermCorrection("Suzuki GSX 8T", "Suzuki GSX-8TT")
 
