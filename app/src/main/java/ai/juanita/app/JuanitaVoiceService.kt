@@ -41,6 +41,8 @@ import ai.juanita.app.presence.PresenceDecision
 import ai.juanita.app.diagnostics.VoiceDiagnosticLog
 import ai.juanita.app.vision.JuanitaImageSearch
 import ai.juanita.app.vision.VisualSearchResult
+import ai.juanita.app.voice.ConfirmedVoiceTermCorrection
+import ai.juanita.app.voice.VoiceTermNormalizer
 import java.time.LocalDate
 import java.time.Period
 import java.util.UUID
@@ -542,8 +544,22 @@ class JuanitaVoiceService : Service() {
                                 initialPrompt.isBlank() && alarmId == null && previewDurationMillis == 0L
                             ) nextProfileOpeningPrompt(loadedProfile) else ("" to null)
                             val effectiveInitialPrompt = initialPrompt.ifBlank { profileOpeningPrompt }
+                            val confirmedVoiceCorrections = withContext(Dispatchers.IO) {
+                                memoryStore.listMemories()
+                                    .filter { it.category == "voice_vocabulary" && it.confirmedByUser }
+                                    .mapNotNull { ConfirmedVoiceTermCorrection.fromStorageText(it.text) }
+                                    .take(40)
+                            }
                             val sessionInstruction = buildString {
                                 append(instruction)
+                                if (confirmedVoiceCorrections.isNotEmpty()) {
+                                    append("\n\nUSER-CONFIRMED VOICE VOCABULARY — apply these exact corrections when interpreting speech; do not alter unrelated terms:")
+                                    confirmedVoiceCorrections.forEach { correction ->
+                                        append("\n- Spoken/recognized alias: \"").append(correction.alias)
+                                            .append("\" → confirmed spelling: \"").append(correction.canonical).append("\"")
+                                    }
+                                    append("\nThese mappings were explicitly corrected by the user and are persistent local vocabulary, not guesses.")
+                                }
                                 if (ai.juanita.app.data.AssistantPreferences(applicationContext).astrologyNatalDataConsent) {
                                     append("\n\nPRIVACY ASTROLOGICA — CONSENSO PERMANENTE ATTIVO: l'utente ha abilitato esplicitamente in Settaggi > Privacy astrologica l'invio a CosmyDay dei dati di nascita salvati per il tema natale. Non chiedere nuovamente il consenso per ogni lettura natale; usa i dati già presenti e chiama il tool. Il consenso riguarda soltanto il calcolo del tema natale e può essere revocato dall'utente nelle impostazioni.")
                                 }
@@ -573,6 +589,7 @@ class JuanitaVoiceService : Service() {
                             }
                             transcriptWorker = serviceScope.launch(Dispatchers.IO) {
                                 var userTranscriptCount = 0
+                                var lastUserUtterance: String? = null
                                 var bufferedEvent: Pair<String, String>? = null
                                 while (true) {
                                     val first = bufferedEvent ?: transcriptQueue.receiveCatching().getOrNull() ?: break
@@ -595,6 +612,38 @@ class JuanitaVoiceService : Service() {
                                     }
 
                                     if (combinedText.isBlank()) continue
+                                    if (role.equals("USER", ignoreCase = true)) {
+                                        val correction = VoiceTermNormalizer.extractExplicitDoubleLetterCorrection(
+                                            previousUserUtterance = lastUserUtterance.orEmpty(),
+                                            correctionUtterance = combinedText
+                                        )
+                                        if (correction != null) {
+                                            val storedCorrection = correction.toStorageText()
+                                            val alreadySaved = memoryStore.listMemories().any {
+                                                it.category == "voice_vocabulary" && it.text == storedCorrection && it.confirmedByUser
+                                            }
+                                            if (!alreadySaved) {
+                                                memoryStore.addMemory(
+                                                    text = storedCorrection,
+                                                    category = "voice_vocabulary",
+                                                    source = "explicit_user_voice_correction",
+                                                    confidence = 1f,
+                                                    confirmedByUser = true,
+                                                    sensitive = false,
+                                                    topic = "technology"
+                                                )
+                                            }
+                                            assistant.sendUserCorrectionContext(
+                                                "USER-EXPLICIT VOICE CORRECTION: In the immediately preceding phrase, the user clarified that \"${correction.alias}\" must be understood and written as \"${correction.canonical}\". The correction is confirmed; use this exact form from now on and do not revert to the earlier one-letter transcription."
+                                            )
+                                            voiceDiagnostics.event(
+                                                "voice.correction.learned",
+                                                "kind=explicit_double_letter; aliasChars=${correction.alias.length}; canonicalChars=${correction.canonical.length}; persisted=${!alreadySaved}"
+                                            )
+                                        } else {
+                                            lastUserUtterance = combinedText.take(500)
+                                        }
+                                    }
                                     // Archive errors must never block automatic memory.
                                     try {
                                         memoryStore.appendConversationTurn(conversationId, role, combinedText, personaId = selectedIdentity?.id)
