@@ -22,12 +22,12 @@ data class ConfirmedVoiceTermCorrection(
 object VoiceTermNormalizer {
 
     private val doubleLetterCorrections = listOf(
-        Regex("""(?iu)\\b(?:sono|è|e)\\s+(?:proprio\\s+)?due\\s+([a-z])\\b"""),
-        Regex("""(?iu)\\b(?:doppia|doppio)\\s+([a-z])\\b"""),
-        Regex("""(?iu)\\b(?:there are|it's|it is)\\s+two\\s+([a-z])s?\\b"""),
-        Regex("""(?iu)\\bdouble\\s+([a-z])\\b"""),
-        Regex("""(?iu)\\bson\\s+dos\\s+([a-z])\\b"""),
-        Regex("""(?iu)\\b(?:doble|dos veces la letra)\\s+([a-z])\\b""")
+        Regex("""(?iu)\b(?:sono|è|e)\s+(?:proprio\s+)?due\s+([a-z])\b"""),
+        Regex("""(?iu)\b(?:doppia|doppio)\s+([a-z])\b"""),
+        Regex("""(?iu)\b(?:there are|it's|it is)\s+two\s+([a-z])s?\b"""),
+        Regex("""(?iu)\bdouble\s+([a-z])\b"""),
+        Regex("""(?iu)\bson\s+dos\s+([a-z])\b"""),
+        Regex("""(?iu)\b(?:doble|dos veces la letra)\s+([a-z])\b""")
     )
 
     private val spokenLetters = mapOf(
@@ -37,7 +37,7 @@ object VoiceTermNormalizer {
         "enne" to 'n', "ene" to 'n',
         "elle" to 'l', "ele" to 'l',
         "acca" to 'h', "ache" to 'h',
-        "ics" to 'x', "ics" to 'x'
+        "ics" to 'x'
     )
 
     /**
@@ -50,8 +50,8 @@ object VoiceTermNormalizer {
     ): ConfirmedVoiceTermCorrection? {
         if (previousUserUtterance.isBlank() || correctionUtterance.isBlank()) return null
         val correction = correctionUtterance.lowercase()
-            .replace(Regex("""[^\\p{L}\\p{N}\\s]"""), " ")
-            .replace(Regex("""\\s+"""), " ")
+            .replace(Regex("""[^\p{L}\p{N}\s]"""), " ")
+            .replace(Regex("""\s+"""), " ")
             .trim()
 
         val letter = doubleLetterCorrections.firstNotNullOfOrNull { pattern ->
@@ -59,13 +59,11 @@ object VoiceTermNormalizer {
         } ?: resolveSpokenLetterPhrase(correction) ?: return null
 
         val previous = previousUserUtterance.trim()
-        val lastTokenMatch = Regex("""([\\p{L}\\p{N}]+)$""").find(previous) ?: return null
+        val lastTokenMatch = Regex("""([\p{L}\p{N}]+)$""").find(previous) ?: return null
         val token = lastTokenMatch.groupValues[1]
         if (token.length < 2 || !token.last().equals(letter, ignoreCase = true)) return null
         if (token[token.lastIndex - 1].equals(letter, ignoreCase = true)) return null
 
-        // Require an alphanumeric stem before the final letter: "8T", "A", etc.
-        if (token.dropLast(1).isBlank()) return null
         val canonicalToken = token.dropLast(1) + letter.uppercaseChar() + letter.uppercaseChar()
         val canonical = previous.dropLast(token.length) + canonicalToken
         return ConfirmedVoiceTermCorrection(previous, canonical)
@@ -82,9 +80,8 @@ object VoiceTermNormalizer {
             .distinctBy { it.alias.lowercase() }
             .sortedByDescending { it.alias.length }
             .fold(text) { current, correction ->
-                val escaped = Regex.escape(correction.alias)
                 current.replace(
-                    Regex(escaped, RegexOption.IGNORE_CASE),
+                    Regex(Regex.escape(correction.alias), RegexOption.IGNORE_CASE),
                     correction.canonical
                 )
             }
