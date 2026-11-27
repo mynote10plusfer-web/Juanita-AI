@@ -863,6 +863,9 @@ private fun JuanitaApp(
                 }
 
                 if (selectedSection == "SETTINGS") {
+                var astrologyNatalConsent by remember {
+                    mutableStateOf(AssistantPreferences(context).astrologyNatalDataConsent)
+                }
                 SettingsCard(panel, gold, "PERMESSI E ACCESSI") {
                     fun permissionState(permission: String): String =
                         if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) "Autorizzato" else "Non autorizzato"
@@ -891,6 +894,29 @@ private fun JuanitaApp(
                     ) { Text("Apri impostazioni permessi") }
                     Text("Puoi revocare o modificare gli accessi in qualsiasi momento. Le funzioni facoltative non bloccano il resto dell'app.",
                         color = Color(0xFF9A9DA4), fontSize = 11.sp)
+                }
+                SettingsCard(panel, gold, "PRIVACY ASTROLOGICA") {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Consenti uso permanente dei dati astrologici", color = Color.White, fontSize = 13.sp)
+                            Text(
+                                if (astrologyNatalConsent)
+                                    "Attivo: data, ora e luogo di nascita salvati potranno essere inviati a CosmyDay quando chiedi un tema natale, senza chiederti ogni volta un nuovo consenso."
+                                else
+                                    "Disattivato: prima di inviare data, ora e luogo di nascita a CosmyDay, Juanita dovrà chiederti il consenso per quella richiesta.",
+                                color = Color(0xFF9A9DA4), fontSize = 11.sp
+                            )
+                        }
+                        Switch(checked = astrologyNatalConsent, onCheckedChange = { enabled ->
+                            AssistantPreferences(context).astrologyNatalDataConsent = enabled
+                            astrologyNatalConsent = enabled
+                            status = if (enabled) "Consenso astrologico permanente attivato" else "Consenso astrologico permanente revocato"
+                        })
+                    }
+                    Text(
+                        "Il consenso riguarda soltanto l'invio dei dati di nascita al servizio esterno CosmyDay per il calcolo del tema natale. Non modifica né cancella i dati già salvati nel profilo cifrato. Puoi revocarlo qui in qualsiasi momento; la revoca blocca le nuove richieste.",
+                        color = Color(0xFF9A9DA4), fontSize = 11.sp
+                    )
                 }
                 SettingsCard(panel, gold, "IDENTITÀ E ATTIVAZIONE") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
