@@ -10,7 +10,19 @@ package ai.juanita.app.voice
 data class ConfirmedVoiceTermCorrection(
     val alias: String,
     val canonical: String
-)
+) {
+    fun toStorageText(): String = alias + STORAGE_SEPARATOR + canonical
+
+    companion object {
+        private const val STORAGE_SEPARATOR = "\\u001F"
+
+        fun fromStorageText(value: String): ConfirmedVoiceTermCorrection? {
+            val parts = value.split(STORAGE_SEPARATOR)
+            if (parts.size != 2 || parts.any { it.isBlank() }) return null
+            return ConfirmedVoiceTermCorrection(parts[0], parts[1])
+        }
+    }
+}
 
 /**
  * Small, deterministic text normalizer for user-confirmed voice corrections.
