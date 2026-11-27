@@ -442,7 +442,7 @@ private fun BriefingOptionRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(label, color = Color.White, fontSize = 13.sp)
+            Text(label, color = gold, fontSize = 13.sp)
             Text(description, color = Color(0xFF9A9DA4), fontSize = 10.sp)
         }
         Switch(checked = checked, onCheckedChange = onCheckedChange)
