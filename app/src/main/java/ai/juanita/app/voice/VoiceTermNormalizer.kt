@@ -14,7 +14,7 @@ data class ConfirmedVoiceTermCorrection(
     fun toStorageText(): String = alias + STORAGE_SEPARATOR + canonical
 
     companion object {
-        private const val STORAGE_SEPARATOR = "\\u001F"
+        private const val STORAGE_SEPARATOR = "\u001F"
 
         fun fromStorageText(value: String): ConfirmedVoiceTermCorrection? {
             val parts = value.split(STORAGE_SEPARATOR)
