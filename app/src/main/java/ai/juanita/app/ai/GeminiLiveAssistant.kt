@@ -1066,6 +1066,24 @@ class GeminiLiveAssistant {
         )
     }
 
+    /**
+     * Inject a short, explicit correction supplied by the user into the active Live
+     * session. This is text context only; it does not open another microphone or
+     * complete the current turn.
+     */
+    suspend fun sendUserCorrectionContext(note: String): Boolean {
+        val activeSession = session ?: return false
+        if (manualStop || note.isBlank() || activeSession.isClosed()) return false
+        return runCatching {
+            activeSession.send(
+                content("user") { text(note.take(1600)) },
+                turnComplete = false
+            )
+        }.onFailure {
+            onDiagnosticEvent("voice.correction_context.failed", it.javaClass.simpleName)
+        }.isSuccess
+    }
+
     suspend fun sendVideoFrame(bitmap: Bitmap) {
         val activeSession = session ?: return
         val output = java.io.ByteArrayOutputStream()
