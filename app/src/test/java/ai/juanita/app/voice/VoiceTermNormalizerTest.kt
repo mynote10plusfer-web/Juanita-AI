@@ -16,7 +16,7 @@ class VoiceTermNormalizerTest {
 
         assertNotNull(correction)
         assertEquals("Suzuki GSX 8T", correction?.alias)
-        assertEquals("Suzuki GSX 8TT", correction?.canonical)
+        assertEquals("Suzuki GSX-8TT", correction?.canonical)
     }
 
     @Test
