@@ -544,6 +544,9 @@ class JuanitaVoiceService : Service() {
                             val effectiveInitialPrompt = initialPrompt.ifBlank { profileOpeningPrompt }
                             val sessionInstruction = buildString {
                                 append(instruction)
+                                if (ai.juanita.app.data.AssistantPreferences(applicationContext).astrologyNatalDataConsent) {
+                                    append("\n\nPRIVACY ASTROLOGICA — CONSENSO PERMANENTE ATTIVO: l'utente ha abilitato esplicitamente in Settaggi > Privacy astrologica l'invio a CosmyDay dei dati di nascita salvati per il tema natale. Non chiedere nuovamente il consenso per ogni lettura natale; usa i dati già presenti e chiama il tool. Il consenso riguarda soltanto il calcolo del tema natale e può essere revocato dall'utente nelle impostazioni.")
+                                }
                                 if (profileContext.isNotBlank()) append("\n\n").append(profileContext)
                                 if (localContext.isNotBlank()) append("\n\n").append(localContext)
                                 if (recoveredContinuityContext.isNotBlank()) {
