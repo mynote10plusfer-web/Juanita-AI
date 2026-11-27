@@ -1,5 +1,17 @@
 # 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
 
+## Stato operativo corrente — 2026-11-27 (PR #58)
+
+- Corsia unica: PR #58, branch `integration/unified-rollup-2026-11-18`, draft/open/unmerged. HEAD prima di questa nota: `5b87643304a62f42d2e2a22874bb5b35f576da8b`. Rileggere sempre la testa PR prima di ogni modifica o build.
+- PR #55–#57 e i precedenti rami sperimentali sono chiusi/non fusi; il loro codice valido va mantenuto nella roll-up #58, senza riaprire linee parallele.
+- Release firmata del precedente HEAD `e4e1b0caa6bcf3cc6d5d9031b972308bd3430a64` è riuscita (run `45956829358`). CI Android su quel commit: build debug, test JVM e validazione modello/tokenizer verdi; strumentali API 31 erano ancora in esecuzione. Il codice successivo ha avviato CI esatta nuova; non dichiarare APK pronta finché la CI corrente e il controllo firma/versione non terminano.
+- Ultimi fix: briefing meteo della sveglia usa il Fused Location Provider con priorità bilanciata, richiesta one-shot e fallback lastLocation, senza forzare GPS; wake KWS usa il gate VAD anche in Release, ma risparmio energetico e accuratezza non sono ancora misurati su Note10+ / S22 Ultra.
+- Nuova funzione in validazione: menu configurabile “Cosa vuoi ascoltare al risveglio?” nel tab Sveglia. Default compatibile: meteo e calendario attivi; oroscopo e notizie disattivati. Sezioni salvate localmente in `juanita_alarm`; saluto/data/ora restano sempre attivi. Il contesto cerca solo le sezioni selezionate.
+- Oroscopo: riusa il provider astrologico esistente e la data di nascita salvata per ricavare il segno; invia solo il segno per la lettura giornaliera, senza dati di nascita completi. Notizie: massimo quattro titoli dall'edizione locale/linguistica del feed Google News RSS; feed non ufficiale/non documentato, soggetto a cambiamenti, non viene archiviato e non si leggono articoli completi. Se la fonte fallisce, il briefing continua senza inventare contenuti.
+- Test aggiunti: default e indipendenza delle opzioni (JVM), persistenza delle selezioni (strumentale). La CI esatta di questa slice deve ancora confermare compilazione e test. Non è stato eseguito test fisico.
+- Invarianti: nessun settimo tab, nessun servizio a pagamento, nessun TTS Android o Gemini TTS separato, nessun cambio package/firma/schema cifrato, nessuna cancellazione dati, nessun merge o modifica a main.
+
+
 ## Stato operativo e dialogo non ripetitivo — 2026-11-26
 - PR #58 resta l'unica linea cumulativa, draft/open/unmerged. HEAD verificato prima di questa slice: `0fd20f3fd16e005a67b4132a8acc93d084b1b917`; i commit successivi sono registrati nel branch e l'HEAD va sempre riletta dalla PR prima di ogni build o modifica.
 - L'elenco GitHub delle PR recenti conferma #58 aperta; #55–#57 e le precedenti PR di lavoro sono chiuse/non fuse e non vanno riaperte come linee di sviluppo parallele.
