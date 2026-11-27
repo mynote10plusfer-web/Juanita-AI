@@ -875,8 +875,11 @@ class JuanitaVoiceService : Service() {
                                 },
                                 onAstrologyRequest = { readingType, privacyConsent ->
                                     if (readingType == "natal") {
-                                        if (privacyConsent != "confirmed" || !astrologyConsentGranted.compareAndSet(true, false)) {
-                                            "Tema natale non eseguito: non è stato rilevato un consenso esplicito appena dato alla richiesta di invio dei dati di nascita. Spiega la richiesta di consenso e attendi una risposta affermativa."
+                                        val persistentConsent = ai.juanita.app.data.AssistantPreferences(applicationContext).astrologyNatalDataConsent
+                                        val oneTimeConsent = privacyConsent == "confirmed" &&
+                                            astrologyConsentGranted.compareAndSet(true, false)
+                                        if (!persistentConsent && !oneTimeConsent) {
+                                            "Tema natale non eseguito: manca il consenso all'invio dei dati di nascita. Spiega il trasferimento a CosmyDay e attendi un sì esplicito, oppure invita l'utente ad attivare il consenso permanente in Settaggi > Privacy astrologica."
                                         } else {
                                             ai.juanita.app.astrology.AstrologyContext.getReading(applicationContext, readingType, "confirmed")
                                         }
