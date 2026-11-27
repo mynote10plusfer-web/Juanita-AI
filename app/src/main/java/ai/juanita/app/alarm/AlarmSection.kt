@@ -74,6 +74,7 @@ fun AlarmSection(panel: Color, gold: Color, assistantName: String) {
     var morningVoiceEnabled by remember {
         mutableStateOf(context.getSharedPreferences("juanita_alarm", Context.MODE_PRIVATE).getBoolean("morning_voice_enabled", true))
     }
+    var briefingOptions by remember { mutableStateOf(MorningBriefingOptions.load(context)) }
 
     fun refresh() {
         alarms = store.all().sortedBy { it.schedule.hour * 60 + it.schedule.minute }
@@ -163,6 +164,38 @@ fun AlarmSection(panel: Color, gold: Color, assistantName: String) {
             })
         }
         Text("Il microfono è necessario per parlare con $assistantName. Calendario e posizione sono facoltativi e vengono richiesti separatamente quando servono.",
+            color = Color(0xFF9A9DA4), fontSize = 11.sp)
+
+        Text("COSA VUOI ASCOLTARE AL RISVEGLIO?", color = gold, fontSize = 13.sp)
+        BriefingOptionRow(
+            label = "Meteo",
+            description = "Condizioni e previsione locale",
+            checked = briefingOptions.weather,
+            gold = gold,
+            onCheckedChange = { briefingOptions = briefingOptions.copy(weather = it).also { it.save(context) } }
+        )
+        BriefingOptionRow(
+            label = "Oroscopo",
+            description = "Lettura giornaliera del segno salvato",
+            checked = briefingOptions.horoscope,
+            gold = gold,
+            onCheckedChange = { briefingOptions = briefingOptions.copy(horoscope = it).also { it.save(context) } }
+        )
+        BriefingOptionRow(
+            label = "Notizie",
+            description = "Brevi titoli nell'edizione della lingua configurata",
+            checked = briefingOptions.news,
+            gold = gold,
+            onCheckedChange = { briefingOptions = briefingOptions.copy(news = it).also { it.save(context) } }
+        )
+        BriefingOptionRow(
+            label = "Calendario",
+            description = "Appuntamenti di oggi con l'orario",
+            checked = briefingOptions.calendar,
+            gold = gold,
+            onCheckedChange = { briefingOptions = briefingOptions.copy(calendar = it).also { it.save(context) } }
+        )
+        Text("Il saluto, il giorno e l'ora restano sempre attivi. Se disattivi una voce, Juanita non la cercherà e non la leggerà.",
             color = Color(0xFF9A9DA4), fontSize = 11.sp)
 
         Text("LE TUE SVEGLIE", color = gold, fontSize = 13.sp)
@@ -394,4 +427,24 @@ private fun dayLabel(day: DayOfWeek): String = when (day) {
     DayOfWeek.FRIDAY -> "Ven"
     DayOfWeek.SATURDAY -> "Sab"
     DayOfWeek.SUNDAY -> "Dom"
+}
+
+@Composable
+private fun BriefingOptionRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    gold: Color,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().background(Color(0xFF202329), RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, color = Color.White, fontSize = 13.sp)
+            Text(description, color = Color(0xFF9A9DA4), fontSize = 10.sp)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
 }
