@@ -1,5 +1,44 @@
 # 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
 
+## PRIORITÀ MASSIMA — Memoria affidabile, comprensione e risposte ancorate alle prove (2026-11-27)
+
+Questa priorità precede nuove funzioni accessorie. Non si dichiara “memoria migliorata” sulla base della sola presenza di un archivio cifrato: il criterio è che Juanita recuperi il fatto giusto, capisca la domanda e non inventi dettagli.
+
+### Diagnosi del codice attuale
+- L'archivio cifrato delle conversazioni e la memoria sintetica sono due livelli distinti. L'archivio può conservare turni, ma il recupero delle conversazioni passate usa soprattutto sovrapposizione lessicale, frase e recenza: parafrasi, pronomi, riferimenti indiretti e domande contestuali possono non trovare il passaggio giusto.
+- Il recupero generale dipende in parte dal fatto che Gemini decida di chiamare `searchPastConversations`. Le istruzioni lo raccomandano, ma non costituiscono un vincolo deterministico del runtime.
+- Il richiamo automatico è attivato solo da una lista di cue linguistici; una richiesta formulata in modo diverso può non attivarlo. Anche quando parte, il risultato viene reiniettato come messaggio di contesto e il modello deve ancora interpretarlo correttamente.
+- L'estrazione automatica delle memorie è disattivata per impostazione SAFE. Se l'utente non l'ha attivata esplicitamente, non vengono creati nuovi fatti sintetici dalla coda: la conversazione può essere archiviata, ma non diventa automaticamente una memoria strutturata. Non cambiare questo consenso senza una scelta esplicita dell'utente.
+- L'estrazione attiva, quando consentita, è asincrona e batch-based (3 turni), dipende da una chiamata al modello e applica soglie di confidenza. Può quindi arrivare in ritardo o non produrre alcuna memoria.
+- Il contesto Live contiene istruzioni molto estese e in inglese. Le regole di memoria sono numerose ma non sempre sufficienti a impedire che il modello confonda inferenze, vecchie informazioni e fatti confermati.
+
+### Architettura obiettivo — senza servizi a pagamento
+1. **Memoria di lavoro immediata:** mantenere un contesto ordinato degli ultimi turni completi e delle correzioni, disponibile deterministicamente al runtime; non affidare il ricordo di ciò che è appena stato detto alla sola chiamata di un tool da parte del modello.
+2. **Fatti durevoli strutturati:** distinguere fatti esplicitamente dichiarati, preferenze, decisioni di progetto, eventi e informazioni provvisorie. Conservare fonte, data, identità/persona, livello di conferma e collegamento alla versione precedente. Nessuna promozione silenziosa di una supposizione a fatto.
+3. **Ricerca ibrida:** mantenere il recupero locale lessicale e aggiungere espansione controllata con sinonimi/parafrasi e collegamenti tematici; valutare embeddings locali solo dopo benchmark su Note10+ e S22 Ultra, con modello leggero, offline e consumo misurato. Nessun embedding cloud o servizio a pagamento introdotto implicitamente.
+4. **Comprensione della richiesta:** prima di rispondere, identificare intento, entità, riferimenti (“quello”, “come ti dicevo”), vincoli, periodo temporale e richiesta effettiva. Se il riferimento non è risolvibile con prove disponibili, porre una sola domanda mirata.
+5. **Correzioni e conflitti:** una correzione esplicita dell'utente prevale sul dato precedente; conservare la provenienza e lo storico cifrato. Se due fonti sono in conflitto senza una correzione chiara, non scegliere arbitrariamente.
+6. **Risposte ancorate alle prove:** separare nel contesto interno fatti confermati, estratti storici, dati provvisori e inferenze. Vietato inventare nomi, date, numeri, preferenze, eventi o risultati di strumenti. Se non c'è prova sufficiente, dire che non è stato trovato o chiedere chiarimento.
+7. **Osservabilità e privacy:** aggiungere diagnostica non sensibile su richiamo tentato/riuscito, fonti consultate, risultati vuoti, errori e latenza. Mai registrare transcript completi, audio, dati personali o contenuti sensibili nei log.
+
+### Sequenza di lavoro e test di accettazione
+- **M1 — Recupero deterministico del contesto recente:** verificare che ogni richiesta riferita ai turni precedenti riceva gli ultimi turni completi, senza dipendere da parole chiave o dal tool call spontaneo del modello; test per pronome, parafrasi, follow-up, correzione e cambio sessione.
+- **M2 — Indice e ricerca storica:** testare frasi diverse con lo stesso significato, italiano/spagnolo/inglese, nomi propri, numeri/modelli, date e fatti recenti contro fatti più vecchi; includere casi senza match per evitare falsi positivi.
+- **M3 — Comprensione e risoluzione riferimenti:** test conversazionali con richieste ellittiche, più vincoli, negazioni, correzioni e riferimenti a entità già citate. La risposta deve seguire l'intento e non soltanto ripetere parole corrispondenti.
+- **M4 — Anti-allucinazione e provenienza:** suite di regressione con informazioni mancanti, contraddittorie o solo ipotizzate; accettare soltanto risposte che citano correttamente la fonte nel contesto o dichiarano l'incertezza.
+- **M5 — Memoria durevole e aggiornamento:** verificare salvataggio, lettura, correzione, supersessione, riavvio e recupero dopo errore/rete assente; preservare AES-GCM, chiavi, schema compatibile e dati esistenti.
+- **M6 — Prestazioni:** misurare tempo di ricerca, CPU, RAM e batteria su Note10+ Android 12 e S22 Ultra; niente modello locale pesante o processo in background continuo.
+
+### Regole di rilascio
+- Nessuna migrazione distruttiva, nessuna cancellazione o riscrittura dell'archivio personale esistente.
+- Non attivare automaticamente l'estrazione cloud SAFE né modificare i consensi esistenti.
+- Nessuna nuova API a pagamento, subscription o chiave segreta nell'APK.
+- Ogni fase richiede test JVM e strumentali pertinenti; la CI deve riferirsi all'HEAD esatto. Le prestazioni e la qualità conversazionale richiedono anche test reali sui telefoni.
+- La metrica di successo è la precisione del ricordo e della comprensione, non il volume di testo conservato o la lunghezza delle istruzioni al modello.
+
+---
+
+
 ## 2026-11-27 — Consenso astrologico permanente controllabile dall'utente
 - Aggiunta in Settaggi una sezione dedicata **Privacy astrologica** con interruttore esplicito, disattivato per impostazione iniziale.
 - Quando attivo, l'utente autorizza in modo persistente l'invio a CosmyDay dei soli dati di nascita già salvati (data, ora e luogo) quando richiede un tema natale. Non viene esteso alle letture giornaliere/settimanali/mensili, che continuano a usare soltanto il segno solare.
