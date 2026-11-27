@@ -35,7 +35,7 @@ object VoiceTermNormalizer {
 
     private val doubleLetterCorrections = listOf(
         Regex("""(?iu)\b(?:sono|è|e)\s+(?:proprio\s+)?due\s+([a-z]+)\b"""),
-        Regex("""(?iu)\b(?:doppia|doppio)\s+([a-z])\b"""),
+        Regex("""(?iu)\b(?:doppia|doppio)\s+([a-z]+)\b"""),
         Regex("""(?iu)\b(?:there are|it's|it is)\s+two\s+([a-z]+)s?\b"""),
         Regex("""(?iu)\bdouble\s+([a-z]+)\b"""),
         Regex("""(?iu)\bson\s+dos\s+([a-z]+)\b"""),
