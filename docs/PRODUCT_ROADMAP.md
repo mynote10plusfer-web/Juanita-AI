@@ -29,6 +29,8 @@ Questa priorità precede nuove funzioni accessorie. Non si dichiara “memoria m
 - **M5 — Memoria durevole e aggiornamento:** verificare salvataggio, lettura, correzione, supersessione, riavvio e recupero dopo errore/rete assente; preservare AES-GCM, chiavi, schema compatibile e dati esistenti.
 - **M6 — Prestazioni:** misurare tempo di ricerca, CPU, RAM e batteria su Note10+ Android 12 e S22 Ultra; niente modello locale pesante o processo in background continuo.
 
+- **M7 — Comprensione vocale e vocabolario personale:** separare gli errori di trascrizione dagli errori di interpretazione; registrare solo correzioni esplicite dell'utente in un vocabolario locale cifrato; riconoscere nomi propri, marchi, sigle, lettere ripetute e combinazioni alfanumeriche; reiniettare la forma confermata nel contesto Live e nelle sessioni successive. Conservare la trascrizione originale per audit e non applicare correzioni ambigue. Test minimo: “Suzuki GSX 8T” seguito da “No, sono due T” deve produrre e mantenere “Suzuki GSX-8TT”; “è una T” non deve creare una correzione.
+
 ### Regole di rilascio
 - Nessuna migrazione distruttiva, nessuna cancellazione o riscrittura dell'archivio personale esistente.
 - Non attivare automaticamente l'estrazione cloud SAFE né modificare i consensi esistenti.
@@ -2265,3 +2267,12 @@ Cross-cutting safeguards and acceptance criteria:
 ## Consent gate hardening — 2026-11-26
 - Il consenso al tema natale non è accettato soltanto dal parametro del tool: il servizio richiede una risposta affermativa riconosciuta dopo che l'assistente ha esplicitamente menzionato il trasferimento dei dati di nascita al provider. Il consenso è in memoria volatile per la sessione e viene consumato al primo calcolo natale; non viene salvato.
 - Commit sorgente: 0cf0ca2af7eb35d73092a960ff6abb8e52b10c78. La successiva modifica documentale attiva la CI sul contenuto esatto della PR; build, test e firma restano in attesa del risultato.
+
+
+## 2026-11-27 — Prima implementazione del vocabolario vocale confermato
+- Aggiunto `VoiceTermNormalizer`: interpreta soltanto correzioni esplicite di lettere raddoppiate; non presume la grafia se manca una formula di correzione chiara.
+- Aggiunti test JVM per Suzuki GSX-8TT, nomi delle lettere pronunciati in italiano, punteggiatura, serializzazione della correzione e rifiuto delle ambiguità.
+- Integrato nel transcript worker: confronta la correzione con l'ultimo enunciato dell'utente; salva alias e grafia canonica come memoria confermata nella memoria AES-GCM esistente; invia una nota di correzione alla sessione Live attiva.
+- Le correzioni confermate vengono caricate nelle istruzioni delle sessioni successive. La trascrizione originale resta invariata nell'archivio.
+- Limite attuale: il primo estrattore copre correzioni esplicite di lettere doppie, non la normalizzazione generale di marchi, modelli, numeri o errori fonetici. La distinzione fra errore del riconoscitore audio e interpretazione del modello resta da misurare con test reali.
+- La CI deve terminare sul nuovo HEAD esatto prima di considerare questa slice validata; nessun APK va installato finché non sono verificati test, versione e firma.
