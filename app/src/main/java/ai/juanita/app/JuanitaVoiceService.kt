@@ -1275,24 +1275,21 @@ class JuanitaVoiceService : Service() {
                         }
                     }
                 }
-                // VAD is an optional optimization: if provisioning fails, keep the
-                // existing Sherpa-only detector fully operational.
-                // The VAD path is an experiment in debug builds only. Release builds
-                // retain the proven continuous Sherpa detector until physical-device
-                // accuracy and energy measurements approve a default change.
-                val vadModelFile = if (BuildConfig.DEBUG) {
-                    try {
-                        WakeWordModelInstaller.installVadModel(applicationContext)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (error: Exception) {
-                        voiceDiagnostics.event(
-                            "wake.vad.install_failed",
-                            "fallback=continuous_sherpa; reason=${error.javaClass.simpleName}"
-                        )
-                        null
-                    }
-                } else {
+                // Use the VAD-gated KWS path in release as well: it keeps microphone
+                // capture continuous but avoids feeding every silent 100 ms frame to
+                // the heavier keyword decoder. If the model cannot be installed or
+                // initialized, the detector safely falls back to continuous Sherpa.
+                // This is an energy-oriented candidate; device-level phrase and battery
+                // measurements are still required before claiming a quantified saving.
+                val vadModelFile = try {
+                    WakeWordModelInstaller.installVadModel(applicationContext)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    voiceDiagnostics.event(
+                        "wake.vad.install_failed",
+                        "fallback=continuous_sherpa; reason=${error.javaClass.simpleName}"
+                    )
                     null
                 }
                 if (!wakeWordRequested || lifecycleState != VoiceLifecycleState.IDLE) return@launch
