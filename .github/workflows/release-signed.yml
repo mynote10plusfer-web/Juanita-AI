@@ -104,8 +104,8 @@ jobs:
           }
           APK_VERSION_CODE=$(sed -nE "s/.*versionCode='([0-9]+)'.*/\\1/p" <<< "$BADGING" | head -n1)
           APK_VERSION_NAME=$(sed -nE "s/.*versionName='([^']+)'.*/\\1/p" <<< "$BADGING" | head -n1)
-          if [[ -z "$APK_VERSION_CODE" || -z "$APK_VERSION_NAME" ]] || (( APK_VERSION_CODE <= 55 )); then
-            echo "::error::APK metadata is missing or versionCode is not greater than the current candidate baseline (55)."
+          if [[ -z "$APK_VERSION_CODE" || -z "$APK_VERSION_NAME" ]] || (( APK_VERSION_CODE <= 56 )); then
+            echo "::error::APK metadata is missing or versionCode is not greater than the installed release baseline (56)."
             echo "Actual package metadata: ${BADGING}"
             exit 1
           fi
