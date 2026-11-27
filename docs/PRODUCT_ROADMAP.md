@@ -1,5 +1,13 @@
 # 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
 
+## 2026-11-27 — Consenso astrologico permanente controllabile dall'utente
+- Aggiunta in Settaggi una sezione dedicata **Privacy astrologica** con interruttore esplicito, disattivato per impostazione iniziale.
+- Quando attivo, l'utente autorizza in modo persistente l'invio a CosmyDay dei soli dati di nascita già salvati (data, ora e luogo) quando richiede un tema natale. Non viene esteso alle letture giornaliere/settimanali/mensili, che continuano a usare soltanto il segno solare.
+- La preferenza è locale sul dispositivo, separata dal profilo personale cifrato e dalla memoria. Disattivandola vengono bloccate le nuove richieste basate sul consenso persistente; resta possibile concedere un consenso una tantum per una singola richiesta.
+- La UI spiega il destinatario esterno, i dati coinvolti e la revoca. Non modifica né cancella i dati di nascita esistenti.
+- Implementazione inserita nella PR #58; build, test e verifica su dispositivo ancora necessari. Non dichiarare la funzione pronta finché la CI sull'HEAD esatto non termina.
+
+
 ## Stato operativo corrente — 2026-11-27 (PR #58)
 
 - Corsia unica: PR #58, branch `integration/unified-rollup-2026-11-18`, draft/open/unmerged. HEAD prima di questa nota: `5b87643304a62f42d2e2a22874bb5b35f576da8b`. Rileggere sempre la testa PR prima di ogni modifica o build.
