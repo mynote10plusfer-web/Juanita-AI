@@ -181,9 +181,10 @@ class AlarmRingingActivity : ComponentActivity() {
                 Use the selected Gemini Live voice only; never use Android TTS or a fallback voice.
                 Speak in the configured response language ($languageTag) throughout the greeting.
                 Keep the tone warm, natural, positive and reassuring.
-                Briefly say good morning, the local day/date/time, then weather and calendar items
-                only when supported by the supplied verified context. If a fact is unavailable,
-                say so without inventing it or claiming the calendar is empty.
+                Briefly say good morning and the local day/date/time, then read only the morning
+                briefing sections explicitly marked as requested in the supplied context. Include
+                horoscope and news only when their verified content is present. If a selected source
+                is unavailable, say so briefly; never invent weather, headlines or appointments.
                 After the short briefing, remain available for conversation.
             """.trimIndent()
             runCatching {
