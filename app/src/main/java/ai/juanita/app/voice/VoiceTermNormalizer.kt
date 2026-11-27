@@ -68,9 +68,9 @@ object VoiceTermNormalizer {
 
         val letter = doubleLetterCorrections.firstNotNullOfOrNull { pattern ->
             pattern.find(correction)?.groupValues?.getOrNull(1)?.let(::resolveLetter)
-        } ?: resolveSpokenLetterPhrase(correction) ?: return null
+        } ?: return null
 
-        val previous = previousUserUtterance.trim()
+        val previous = previousUserUtterance.trim().trimEnd('.', ',', '!', '?', ';', ':')
         val lastTokenMatch = Regex("""([\p{L}\p{N}]+)$""").find(previous) ?: return null
         val token = lastTokenMatch.groupValues[1]
         if (token.length < 2 || !token.last().equals(letter, ignoreCase = true)) return null
@@ -105,9 +105,5 @@ object VoiceTermNormalizer {
         else spokenLetters[normalized]
     }
 
-    private fun resolveSpokenLetterPhrase(text: String): Char? {
-        val tokens = text.split(' ').filter { it.isNotBlank() }
-        val last = tokens.lastOrNull() ?: return null
-        return resolveLetter(last)
-    }
+
 }
