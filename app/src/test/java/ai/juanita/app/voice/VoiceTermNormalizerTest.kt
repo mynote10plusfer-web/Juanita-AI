@@ -30,6 +30,26 @@ class VoiceTermNormalizerTest {
     }
 
     @Test
+    fun correctsWrongFinalLetterWhenUserExplicitlyNamesTheDoubleT() {
+        val correction = VoiceTermNormalizer.extractExplicitDoubleLetterCorrection(
+            previousUserUtterance = "Suzuki GSX 8S",
+            correctionUtterance = "No, sono due T"
+        )
+
+        assertEquals("Suzuki GSX-8TT", correction?.canonical)
+    }
+
+    @Test
+    fun understandsPhoneticNumberAndSpokenLetterInModelName() {
+        val correction = VoiceTermNormalizer.extractExplicitDoubleLetterCorrection(
+            previousUserUtterance = "Suzuki GSX otto esse",
+            correctionUtterance = "No, sono due ti"
+        )
+
+        assertEquals("Suzuki GSX-8TT", correction?.canonical)
+    }
+
+    @Test
     fun doesNotGuessWhenUserHasNotConfirmedRepeatedLetter() {
         assertNull(
             VoiceTermNormalizer.extractExplicitDoubleLetterCorrection(
