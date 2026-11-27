@@ -18,6 +18,11 @@ class AssistantPreferences(context: Context) {
         get() = storage.getString(KEY_LANGUAGE_TAG, DEFAULT_LANGUAGE_TAG) ?: DEFAULT_LANGUAGE_TAG
         set(value) { storage.edit().putString(KEY_LANGUAGE_TAG, value).apply() }
 
+    /** Persistent opt-in for sending saved birth details to the external natal-chart provider. Off by default. */
+    var astrologyNatalDataConsent: Boolean
+        get() = storage.getBoolean(KEY_ASTROLOGY_NATAL_CONSENT, false)
+        set(value) { storage.edit().putBoolean(KEY_ASTROLOGY_NATAL_CONSENT, value).apply() }
+
     var wakePhrase: String
         get() = storage.getString(KEY_WAKE_PHRASE, DEFAULT_WAKE_PHRASE) ?: DEFAULT_WAKE_PHRASE
         set(value) { storage.edit().putString(KEY_WAKE_PHRASE, value.trim()).apply() }
@@ -78,6 +83,7 @@ class AssistantPreferences(context: Context) {
         private const val KEY_LANGUAGE_TAG = "language_tag"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         private const val KEY_WAKE_PHRASE = "wake_phrase"
+        private const val KEY_ASTROLOGY_NATAL_CONSENT = "astrology_natal_data_consent"
         private const val KEY_DIALECT_ID = "dialect_id"
         private const val KEY_ASSISTANT_NAME = "assistant_name"
         private const val KEY_ASSISTANT_GENDER = "assistant_gender"
