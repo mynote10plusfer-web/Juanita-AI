@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.AlarmManager
 import android.content.Context
 import android.content.pm.PackageManager
-import android.location.LocationManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
@@ -14,6 +13,11 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import java.util.concurrent.TimeUnit
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import com.google.android.gms.tasks.Tasks
 
 /** Builds factual device-local morning context. Missing access is never reported as an empty day. */
 object MorningBriefingContext {
@@ -124,12 +128,26 @@ object MorningBriefingContext {
             val fine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
             val coarse = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
             if (!fine && !coarse) return "Weather unavailable: location permission is missing. Ask the user for a town or city; a locality can be checked without GPS."
+            // Use the same fused location source as the main assistant. LocationManager's
+            // provider cache can be empty even when the phone has a usable fused fix.
+            // Balanced accuracy is sufficient for local weather and avoids forcing GPS.
             val location = runCatching {
-                val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                listOf(LocationManager.NETWORK_PROVIDER, LocationManager.GPS_PROVIDER)
-                    .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
-                    .maxByOrNull { it.time }
-            }.getOrNull() ?: return "Weather unavailable: the phone has no recent location fix. Ask the user for a town or city."
+                val client = LocationServices.getFusedLocationProviderClient(context)
+                val cancellation = CancellationTokenSource()
+                try {
+                    runCatching {
+                        Tasks.await(
+                            client.getCurrentLocation(Priority.PRIORITY_BALANCED_POWER_ACCURACY, cancellation.token),
+                            8,
+                            TimeUnit.SECONDS
+                        )
+                    }.getOrNull() ?: runCatching {
+                        Tasks.await(client.lastLocation, 2, TimeUnit.SECONDS)
+                    }.getOrNull()
+                } finally {
+                    cancellation.cancel()
+                }
+            }.getOrNull() ?: return "Weather unavailable: the phone has no recent fused location fix. Ask the user for a town or city."
             val fixAgeMs = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
             if (fixAgeMs > 2 * 60 * 60 * 1000L) {
                 return "Weather unavailable: the last phone location is stale (${fixAgeMs / 60_000L} minutes old). Ask the user for a locality."
