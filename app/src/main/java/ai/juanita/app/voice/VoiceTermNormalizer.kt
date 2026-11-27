@@ -71,13 +71,40 @@ object VoiceTermNormalizer {
         } ?: return null
 
         val previous = previousUserUtterance.trim().trimEnd('.', ',', '!', '?', ';', ':')
+        val repeated = "\${letter.uppercaseChar()}\${letter.uppercaseChar()}"
+
+        // Motorcycle model names are especially prone to ASR substitutions such as
+        // "8S", "otto esse" or "8T". A clear user correction wins over the single
+        // final letter, but only when the phrase identifies the GSX model family.
+        val gsxPrefix = Regex("""(?iu)^(.*?\b(?:suzuki\s+)?gsx)\s+(?:8|otto)(?:\s+(?:[a-z]+))?$""")
+            .find(previous)
+        if (gsxPrefix != null) {
+            val prefix = gsxPrefix.groupValues[1].trimEnd()
+            return ConfirmedVoiceTermCorrection(previous, "\${prefix}-8\${repeated}")
+        }
+
         val lastTokenMatch = Regex("""([\p{L}\p{N}]+)$""").find(previous) ?: return null
         val token = lastTokenMatch.groupValues[1]
-        if (token.length < 2 || !token.last().equals(letter, ignoreCase = true)) return null
-        if (token[token.lastIndex - 1].equals(letter, ignoreCase = true)) return null
-
-        val canonicalToken = token.dropLast(1) + letter.uppercaseChar() + letter.uppercaseChar()
-        val canonical = previous.dropLast(token.length) + canonicalToken
+        val prefix = previous.dropLast(token.length).trimEnd()
+        val spokenLetter = spokenLetters[token.lowercase()]
+        val canonical = when {
+            // A letter name written out by transcription ("esse", "ti").
+            spokenLetter != null -> {
+                val numericPrefix = Regex("""(?iu)\botto$""").find(prefix)
+                if (numericPrefix != null) {
+                    prefix.dropLast(4).trimEnd() + " 8\${repeated}"
+                } else {
+                    prefix + (if (prefix.isBlank()) "" else " ") + repeated
+                }
+            }
+            // Alphanumeric model suffix, even if ASR substituted the wrong letter.
+            token.length >= 2 && token.last().isLetter() && token.dropLast(1).any(Char::isDigit) ->
+                previous.dropLast(1) + repeated
+            // The transcript ended at the number and the user explicitly supplied its suffix.
+            token.any(Char::isDigit) && token.all(Char::isDigit) ->
+                previous + repeated
+            else -> return null
+        }
         return ConfirmedVoiceTermCorrection(previous, canonical)
     }
 
