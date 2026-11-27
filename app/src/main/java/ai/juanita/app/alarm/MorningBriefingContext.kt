@@ -1,14 +1,17 @@
 package ai.juanita.app.alarm
 
 import android.Manifest
+import android.util.Xml
 import android.app.AlarmManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import org.json.JSONObject
+import org.xmlpull.v1.XmlPullParser
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -21,7 +24,11 @@ import com.google.android.gms.tasks.Tasks
 
 /** Builds factual device-local morning context. Missing access is never reported as an empty day. */
 object MorningBriefingContext {
-    fun build(context: Context, languageTag: String = Locale.getDefault().toLanguageTag()): String {
+    fun build(
+        context: Context,
+        languageTag: String = Locale.getDefault().toLanguageTag(),
+        options: MorningBriefingOptions = MorningBriefingOptions.load(context)
+    ): String {
         val now = ZonedDateTime.now()
         val locale = Locale.forLanguageTag(languageTag).takeIf { it.language.isNotBlank() } ?: Locale.getDefault()
         val date = now.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", locale))
@@ -33,22 +40,31 @@ object MorningBriefingContext {
             "Next Android alarm reported by the system: " +
                 alarmTime.format(DateTimeFormatter.ofPattern("EEEE d MMMM 'at' HH:mm", locale)) + "."
         } ?: "Android reports no upcoming external alarm."
-        val calendarText = readCalendar(context, now, locale)
-        val weatherText = readWeather(context, locale)
+        val calendarText = if (options.calendar) readCalendar(context, now, locale) else "Not requested by the user."
+        val weatherText = if (options.weather) readWeather(context, locale) else "Not requested by the user."
+        val horoscopeText = if (options.horoscope) {
+            runCatching { ai.juanita.app.astrology.AstrologyContext.getReading(context, "daily", "") }
+                .getOrElse { "Horoscope unavailable (${it.javaClass.simpleName}); do not invent a reading." }
+        } else "Not requested by the user."
+        val newsText = if (options.news) readNews(locale) else "Not requested by the user."
         return """
-            MORNING BRIEFING CONTEXT — device-local data:
+            MORNING BRIEFING CONTEXT — verified data:
             LOCAL DATE: $date. LOCAL TIME: $time. TIME ZONE: $zone.
             $systemAlarmText
+            REQUESTED SECTIONS: weather=${options.weather}; horoscope=${options.horoscope}; news=${options.news}; calendar=${options.calendar}.
             CALENDAR: $calendarText
             WEATHER: $weatherText
+            HOROSCOPE: $horoscopeText
+            NEWS: $newsText
 
             REQUIRED WAKE-UP LANGUAGE: $languageTag. Use this language consistently.
             The Gemini Live voice is selected from the user's active identity profile.
-            Open with a very warm, reassuring and uplifting good morning greeting; avoid robotic phrasing.
-            Say the weekday, date and local time, then briefly summarize weather and calendar events.
-            If a fact is unavailable, say so; never invent forecasts or appointments.
+            Open with a warm, reassuring and uplifting good morning greeting; avoid robotic phrasing.
+            Say the weekday, date and local time. Read only the sections explicitly requested above.
+            Keep each selected section brief and practical. If a selected source is unavailable, say so briefly;
+            never invent weather, horoscope text, headlines or appointments.
             Distinguish the Android alarm from Juanita's alarm. Do not read emoji aloud.
-            End with an affectionate sentence and leave room for the user's reply without asking a string of questions.
+            End naturally and leave room for the user's reply without asking a string of questions.
         """.trimIndent()
     }
 
@@ -79,6 +95,76 @@ object MorningBriefingContext {
             if (events.isEmpty()) "No events found today in the authorized calendar."
             else events.joinToString("; ")
         }.getOrElse { "Calendar temporarily unreadable (${it.javaClass.simpleName}); do not assume it is empty." }
+    }
+
+    /**
+     * Reads a few headlines from the public Google News RSS edition for the configured locale.
+     * This is an observed, undocumented feed, not an official API; failure is non-fatal.
+     * Headlines are spoken for the user's personal briefing and are not persisted.
+     */
+    private fun readNews(locale: Locale): String {
+        val language = locale.language.takeIf { it.isNotBlank() } ?: "es"
+        val country = locale.country.takeIf { it.isNotBlank() }
+            ?: Locale.getDefault().country.takeIf { it.isNotBlank() }
+            ?: "ES"
+        val hl = if (locale.country.isBlank()) "$language-$country" else locale.toLanguageTag()
+        val edition = "$country:$language"
+        val url = URL(
+            "https://news.google.com/rss?hl=${URLEncoder.encode(hl, "UTF-8")}" +
+                "&gl=${URLEncoder.encode(country, "UTF-8")}" +
+                "&ceid=${URLEncoder.encode(edition, "UTF-8")}"
+        )
+        val connection = (url.openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5_000
+            readTimeout = 5_000
+            requestMethod = "GET"
+            setRequestProperty("Accept", "application/rss+xml, application/xml, text/xml")
+            setRequestProperty("User-Agent", "JuanitaAI personal RSS reader")
+        }
+        return try {
+            val parser = Xml.newPullParser()
+            connection.inputStream.use { input ->
+                parser.setInput(input, "UTF-8")
+                val headlines = mutableListOf<String>()
+                var event = parser.eventType
+                while (event != XmlPullParser.END_DOCUMENT && headlines.size < 4) {
+                    if (event == XmlPullParser.START_TAG && parser.name == "item") {
+                        var title = ""
+                        var source = ""
+                        while (true) {
+                            val itemEvent = parser.next()
+                            if (itemEvent == XmlPullParser.END_DOCUMENT ||
+                                (itemEvent == XmlPullParser.END_TAG && parser.name == "item")
+                            ) break
+                            if (itemEvent == XmlPullParser.START_TAG) {
+                                when (parser.name) {
+                                    "title" -> title = parser.nextText().trim().take(180)
+                                    "source" -> source = parser.nextText().trim().take(80)
+                                }
+                            }
+                        }
+                        if (title.isNotBlank()) {
+                            headlines += if (source.isNotBlank()) "$title — $source" else title
+                        }
+                        event = parser.eventType
+                    } else {
+                        event = parser.next()
+                    }
+                }
+                if (headlines.isEmpty()) {
+                    "News unavailable: the RSS feed returned no headlines."
+                } else {
+                    "Latest headlines (Google News RSS, edition $edition): " +
+                        headlines.joinToString("; ") +
+                        ". Source: Google News RSS and the publishers named beside each headline. " +
+                        "Feed is unofficial and may change."
+                }
+            }
+        } catch (failure: Exception) {
+            "News unavailable: RSS request failed (${failure.javaClass.simpleName})."
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private data class ModelWeather(
