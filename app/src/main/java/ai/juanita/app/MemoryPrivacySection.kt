@@ -371,7 +371,7 @@ internal fun MemoryPrivacySection(
         val message = when (action) {
             "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
             "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
-            "factory_reset" -> "Saranno eliminati tutti i ricordi personali, l'intero archivio conversazioni, la memoria temporanea, le correzioni vocali e gli indici di ricerca. L'archivio e l'apprendimento automatico verranno disattivati. Impostazioni e personaggi resteranno. Operazione irreversibile."
+            "factory_reset" -> "Prima termina la conversazione vocale. Saranno eliminati tutti i ricordi personali, l'intero archivio conversazioni, la memoria temporanea, le correzioni vocali e gli indici di ricerca. L'archivio e l'apprendimento automatico verranno disattivati. Impostazioni e personaggi resteranno. Operazione irreversibile."
             "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
             "archive_range" -> "Saranno eliminati tutti i messaggi archiviati dal ${rangeStartDate} al ${rangeEndDate}, estremi inclusi. I ricordi personali non verranno modificati. L'operazione è definitiva."
             else -> "Questa operazione è definitiva e non può essere annullata."
