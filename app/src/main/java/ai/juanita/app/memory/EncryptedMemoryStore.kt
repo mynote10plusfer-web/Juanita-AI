@@ -1681,7 +1681,13 @@ class EncryptedMemoryStore(context: Context) {
         memoryFiles.forEach { file ->
             check(file.deleteRecursively()) { "Unable to clear encrypted memory file: ${file.name}" }
         }
-        sessionArchiveSessionIds().forEach(::deleteSessionArchive)
+        // Remove the complete archive directory contents, including orphaned journals,
+        // interrupted temporary files and legacy entries not represented in the session index.
+        val archiveFiles = sessionArchiveDirectory().listFiles()
+            ?: throw IllegalStateException("Unable to inspect encrypted conversation archive directory")
+        archiveFiles.forEach { file ->
+            check(file.deleteRecursively()) { "Unable to clear conversation archive entry: ${file.name}" }
+        }
     }
 
     /**
