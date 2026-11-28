@@ -234,12 +234,25 @@ object MorningBriefingContext {
                     cancellation.cancel()
                 }
             }.getOrNull() ?: return "Weather unavailable: the phone has no recent fused location fix. Ask the user for a town or city."
-            val fixAgeMs = (System.currentTimeMillis() - location.time).coerceAtLeast(0L)
-            if (fixAgeMs > 2 * 60 * 60 * 1000L) {
+            val rawFixAgeMs = System.currentTimeMillis() - location.time
+            if (rawFixAgeMs < -30_000L) {
+                return "Weather unavailable: the phone location timestamp is in the future. Ask the user for a town or city."
+            }
+            val fixAgeMs = rawFixAgeMs.coerceAtLeast(0L)
+            if (fixAgeMs > 10 * 60 * 1000L) {
                 return "Weather unavailable: the last phone location is stale (${fixAgeMs / 60_000L} minutes old). Ask the user for a locality."
             }
+            if (!location.latitude.isFinite() || location.latitude !in -90.0..90.0 ||
+                !location.longitude.isFinite() || location.longitude !in -180.0..180.0
+            ) {
+                return "Weather unavailable: the phone returned invalid coordinates. Ask the user for a town or city."
+            }
+            if (!location.hasAccuracy() || !location.accuracy.isFinite() || location.accuracy > 2_000f) {
+                val accuracy = if (location.hasAccuracy() && location.accuracy.isFinite()) location.accuracy.toInt() else -1
+                return "Weather unavailable: the phone location is not accurate enough (accuracy ${accuracy}m). Ask the user for a town or city."
+            }
             coordinates = location.latitude to location.longitude
-            placeLabel = "current phone location"
+            placeLabel = "current phone location (fresh fused fix, accuracy ${location.accuracy.toInt()}m)"
         }
 
         val models = listOf(
