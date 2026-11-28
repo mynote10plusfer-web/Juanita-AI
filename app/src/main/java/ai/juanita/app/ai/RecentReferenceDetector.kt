@@ -55,7 +55,8 @@ internal object RecentReferenceDetector {
         val words = normalized.split(' ').filter(String::isNotBlank)
         if (words.size !in 2..10 || words.first() !in continuationWords) return false
         val tail = words.drop(1)
-        return tail.any { it in referentialWords || it in articles } ||
+        return tail.any { it in referentialWords } ||
+            (tail.any { it in articles } && tail.any { it in followupTopics }) ||
             tail.any { it in followupTopics }
     }
 
