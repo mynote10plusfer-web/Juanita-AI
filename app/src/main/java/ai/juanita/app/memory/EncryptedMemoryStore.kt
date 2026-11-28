@@ -1671,11 +1671,20 @@ class EncryptedMemoryStore(context: Context) {
     /** Clears every archived turn and semantic memory record (legacy all-data operation). */
     @Synchronized
     fun clearAll() {
+        // Disable new writes and advance the generation before deleting anything.
+        // An extraction request already in flight carries the old generation and
+        // is therefore unable to repopulate memories after this reset.
+        val nextClearVersion = memoryClearVersion + 1L
+        check(preferences.edit()
+            .putBoolean(KEY_AUTO_MEMORY_ENABLED, false)
+            .putBoolean(KEY_ARCHIVE_ENABLED, false)
+            .putLong(KEY_MEMORY_CLEAR_VERSION, nextClearVersion)
+            .remove(KEY_ENCRYPTED_DATA)
+            .commit()) {
+            "Unable to invalidate and clear encrypted memory metadata"
+        }
         invalidateMemoryRecallIndex()
         invalidateArchiveRecallIndex()
-        check(preferences.edit().remove(KEY_ENCRYPTED_DATA).commit()) {
-            "Unable to clear encrypted memory metadata"
-        }
         val memoryFiles = memoryDirectory().listFiles()
             ?: throw IllegalStateException("Unable to inspect encrypted memory directory")
         memoryFiles.forEach { file ->
