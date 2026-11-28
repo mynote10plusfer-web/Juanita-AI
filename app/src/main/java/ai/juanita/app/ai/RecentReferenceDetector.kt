@@ -29,7 +29,7 @@ internal object RecentReferenceDetector {
     )
 
     private val continuationWords = setOf(
-        "e", "ma", "allora", "quindi", "invece", "però", "anche", "ok",
+        "e", "ma", "allora", "quindi", "invece", "pero", "anche", "ok",
         "and", "but", "so", "then", "also", "what", "y", "pero", "entonces", "tambien"
     )
     private val referentialWords = setOf(
