@@ -11,11 +11,20 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class IdentityMemoryNamespaceTest {
+
+    @Before
+    fun enableArchiveForThisTest() {
+        // clearAll() is a privacy reset and deliberately disables archiving;
+        // each test opts back in explicitly before exercising archive behavior.
+        EncryptedMemoryStore(InstrumentationRegistry.getInstrumentation().targetContext)
+            .setConversationArchiveEnabled(true)
+    }
     @Test
     fun productionFactoryReturnsOneProcessWideEncryptedStoreInstance() {
         // Use the real target application context: the process singleton must never
