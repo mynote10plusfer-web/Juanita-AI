@@ -81,10 +81,14 @@ class PersonalProfileStoreTest {
         val unrelatedFile = File(testDirectory, "unrelated-memory-fixture.txt").apply {
             writeText("preserve")
         }
+        val interruptedWrite = File(testDirectory, "juanita_personal_profile.enc.tmp").apply {
+            writeText("stale encrypted profile fixture")
+        }
 
         store.clear()
 
         assertEquals(null, store.load().value(PersonalProfile.PREFERRED_NAME))
+        assertFalse("A crashed/interrupted profile write must not survive reset", interruptedWrite.exists())
         assertEquals("preserve", unrelatedFile.readText())
     }
 
