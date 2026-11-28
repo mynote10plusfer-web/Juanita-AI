@@ -158,8 +158,14 @@ class PersonalProfileStore(context: Context) {
 
     @Synchronized
     fun clear() {
-        if (profileFile.exists() && !profileFile.delete()) {
-            throw IllegalStateException("Impossibile eliminare il profilo.")
+        // Remove both the committed profile and any interrupted atomic-write
+        // temporary file. The Keystore key is intentionally retained so a future
+        // profile can be created without changing the app's security identity.
+        val temporaryFile = File(appContext.filesDir, "$FILE_NAME.tmp")
+        listOf(profileFile, temporaryFile).forEach { file ->
+            if (file.exists() && !file.delete()) {
+                throw IllegalStateException("Impossibile eliminare il dato profilo: ${file.name}")
+            }
         }
     }
 
