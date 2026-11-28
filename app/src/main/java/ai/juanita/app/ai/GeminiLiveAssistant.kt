@@ -1225,28 +1225,8 @@ class GeminiLiveAssistant {
             }
         }
 
-        internal fun shouldAutoRecallRecentContext(text: String): Boolean {
-            val normalized = text.lowercase(Locale.ROOT)
-                .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-            if (normalized.isBlank()) return false
-            val cues = listOf(
-                "te l ho appena detto", "te l ho detto", "te lo avevo detto", "te l avevo detto",
-                "appena detto", "minuti fa", "poco fa", "ti ho detto", "cosa ti ho detto",
-                "che cosa ti ho detto", "cosa avevamo deciso", "che cosa avevamo deciso",
-                "di cosa parlavamo", "quello che dicevo", "ricordi cosa", "ricordati cosa",
-                "ti ricordi", "ricordi", "ne abbiamo parlato", "l informazione di prima", "quella cosa di prima", "ricordati",
-                "cerca nella memoria", "cerca in memoria", "cerca nei ricordi", "cerca quello che ti ho detto",
-                "what did i tell", "i just told you", "i just said", "a few minutes ago",
-                "what did we decide", "what were we talking about", "remember what", "remember",
-                "do you remember", "we discussed", "earlier i said",
-                "te lo dije", "te lo acabo de decir", "hace un momento", "hace unos minutos",
-                "que te dije", "qué te dije", "que habiamos decidido", "qué habíamos decidido",
-                "de que hablabamos", "de qué hablábamos", "recuerdas lo que", "recuerdas", "te acuerdas"
-            )
-            return cues.any(normalized::contains)
-        }
+        internal fun shouldAutoRecallRecentContext(text: String): Boolean =
+            RecentReferenceDetector.shouldRecall(text)
 
         private const val TAG = "GeminiLiveAssistant"
         private const val MAX_AUTOMATIC_RECOVERIES = 1
