@@ -363,6 +363,41 @@ class IdentityMemoryNamespaceTest {
     }
 
     @Test
+    fun fullResetInvalidatesPendingWorkAndRemovesEveryMemoryAndContinuityLayer() {
+        val context = isolatedContext()
+        val preferences = context.getSharedPreferences("juanita_encrypted_memory", Context.MODE_PRIVATE)
+        preferences.edit().clear().commit()
+        val store = EncryptedMemoryStore(context)
+        val sessionId = "reset-${UUID.randomUUID()}"
+        val fact = "Informazione da cancellare ${UUID.randomUUID()}"
+        try {
+            store.setAutomaticMemoryEnabled(true)
+            store.setConversationArchiveEnabled(true)
+            val oldGeneration = store.memoryClearVersion
+            store.addMemory(fact, category = "voice_vocabulary", source = "explicit_user_voice_correction", confirmedByUser = true)
+            store.appendConversationTurn(sessionId, "USER", fact)
+            store.appendContinuityTurn(sessionId, "USER", fact)
+            store.enqueuePendingAutomaticMemoryTurn("USER: $fact", oldGeneration)
+
+            store.clearAll()
+
+            assertFalse("Full reset must disable automatic memory", store.isAutomaticMemoryEnabled)
+            assertFalse("Full reset must disable transcript archiving", store.isConversationArchiveEnabled)
+            assertTrue("Full reset must advance the generation to invalidate in-flight extraction",
+                store.memoryClearVersion > oldGeneration)
+            assertTrue("No saved facts, including voice corrections, may survive", store.listAllMemories().isEmpty())
+            assertTrue("No transcript may survive", store.listArchivedConversations().isEmpty())
+            assertTrue("No continuity snapshot may survive", store.buildContinuityContext(sessionId).isEmpty())
+            assertEquals(0, store.enqueuePendingAutomaticMemoryTurn("USER: stale", oldGeneration))
+            store.setAutomaticMemoryEnabled(true)
+            assertTrue("Re-enabling after reset must not resurrect stale queued turns",
+                store.readPendingAutomaticMemoryTurns().isEmpty())
+        } finally {
+            store.clearAll()
+            preferences.edit().clear().commit()
+        }
+    }
+    @Test
     fun interruptedContinuityIsRecoveredOnlyByTheSameCharacter() {
         val context = isolatedContext()
         val store = EncryptedMemoryStore(context)
