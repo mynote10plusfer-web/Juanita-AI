@@ -310,6 +310,11 @@ class MainActivity : ComponentActivity() {
                 onUpdateMemory = { id, text -> memoryStore.updateMemory(id, text) },
                  onConfirmMemory = { id -> memoryStore.confirmMemory(id) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
+                onFactoryReset = {
+                    memoryStore.setAutomaticMemoryEnabled(false)
+                    memoryStore.setConversationArchiveEnabled(false)
+                    memoryStore.clearAll()
+                },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
                 onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
                 onListConversationTurns = { sessionId, pageIndex, pageSize -> memoryStore.listConversationTurnsPage(sessionId, pageIndex, pageSize) },
@@ -382,6 +387,7 @@ private fun JuanitaApp(
     onUpdateMemory: (String, String) -> Boolean,
     onConfirmMemory: (String) -> Boolean,
      onClearMemories: () -> Unit,
+    onFactoryReset: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
     onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
@@ -1299,6 +1305,7 @@ private fun JuanitaApp(
                     onUpdateMemory = onUpdateMemory,
                     onConfirmMemory = onConfirmMemory,
                      onClearMemories = onClearMemories,
+                    onFactoryReset = onFactoryReset,
                     onDeleteConversation = onDeleteConversation,
                     onDeleteArchiveRange = onDeleteArchiveRange,
                     onListConversationTurns = onListConversationTurns,
