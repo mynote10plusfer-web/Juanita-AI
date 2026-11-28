@@ -80,6 +80,7 @@ import ai.juanita.app.data.AssistantPreferences
 import ai.juanita.app.alarm.AlarmSection
 import ai.juanita.app.memory.EncryptedMemoryStore
 import ai.juanita.app.memory.MemoryItem
+import ai.juanita.app.profile.PersonalProfileStore
 import ai.juanita.app.memory.ImprovementReport
 import ai.juanita.app.identity.DigitalIdentitySection
 import ai.juanita.app.identity.DigitalIdentity
@@ -242,6 +243,7 @@ class MainActivity : ComponentActivity() {
         screenOffReceiverRegistered = true
         preferences = AssistantPreferences(applicationContext)
         val memoryStore = EncryptedMemoryStore.getInstance(applicationContext)
+        val personalProfileStore = PersonalProfileStore(applicationContext)
         val avatarStore = AvatarProfileStore(applicationContext)
         val digitalIdentityStore = DigitalIdentityStore(applicationContext)
         val initialDigitalIdentities = runCatching { digitalIdentityStore.list() }.getOrDefault(emptyList())
@@ -311,9 +313,11 @@ class MainActivity : ComponentActivity() {
                  onConfirmMemory = { id -> memoryStore.confirmMemory(id) },
                 onClearMemories = { memoryStore.clearPersonalMemories() },
                 onFactoryReset = {
-                    memoryStore.setAutomaticMemoryEnabled(false)
-                    memoryStore.setConversationArchiveEnabled(false)
+                    // Full reset spans both independent encrypted stores. Stop future
+                    // automatic extraction first, invalidate in-flight batches, then clear
+                    // the permanent profile and every conversational-memory layer.
                     memoryStore.clearAll()
+                    personalProfileStore.clear()
                 },
                 onDeleteConversation = { memoryStore.deleteConversation(it) },
                 onDeleteArchiveRange = { start, end -> memoryStore.deleteArchiveRange(start, end) },
