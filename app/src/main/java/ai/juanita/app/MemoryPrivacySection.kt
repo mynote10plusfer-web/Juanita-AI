@@ -72,6 +72,7 @@ internal fun MemoryPrivacySection(
     onUpdateMemory: (String, String) -> Boolean,
     onConfirmMemory: (String) -> Boolean,
     onClearMemories: () -> Unit,
+    onFactoryReset: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
     onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
@@ -255,6 +256,9 @@ internal fun MemoryPrivacySection(
                 TextButton(onClick = { confirmAction = "clear_memories" }) {
                     Text("ELIMINA TUTTI I RICORDI PERSONALI", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
+                TextButton(onClick = { confirmAction = "factory_reset" }) {
+                    Text("RESET COMPLETO MEMORIA E ARCHIVIO JUANITA", color = Color(0xFFFF8A80), fontSize = 11.sp)
+                }
             }
 
             Divider(color = Color(0xFF343941))
@@ -360,12 +364,14 @@ internal fun MemoryPrivacySection(
             "archive_range" -> "Eliminare le conversazioni nel periodo?"
             "clear_memories" -> "Eliminare tutti i ricordi?"
             "clear_archive" -> "Svuotare l'archivio?"
+            "factory_reset" -> "Reset completo di Juanita?"
             "selected_memories" -> "Eliminare i ricordi selezionati?"
             else -> if (isMemory) "Eliminare questo ricordo?" else "Eliminare questa conversazione?"
         }
         val message = when (action) {
             "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
             "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
+            "factory_reset" -> "Saranno eliminati tutti i ricordi personali, l'intero archivio conversazioni, la memoria temporanea, le correzioni vocali e gli indici di ricerca. L'archivio e l'apprendimento automatico verranno disattivati. Impostazioni e personaggi resteranno. Operazione irreversibile."
             "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
             "archive_range" -> "Saranno eliminati tutti i messaggi archiviati dal ${rangeStartDate} al ${rangeEndDate}, estremi inclusi. I ricordi personali non verranno modificati. L'operazione è definitiva."
             else -> "Questa operazione è definitiva e non può essere annullata."
@@ -391,6 +397,7 @@ internal fun MemoryPrivacySection(
                                 when {
                                     archiveRange != null -> onDeleteArchiveRange(archiveRange.first, archiveRange.second)
                                     action == "clear_memories" -> onClearMemories()
+                                    action == "factory_reset" -> onFactoryReset()
                                     action == "clear_archive" -> onClearArchive()
                                     action == "selected_memories" -> onDeleteMemories(selectedIds)
                                     memoryId != null -> onDeleteMemory(memoryId)
@@ -400,6 +407,16 @@ internal fun MemoryPrivacySection(
                         }.onSuccess {
                             when {
                                 action == "clear_memories" -> memories = emptyList()
+                                action == "factory_reset" -> {
+                                    memories = emptyList()
+                                    conversations = emptyList()
+                                    archiveEnabled = false
+                                    autoMemoryEnabled = false
+                                    selectedMemoryIds = emptySet()
+                                    archiveSearchResults = emptyList()
+                                    archiveSearchPerformed = false
+                                    archiveSearchQuery = ""
+                                }
                                 action == "selected_memories" -> {
                                     memories = memories.filterNot { it.id in selectedIds }
                                     selectedMemoryIds = emptySet()
