@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,12 @@ import java.time.format.DateTimeFormatter
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 @Composable
 internal fun MemoryPrivacySection(
@@ -64,15 +70,18 @@ internal fun MemoryPrivacySection(
     onDeleteMemory: (String) -> Unit,
     onDeleteMemories: (Set<String>) -> Unit,
     onUpdateMemory: (String, String) -> Boolean,
+    onConfirmMemory: (String) -> Boolean,
     onClearMemories: () -> Unit,
+    onFactoryReset: () -> Unit,
     onDeleteConversation: (String) -> Unit,
     onDeleteArchiveRange: (Long, Long) -> Unit,
-    onListConversationTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
+    onListConversationTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
     onDeleteConversationRange: (String, Long, Long) -> Unit,
     onRefreshArchive: () -> List<EncryptedMemoryStore.ArchivedConversation>,
     onClearArchive: () -> Unit,
     onRetentionChanged: (Int) -> Unit,
-    onRefreshMemories: () -> List<MemoryItem>
+    onRefreshMemories: () -> List<MemoryItem>,
+    onSearchArchive: (String) -> List<EncryptedMemoryStore.ArchivedSearchHit>
 ) {
     var archiveEnabled by remember { mutableStateOf(initialArchiveEnabled) }
     var autoMemoryEnabled by remember { mutableStateOf(initialAutoMemoryEnabled) }
@@ -80,6 +89,8 @@ internal fun MemoryPrivacySection(
     var conversations by remember { mutableStateOf(initialArchivedConversations) }
     var retentionDays by remember { mutableStateOf(initialRetentionDays) }
     var memoryDraft by remember { mutableStateOf("") }
+    var memorySaving by remember { mutableStateOf(false) }
+    var storageError by remember { mutableStateOf<String?>(null) }
     var retentionMenu by remember { mutableStateOf(false) }
     var confirmAction by remember { mutableStateOf<String?>(null) }
     var editingMemory by remember { mutableStateOf<MemoryItem?>(null) }
@@ -87,8 +98,20 @@ internal fun MemoryPrivacySection(
     var archiveRangeStart by remember { mutableStateOf("") }
     var archiveRangeEnd by remember { mutableStateOf("") }
     var selectedMemoryIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(memoryStatus) {
-        memories = onRefreshMemories()
+    var memoryPage by remember { mutableStateOf(0) }
+    var archiveSearchQuery by remember { mutableStateOf("") }
+    var archiveSearchResults by remember { mutableStateOf<List<EncryptedMemoryStore.ArchivedSearchHit>>(emptyList()) }
+    var archiveSearchPerformed by remember { mutableStateOf(false) }
+    var archiveSearchLoading by remember { mutableStateOf(false) }
+    var archiveSearchError by remember { mutableStateOf<String?>(null) }
+    val ioScope = rememberCoroutineScope()
+    // Refresh once when the Memory tab is opened, never on every streaming status update.
+    LaunchedEffect(Unit) {
+        runCatching { withContext(Dispatchers.IO) { onRefreshMemories() } }
+            .onSuccess { memories = it; storageError = null }
+            .onFailure { failure ->
+                storageError = "Lettura ricordi non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+            }
     }
     val rangeStartDate = runCatching { LocalDate.parse(archiveRangeStart.trim()) }.getOrNull()
     val rangeEndDate = runCatching { LocalDate.parse(archiveRangeEnd.trim()) }.getOrNull()
@@ -99,6 +122,10 @@ internal fun MemoryPrivacySection(
         90 -> "90 giorni"
         else -> "Mai (cancellazione manuale)"
     }
+    val memoryPageSize = 25
+    val memoryPageCount = ((memories.size + memoryPageSize - 1) / memoryPageSize).coerceAtLeast(1)
+    val safeMemoryPage = memoryPage.coerceIn(0, memoryPageCount - 1)
+    val visibleMemories = memories.drop(safeMemoryPage * memoryPageSize).take(memoryPageSize)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -112,8 +139,13 @@ internal fun MemoryPrivacySection(
             Text("MEMORIA AUTOMATICA", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = autoMemoryEnabled, onCheckedChange = { enabled ->
-                    autoMemoryEnabled = enabled
-                    onAutoMemoryEnabledChanged(enabled)
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onAutoMemoryEnabledChanged(enabled) } }
+                            .onSuccess { autoMemoryEnabled = enabled; storageError = null }
+                            .onFailure { failure ->
+                                storageError = "Modifica della memoria automatica non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                    }
                 })
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Ricorda automaticamente le informazioni importanti", color = Color.White, fontSize = 13.sp)
@@ -123,12 +155,20 @@ internal fun MemoryPrivacySection(
             }
             Text(if (autoMemoryEnabled) memoryStatus else "Memoria automatica in pausa.",
                 color = if (autoMemoryEnabled) gold else Color(0xFF9A9DA4), fontSize = 11.sp)
-            Text("Per selezionare i ricordi, brevi estratti testuali vengono inviati a Gemini. Nel livello gratuito Google può usare i contenuti inviati per migliorare i propri prodotti, secondo i suoi termini. Non viene salvato l’audio e non serve attivare l’archivio completo. Puoi disattivare questa funzione in qualsiasi momento.",
+            Text("MODALITÀ SAFE: questa funzione è disattivata nelle nuove installazioni. Se la attivi, brevi estratti testuali delle conversazioni vengono inviati a Google Gemini per selezionare i ricordi; si applicano le condizioni e le regole di trattamento dati di Google e l'uso può consumare quota o generare costi se il progetto è configurato con fatturazione. L'audio non viene salvato. Puoi continuare a inserire e modificare ricordi manualmente: il salvataggio non avvia richieste a Gemini. Durante una successiva conversazione Live, i ricordi pertinenti possono essere inclusi nel contesto inviato al modello per risponderti.",
                 color = Color(0xFF9A9DA4), fontSize = 11.sp)
             Text("RICORDI PERSONALI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${memories.size}/100 ricordi · ${memories.sumOf { it.text.length }}/32.000 caratteri", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
-                TextButton(onClick = { memories = onRefreshMemories() }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
+                Text("${memories.size} ricordi · ${memories.sumOf { it.text.length }} caratteri · archivio locale senza soglia applicativa", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onRefreshMemories() } }
+                            .onSuccess { memories = it; storageError = null }
+                            .onFailure { failure ->
+                                storageError = "Aggiornamento ricordi non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                    }
+                }) { Text("Aggiorna", color = gold, fontSize = 12.sp) }
             }
             OutlinedTextField(
                 value = memoryDraft, onValueChange = { memoryDraft = it },
@@ -138,14 +178,27 @@ internal fun MemoryPrivacySection(
             )
             Button(
                 onClick = {
-                    if (memoryDraft.isNotBlank()) {
-                        memories = listOf(onSaveMemory(memoryDraft.trim())) + memories
-                        memoryDraft = ""
+                    val draft = memoryDraft.trim()
+                    if (draft.isNotBlank() && !memorySaving) {
+                        memorySaving = true
+                        storageError = null
+                        ioScope.launch {
+                            runCatching { withContext(Dispatchers.IO) { onSaveMemory(draft) } }
+                                .onSuccess { saved ->
+                                    memories = listOf(saved) + memories
+                                    memoryDraft = ""
+                                }
+                                .onFailure { failure ->
+                                    storageError = "Salvataggio non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                }
+                            memorySaving = false
+                        }
                     }
                 },
-                enabled = memoryDraft.isNotBlank(), modifier = Modifier.fillMaxWidth(),
+                enabled = memoryDraft.isNotBlank() && !memorySaving, modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
-            ) { Text("Salva ricordo") }
+            ) { Text(if (memorySaving) "Salvataggio…" else "Salva ricordo") }
+            storageError?.let { Text(it, color = Color(0xFFE6A0A0), fontSize = 11.sp) }
 
             if (memories.isEmpty()) {
                 Text("Non hai ancora salvato ricordi personali.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
@@ -158,13 +211,42 @@ internal fun MemoryPrivacySection(
                         Text("Elimina selezionati (${selectedMemoryIds.size})", color = Color(0xFFE6A0A0), fontSize = 12.sp)
                     }
                 }
-                memories.forEach { item ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Pagina ${safeMemoryPage + 1} di ${memoryPageCount}", color = Color(0xFF9A9DA4), fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { memoryPage = (safeMemoryPage - 1).coerceAtLeast(0) }, enabled = safeMemoryPage > 0) {
+                        Text("Precedente", color = gold, fontSize = 11.sp)
+                    }
+                    TextButton(onClick = { memoryPage = (safeMemoryPage + 1).coerceAtMost(memoryPageCount - 1) }, enabled = safeMemoryPage < memoryPageCount - 1) {
+                        Text("Successiva", color = gold, fontSize = 11.sp)
+                    }
+                }
+                visibleMemories.forEach { item ->
                     Row(verticalAlignment = Alignment.Top) {
                         Checkbox(checked = item.id in selectedMemoryIds, onCheckedChange = { checked -> selectedMemoryIds = if (checked) selectedMemoryIds + item.id else selectedMemoryIds - item.id })
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(item.text, color = Color.White, fontSize = 13.sp)
                             Text("${item.category} · ${DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(item.createdAtMillis))}", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                            if (!item.confirmedByUser) {
+                                Text("RICORDO AUTOMATICO · PROVVISORIO · NON ANCORA CONFERMATO", color = Color(0xFFE4BD69), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!item.confirmedByUser) {
+                                    TextButton(onClick = {
+                                        val memoryId = item.id
+                                        ioScope.launch {
+                                            storageError = null
+                                            runCatching { withContext(Dispatchers.IO) { onConfirmMemory(memoryId) } }
+                                                .onSuccess { confirmed ->
+                                                    if (confirmed) memories = memories.map {
+                                                        if (it.id == memoryId) it.copy(confirmedByUser = true, source = "user_confirmed") else it
+                                                    } else storageError = "Il ricordo non è stato confermato."
+                                                }
+                                                .onFailure { failure ->
+                                                    storageError = "Conferma non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                                }
+                                        }
+                                    }) { Text("Conferma", color = gold, fontSize = 12.sp) }
+                                }
                                 TextButton(onClick = { editingMemory = item; editText = item.text }) { Text("Modifica", color = gold, fontSize = 12.sp) }
                                 TextButton(onClick = { confirmAction = "memory:${item.id}" }) { Text("Elimina", color = gold, fontSize = 12.sp) }
                             }
@@ -174,26 +256,102 @@ internal fun MemoryPrivacySection(
                 TextButton(onClick = { confirmAction = "clear_memories" }) {
                     Text("ELIMINA TUTTI I RICORDI PERSONALI", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
+                TextButton(onClick = { confirmAction = "factory_reset" }) {
+                    Text("RESET COMPLETO MEMORIA E ARCHIVIO JUANITA", color = Color(0xFFFF8A80), fontSize = 11.sp)
+                }
+            }
+
+            Divider(color = Color(0xFF343941))
+            Text("CERCA NELLE CONVERSAZIONI", color = gold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Cerca un argomento o una frase nei messaggi archiviati. La ricerca usa l'indice cifrato locale e apre solo i passaggi pertinenti.",
+                color = Color(0xFF9A9DA4), fontSize = 11.sp)
+            OutlinedTextField(
+                value = archiveSearchQuery,
+                onValueChange = { archiveSearchQuery = it },
+                label = { Text("Cosa vuoi ritrovare?") },
+                placeholder = { Text("Es. decisioni sul progetto Juanita") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(
+                    onClick = {
+                        val query = archiveSearchQuery.trim()
+                        if (query.isNotBlank() && !archiveSearchLoading) {
+                            archiveSearchLoading = true
+                            archiveSearchPerformed = false
+                            archiveSearchError = null
+                            ioScope.launch {
+                                val result = withContext(Dispatchers.IO) { runCatching { onSearchArchive(query) } }
+                                archiveSearchResults = result.getOrDefault(emptyList())
+                                archiveSearchError = result.exceptionOrNull()?.let {
+                                    "Ricerca non riuscita: l’archivio potrebbe contenere dati temporaneamente non leggibili. I file originali non vengono cancellati."
+                                }
+                                archiveSearchPerformed = true
+                                archiveSearchLoading = false
+                            }
+                        }
+                    },
+                    enabled = archiveSearchQuery.isNotBlank() && !archiveSearchLoading,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF30343B), contentColor = gold)
+                ) { Text(if (archiveSearchLoading) "Ricerca…" else "Cerca") }
+                TextButton(onClick = {
+                    archiveSearchQuery = ""
+                    archiveSearchResults = emptyList()
+                    archiveSearchPerformed = false
+                    archiveSearchError = null
+                }) { Text("Pulisci", color = gold) }
+            }
+            if (archiveSearchPerformed) {
+                if (archiveSearchError != null) {
+                    Text(archiveSearchError.orEmpty(), color = Color(0xFFFFCC80), fontSize = 12.sp)
+                } else if (archiveSearchResults.isEmpty()) {
+                    Text("Nessun passaggio pertinente trovato nell'archivio.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
+                } else {
+                    Text("${archiveSearchResults.size} passaggi pertinenti trovati", color = gold, fontSize = 11.sp)
+                    archiveSearchResults.forEach { hit ->
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Text(
+                                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(hit.turn.timestampMillis)) +
+                                    " · " + hit.turn.role,
+                                color = Color(0xFF9A9DA4), fontSize = 10.sp
+                            )
+                            Text(hit.turn.text, color = Color.White, fontSize = 12.sp)
+                        }
+                        Divider(color = Color(0xFF343941))
+                    }
+                }
             }
 
             ConversationArchiveCalendar(
-                panel = panel, gold = gold, conversations = conversations,
+                panel = panel, gold = gold, initialConversations = conversations,
                 archiveEnabled = archiveEnabled, retentionLabel = retentionLabel,
                 onArchiveEnabledChanged = { archiveEnabled = it; onArchiveEnabledChanged(it) },
-                onRetentionChanged = { retentionDays = it; onRetentionChanged(it) },
-                onRefresh = { conversations = onRefreshArchive() },
+                onRetentionChanged = { value ->
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onRetentionChanged(value) } }
+                            .onSuccess { retentionDays = value; storageError = null }
+                            .onFailure { failure ->
+                                storageError = "Modifica della conservazione non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                    }
+                },
+                onRefresh = onRefreshArchive,
                 onDeleteConversation = { confirmAction = "conversation:" + it },
                 onDeleteDay = { day ->
                     val zone = ZoneId.systemDefault()
                     onDeleteArchiveRange(day.atStartOfDay(zone).toInstant().toEpochMilli(),
                         day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
-                    conversations = onRefreshArchive()
                 },
                 onListTurns = onListConversationTurns,
                 onDeleteTimeRange = { id, from, until ->
-                    onDeleteConversationRange(id, from, until); conversations = onRefreshArchive()
+                    onDeleteConversationRange(id, from, until)
                 },
-                onClearArchive = { confirmAction = "clear_archive" }
+                onClearArchive = { confirmAction = "clear_archive" },
+                onStorageError = { storageError = it }
             )
         }
     }
@@ -206,12 +364,14 @@ internal fun MemoryPrivacySection(
             "archive_range" -> "Eliminare le conversazioni nel periodo?"
             "clear_memories" -> "Eliminare tutti i ricordi?"
             "clear_archive" -> "Svuotare l'archivio?"
+            "factory_reset" -> "Reset completo di Juanita?"
             "selected_memories" -> "Eliminare i ricordi selezionati?"
             else -> if (isMemory) "Eliminare questo ricordo?" else "Eliminare questa conversazione?"
         }
         val message = when (action) {
             "clear_memories" -> "Saranno cancellati solo i ricordi personali. L'archivio conversazioni resterà intatto."
             "clear_archive" -> "Saranno cancellate solo le conversazioni archiviate. I ricordi personali resteranno intatti."
+            "factory_reset" -> "Prima termina la conversazione vocale. Saranno eliminati tutti i ricordi personali, l'intero archivio conversazioni, la memoria temporanea, le correzioni vocali e gli indici di ricerca. L'archivio e l'apprendimento automatico verranno disattivati. Impostazioni e personaggi resteranno. Operazione irreversibile."
             "selected_memories" -> "Saranno eliminati ${selectedMemoryIds.size} ricordi selezionati. Le conversazioni archiviate resteranno intatte."
             "archive_range" -> "Saranno eliminati tutti i messaggi archiviati dal ${rangeStartDate} al ${rangeEndDate}, estremi inclusi. I ricordi personali non verranno modificati. L'operazione è definitiva."
             else -> "Questa operazione è definitiva e non può essere annullata."
@@ -221,33 +381,55 @@ internal fun MemoryPrivacySection(
             title = { Text(title) }, text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = {
-                    when {
-                        action == "archive_range" -> {
-                            val start = rangeStartDate
-                            val end = rangeEndDate
-                            if (start != null && end != null && !end.isBefore(start)) {
-                                val zone = ZoneId.systemDefault()
-                                val startMillis = start.atStartOfDay(zone).toInstant().toEpochMilli()
-                                val endMillis = end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-                                onDeleteArchiveRange(startMillis, endMillis)
-                                conversations = onRefreshArchive()
+                    val selectedIds = selectedMemoryIds
+                    val memoryId = action.takeIf { isMemory }?.removePrefix("memory:")
+                    val conversationId = action.takeIf { isConversation }?.removePrefix("conversation:")
+                    val archiveRange = if (action == "archive_range" && rangeStartDate != null && rangeEndDate != null && !rangeEndDate.isBefore(rangeStartDate)) {
+                        val zone = ZoneId.systemDefault()
+                        rangeStartDate.atStartOfDay(zone).toInstant().toEpochMilli() to
+                            rangeEndDate.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+                    } else null
+                    confirmAction = null
+                    storageError = null
+                    ioScope.launch {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                when {
+                                    archiveRange != null -> onDeleteArchiveRange(archiveRange.first, archiveRange.second)
+                                    action == "clear_memories" -> onClearMemories()
+                                    action == "factory_reset" -> onFactoryReset()
+                                    action == "clear_archive" -> onClearArchive()
+                                    action == "selected_memories" -> onDeleteMemories(selectedIds)
+                                    memoryId != null -> onDeleteMemory(memoryId)
+                                    conversationId != null -> onDeleteConversation(conversationId)
+                                }
                             }
-                        }
-                        action == "clear_memories" -> { onClearMemories(); memories = emptyList() }
-                        action == "clear_archive" -> { onClearArchive(); conversations = emptyList() }
-                        action == "selected_memories" -> { onDeleteMemories(selectedMemoryIds); memories = memories.filterNot { it.id in selectedMemoryIds }; selectedMemoryIds = emptySet() }
-                        isMemory -> {
-                            val id = action.removePrefix("memory:")
-                            onDeleteMemory(id)
-                            memories = memories.filterNot { it.id == id }
-                        }
-                        isConversation -> {
-                            val id = action.removePrefix("conversation:")
-                            onDeleteConversation(id)
-                            conversations = conversations.filterNot { it.sessionId == id }
+                        }.onSuccess {
+                            when {
+                                action == "clear_memories" -> memories = emptyList()
+                                action == "factory_reset" -> {
+                                    memories = emptyList()
+                                    conversations = emptyList()
+                                    archiveEnabled = false
+                                    autoMemoryEnabled = false
+                                    selectedMemoryIds = emptySet()
+                                    archiveSearchResults = emptyList()
+                                    archiveSearchPerformed = false
+                                    archiveSearchQuery = ""
+                                }
+                                action == "selected_memories" -> {
+                                    memories = memories.filterNot { it.id in selectedIds }
+                                    selectedMemoryIds = emptySet()
+                                }
+                                memoryId != null -> memories = memories.filterNot { it.id == memoryId }
+                                action == "clear_archive" -> conversations = emptyList()
+                                conversationId != null -> conversations = conversations.filterNot { it.sessionId == conversationId }
+                                archiveRange != null -> conversations = withContext(Dispatchers.IO) { onRefreshArchive() }
+                            }
+                        }.onFailure { failure ->
+                            storageError = "Operazione non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
                         }
                     }
-                    confirmAction = null
                 }) { Text("Elimina", color = Color(0xFFB94A48)) }
             },
             dismissButton = { TextButton(onClick = { confirmAction = null }) { Text("Annulla") } }
@@ -264,10 +446,29 @@ internal fun MemoryPrivacySection(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    if (editText.isNotBlank() && onUpdateMemory(item.id, editText)) {
-                        memories = memories.map { if (it.id == item.id) it.copy(text = editText.trim()) else it }
-                    }
+                    val editedText = editText.trim()
+                    val memoryId = item.id
                     editingMemory = null
+                    if (editedText.isNotBlank()) {
+                        ioScope.launch {
+                            storageError = null
+                            runCatching {
+                                withContext(Dispatchers.IO) { onUpdateMemory(memoryId, editedText) }
+                            }.onSuccess { updated ->
+                                if (updated) {
+                                    runCatching { withContext(Dispatchers.IO) { onRefreshMemories() } }
+                                        .onSuccess { memories = it; memoryPage = 0 }
+                                        .onFailure { failure ->
+                                            storageError = "Ricordo aggiornato, ma la rilettura non è riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                        }
+                                } else {
+                                    storageError = "Il ricordo non è stato aggiornato."
+                                }
+                            }.onFailure { failure ->
+                                storageError = "Modifica non riuscita: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                            }
+                        }
+                    }
                 }) { Text("Salva", color = gold) }
             },
             dismissButton = { TextButton(onClick = { editingMemory = null }) { Text("Annulla") } }
@@ -278,18 +479,21 @@ internal fun MemoryPrivacySection(
 @Composable
 private fun ConversationArchiveCalendar(
     panel: Color, gold: Color,
-    conversations: List<EncryptedMemoryStore.ArchivedConversation>,
+    initialConversations: List<EncryptedMemoryStore.ArchivedConversation>,
     archiveEnabled: Boolean, retentionLabel: String,
     onArchiveEnabledChanged: (Boolean) -> Unit, onRetentionChanged: (Int) -> Unit,
-    onRefresh: () -> Unit, onDeleteConversation: (String) -> Unit,
+    onRefresh: () -> List<EncryptedMemoryStore.ArchivedConversation>, onDeleteConversation: (String) -> Unit,
     onDeleteDay: (LocalDate) -> Unit,
-    onListTurns: (String) -> List<EncryptedMemoryStore.ArchivedTurn>,
-    onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit
+    onListTurns: (String, Int, Int) -> EncryptedMemoryStore.ArchivedTurnPage,
+    onDeleteTimeRange: (String, Long, Long) -> Unit, onClearArchive: () -> Unit,
+    onStorageError: (String) -> Unit
 ) {
     var month by remember { mutableStateOf(YearMonth.now()) }
     var day by remember { mutableStateOf(LocalDate.now()) }
     var opened by remember { mutableStateOf<EncryptedMemoryStore.ArchivedConversation?>(null) }
     var turns by remember { mutableStateOf(emptyList<EncryptedMemoryStore.ArchivedTurn>()) }
+    var turnsPageInfo by remember { mutableStateOf<EncryptedMemoryStore.ArchivedTurnPage?>(null) }
+    var turnsLoading by remember { mutableStateOf(false) }
     var fromText by remember { mutableStateOf("") }
     var toText by remember { mutableStateOf("") }
     var confirmDay by remember { mutableStateOf(false) }
@@ -297,15 +501,23 @@ private fun ConversationArchiveCalendar(
     var selectingDays by remember { mutableStateOf(false) }
     var selectedDays by remember { mutableStateOf<Set<LocalDate>>(emptySet()) }
     var confirmSelectedDays by remember { mutableStateOf(false) }
+    var conversations by remember(initialConversations) { mutableStateOf(initialConversations) }
+    var archiveError by remember { mutableStateOf<String?>(null) }
     val zone = remember { ZoneId.systemDefault() }
     val fmt = remember { DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm") }
-    // Refresh on entry and periodically while the archive is visible: the voice worker
-    // writes transcript turns asynchronously, so the initial activity snapshot can be stale.
-    LaunchedEffect(Unit) {
-        onRefresh()
-        while (true) {
-            delay(2_000L)
-            onRefresh()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val ioScope = rememberCoroutineScope()
+    // Load once when the archive tab becomes visible. Repeated two-second scans
+    // decrypted every archived session and could compete with the live transcript writer.
+    // The user can refresh explicitly; disk work always stays off the UI thread.
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            runCatching { withContext(Dispatchers.IO) { onRefresh() } }
+                .onSuccess { conversations = it; archiveError = null }
+                .onFailure { failure ->
+                    archiveError = "Archivio non leggibile: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                    onStorageError(archiveError!!)
+                }
         }
     }
     val byDay = remember(conversations) {
@@ -323,7 +535,16 @@ private fun ConversationArchiveCalendar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = archiveEnabled, onCheckedChange = onArchiveEnabledChanged)
                 Text(if (archiveEnabled) "Archiviazione attiva" else "Archiviazione in pausa", color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                TextButton(onClick = onRefresh) { Text("Aggiorna", color = gold) }
+                TextButton(onClick = {
+                    ioScope.launch {
+                        runCatching { withContext(Dispatchers.IO) { onRefresh() } }
+                            .onSuccess { conversations = it; archiveError = null }
+                            .onFailure { failure ->
+                                archiveError = "Aggiornamento archivio non riuscito: ${failure.localizedMessage ?: failure.javaClass.simpleName}"
+                                onStorageError(archiveError!!)
+                            }
+                    }
+                }) { Text("Aggiorna", color = gold) }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Conservazione: " + retentionLabel, color = Color.White, modifier = Modifier.weight(1f), fontSize = 12.sp)
@@ -378,6 +599,7 @@ private fun ConversationArchiveCalendar(
                     Text("Elimina ${selectedDays.size} giorni", color = Color(0xFFE6A0A0), fontSize = 11.sp)
                 }
             }
+            archiveError?.let { Text(it, color = Color(0xFFE6A0A0), fontSize = 11.sp) }
             Text("Conversazioni del " + day.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.ITALIAN)), color = gold, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             val sessions = byDay[day].orEmpty().sortedByDescending { it.startedAtMillis }
             if (sessions.isEmpty()) Text("Nessuna conversazione archiviata in questo giorno.", color = Color(0xFF9A9DA4), fontSize = 12.sp)
@@ -389,9 +611,23 @@ private fun ConversationArchiveCalendar(
                             " · " + session.turnCount + " messaggi", color = Color(0xFF9A9DA4), fontSize = 10.sp)
                         Row {
                             TextButton(onClick = {
-                                opened = session; turns = onListTurns(session.sessionId)
+                                opened = session
                                 fromText = java.time.Instant.ofEpochMilli(session.startedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
                                 toText = java.time.Instant.ofEpochMilli(session.updatedAtMillis).atZone(zone).toLocalDateTime().format(fmt)
+                                turns = emptyList()
+                                turnsPageInfo = null
+                                turnsLoading = true
+                                ioScope.launch {
+                                    runCatching {
+                                        withContext(Dispatchers.IO) { onListTurns(session.sessionId, 0, 50) }
+                                    }.onSuccess { page ->
+                                        turns = page.turns
+                                        turnsPageInfo = page
+                                    }.onFailure { failure ->
+                                        onStorageError("Conversazione non leggibile: ${failure.localizedMessage ?: failure.javaClass.simpleName}")
+                                    }
+                                    turnsLoading = false
+                                }
                             }) { Text("Apri", color = gold) }
                             TextButton(onClick = { onDeleteConversation(session.sessionId) }) { Text("Elimina", color = Color(0xFFE6A0A0)) }
                         }
@@ -406,12 +642,25 @@ private fun ConversationArchiveCalendar(
     if (confirmSelectedDays) AlertDialog(onDismissRequest = { confirmSelectedDays = false },
         title = { Text("Eliminare i giorni selezionati?") },
         text = { Text("Saranno cancellate tutte le trascrizioni di ${selectedDays.size} giornate selezionate. I giorni non selezionati e i ricordi personali resteranno intatti.") },
-        confirmButton = { TextButton(onClick = { selectedDays.sorted().forEach(onDeleteDay); selectedDays = emptySet(); selectingDays = false; confirmSelectedDays = false }) { Text("Elimina", color = Color(0xFFB94A48)) } },
+        confirmButton = { TextButton(onClick = {
+            val days = selectedDays.sorted()
+            ioScope.launch {
+                withContext(Dispatchers.IO) { days.forEach(onDeleteDay) }
+                conversations = withContext(Dispatchers.IO) { onRefresh() }
+                selectedDays = emptySet(); selectingDays = false; confirmSelectedDays = false
+            }
+        }) { Text("Elimina", color = Color(0xFFB94A48)) } },
         dismissButton = { TextButton(onClick = { confirmSelectedDays = false }) { Text("Annulla") } })
     if (confirmDay) AlertDialog(onDismissRequest = { confirmDay = false },
         title = { Text("Eliminare l'intera giornata?") },
         text = { Text("Saranno cancellate le trascrizioni del giorno " + day + ". I ricordi personali resteranno intatti.") },
-        confirmButton = { TextButton(onClick = { onDeleteDay(day); confirmDay = false }) { Text("Elimina", color = Color(0xFFB94A48)) } },
+        confirmButton = { TextButton(onClick = {
+            ioScope.launch {
+                withContext(Dispatchers.IO) { onDeleteDay(day) }
+                conversations = withContext(Dispatchers.IO) { onRefresh() }
+                confirmDay = false
+            }
+        }) { Text("Elimina", color = Color(0xFFB94A48)) } },
         dismissButton = { TextButton(onClick = { confirmDay = false }) { Text("Annulla") } })
     opened?.let { session ->
         val from = runCatching { LocalDateTime.parse(fromText, fmt).atZone(zone).toInstant().toEpochMilli() }.getOrNull()
@@ -430,13 +679,37 @@ private fun ConversationArchiveCalendar(
                             Divider(color = Color(0xFF3B4049))
                         }
                     }
+                    if (turnsLoading) {
+                        Text("Caricamento messaggi…", color = Color(0xFF9A9DA4), fontSize = 10.sp)
+                    } else if (turnsPageInfo?.hasMore == true) {
+                        TextButton(onClick = {
+                            val nextPage = (turnsPageInfo?.pageIndex ?: 0) + 1
+                            turnsLoading = true
+                            ioScope.launch {
+                                runCatching {
+                                    withContext(Dispatchers.IO) { onListTurns(session.sessionId, nextPage, 50) }
+                                }.onSuccess { page ->
+                                    turns = turns + page.turns
+                                    turnsPageInfo = page
+                                }
+                                turnsLoading = false
+                            }
+                        }) { Text("Carica altri messaggi (" + ((turnsPageInfo?.totalCount ?: 0) - turns.size) + " rimanenti)", color = gold, fontSize = 10.sp) }
+                    }
                 }
             },
             confirmButton = { TextButton(enabled = from != null && until != null && until > from, onClick = {
                 if (from != null && until != null && until > from) {
-                    onDeleteTimeRange(session.sessionId, from, until + 60_000L)
-                    turns = onListTurns(session.sessionId)
-                    if (turns.isEmpty()) opened = null
+                    ioScope.launch {
+                        withContext(Dispatchers.IO) {
+                            onDeleteTimeRange(session.sessionId, from, until + 60_000L)
+                        }
+                        val refreshedPage = withContext(Dispatchers.IO) { onListTurns(session.sessionId, 0, 50) }
+                        turns = refreshedPage.turns
+                        turnsPageInfo = refreshedPage
+                        conversations = withContext(Dispatchers.IO) { onRefresh() }
+                        if (turns.isEmpty()) opened = null
+                    }
                 }
             }) { Text("Elimina intervallo", color = Color(0xFFB94A48)) } },
             dismissButton = { TextButton(onClick = { opened = null }) { Text("Chiudi", color = gold) } })

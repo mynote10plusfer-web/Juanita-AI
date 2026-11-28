@@ -2,9 +2,17 @@
 
 Android voice assistant for natural multilingual, multi-turn conversations, configurable personality and regional speech profiles.
 
-## Current signed release: 0.10.8 (versionCode 37)
+## Stable production baseline: 0.11.12 (versionCode 51)
 
-Signed Release 0.10.8 adds progressive personal knowledge: a voice-led first meeting, optional name and birth date gathered naturally, a dedicated encrypted profile store connected to Gemini Live, and gradual learning from ordinary conversation. PR #23 has merged the timezone-safe Smart Alarm schedule model (not yet a working alarm). PR #24 is under CI review for automatic recovery after Gemini Live disconnects; it is not yet released or physically tested. Intermediate builds are not for installation.
+Production application ID: `ai.juanita.app`, protected by the permanent signing certificate.
+
+## Current development candidate — PR #58: 0.11.17 (versionCode 56)
+
+The cumulative integration branch is the sole active development line. Its signed Release workflow builds the production package and verifies the permanent certificate, exact application ID and monotonically increasing version before uploading an APK artifact. Debug is used only as an internal CI test target; no debug APK is published for installation.
+
+Current candidate includes identity-aware encrypted memory and archive, native Gemini Live voice, offline wake phrase source integration, reliability/battery safeguards, alarms, vision/image search, and conversational weather. The new route estimate is an experimental base route using public OpenStreetMap/OSRM data: no live traffic, no motorcycle-specific routing and no turn-by-turn navigation. It is not release-accepted until exact-head CI and device tests pass.
+
+Do not uninstall an older `.debug` installation containing personal memory/archive until encrypted export/import or a verified migration is available. Android treats `ai.juanita.app.debug` and `ai.juanita.app` as separate apps with separate private data.
 
 ## Historical release: 0.10.4 (versionCode 33)
 
@@ -26,7 +34,7 @@ This candidate adds opt-in Android notification reading, increments versionCode,
 - Android Keystore-backed AES-256-GCM memory. Full text transcripts from both sides of every Gemini Live conversation are archived automatically by default, locally, in encrypted per-session files; archive survives app/process restarts and is independent of curated personal facts. Raw microphone audio is never archived. Archive can be paused, assigned manual/7/30/90-day retention, and individual conversations can be deleted; manual retention is the default. The app restores the latest 60 archived turns plus curated facts and a grounded autobiographical continuity profile into a new Live session (bounded by the model context budget). A Gemini Live function tool can search older archived sessions on demand and return a small relevant excerpt before answering. Automatic curated personal-memory extraction is enabled by default, separately, and uses a retryable encrypted queue; it now captures meaningful non-sensitive experiences, milestones, relevant people/context and project decisions as well as stable facts. Extraction still requires successful Gemini transcription and a successful model response; inspect the in-app memory status and memory list to verify each step. A local lexical archive-search tool now lets Gemini retrieve relevant older conversations before answering; it ranks phrase/token matches and recency. Vector/embedding-based multilingual semantic search and a dedicated editable biography screen remain future work.
 - CameraX front/rear camera preview and optional 1 FPS image frames to the active Gemini Live session are implemented in 0.9.0; physical-device testing is pending.
 - The Altro tab includes a local capability catalogue and Improvement Lab. User-authored engineering reports are encrypted on-device, can be previewed, exported as ordinary UTF-8 .txt files and deleted. Automatic gap detection is a later phase.
-- GitHub Actions builds a debug APK and a permanently signed release APK.
+- GitHub Actions compiles the debug variant only for CI tests and builds the permanently signed production Release APK; no debug APK artifact is uploaded for installation.
 
 ## AI provider and cost constraints
 
@@ -36,13 +44,14 @@ The user selected Firebase Spark/free tier with Firebase AI Logic and Gemini Dev
 
 The Android app initializes Firebase App Check. Debug builds use the Firebase App Check debug provider; release builds use Play Integrity. The debug provider requires registering its generated debug token in Firebase Console. Release App Check registration and distribution settings must be completed before distributing the signed release build. Do not publish debug tokens, signing credentials or private keys.
 
-For a pre-release conversation test, prefer the debug build and Firebase's documented debug-provider flow. A production Play Integrity registration is still required before distributing the signed release build.
+The debug provider is reserved for internal CI/developer diagnostics only; do not install debug APKs as the ongoing user app. The user-facing candidate is the signed production Release. Play Integrity registration and distribution settings must be verified before wider distribution.
 
 ## Notification reader — deferred
 
-- Notification reading is intentionally disabled in the 0.10.6 sideload build. The Android notification-listener service is not declared in the manifest, and no Gemini Live notification-reading tools or notification-access UI are exposed.
-- The implementation source is retained for a later project phase, after a distribution path that passes Google Play Protect requirements is established.
-- Do not ask users to disable Play Protect or grant notification access for this build.
+- Notification reading is excluded from the 0.11.3 sideload candidate after Google Play Protect blocked the 0.11.2 candidate.
+- The shipped manifest does not declare the privileged Android notification-listener service; Gemini Live notification tools, notification-reader settings and onboarding actions are removed.
+- Historical implementation files may remain in the repository for a later review, but they are not part of the active app experience.
+- Do not ask users to disable Play Protect. Revisit only after a compliant distribution/policy path is established; Play Developer registration alone does not guarantee approval.
 
 
 ## Not implemented yet
@@ -74,7 +83,63 @@ The microphone is activated only after the user grants permission and starts a L
 
 ## Current engineering work (2026-11-08)
 
-- Smart Alarm schedule model: merged in PR #23. This is only the recurrence/time-zone calculation core; Android alarm delivery, persistence, controls and spoken greeting are still planned.
-- Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks, bounded reconnection and recent transcript context replay. It must pass CI and real-device testing before being called fixed or included in a Release APK.
+- Smart Alarm: app-owned local multi-alarm scheduling, persistence, controls, recurrence, voice stop and optional Gemini Live morning greeting are implemented in the 0.11.5/0.11.6 candidate. Physical reliability testing on Note10+ Android 12 and S22 Ultra Android 15 is still required.
+- Gemini Live audio recovery: PR #24 adds GoAway handling, websocket health checks and bounded reconnection. PR #31 adds a session-scoped encrypted continuity snapshot, independent of the optional archive, for recovery context; latest CI and real-device testing are still required before calling it fixed.
 - Familiar-person speaker identification remains unimplemented. Voice transcription is not speaker recognition; local enrollment requires explicit consent and privacy/legal review.
 - Notification reading remains deferred; do not disable Play Protect.
+
+
+## Current candidate status — 2026-11-10
+
+- PR #31 remains draft and unmerged. Current cumulative candidate is 0.11.11 / versionCode 50. Keep production application ID `ai.juanita.app`, permanent signing certificate and all local data unchanged.
+- The 0.11.11 audio-route changes are awaiting fresh CI validation. Any debug artifact is separate from the permanent-certificate-signed production update; verify the certificate and release artifact independently.
+- User device test on 2026-11-10: loudspeaker causes repeated self-interruptions; headphones do not. Candidate 0.11.11 now aligns Android input source, assistant playback usage and communication routing/mode, with route restoration. Physical testing remains the release gate; do not claim the voice fix complete before it passes.
+- Notification reading remains deferred after the earlier Play Protect block. Do not disable Play Protect or restore NotificationListenerService in this release.
+- Current tabs remain Home, Avatar, Sveglia, Settaggi, Memoria and Altro. Their source-level functions and remaining gaps are documented in the roadmap.
+- Next approved product area remains Juanita Personal Organizer: after voice/alarm reliability validation, implement encrypted local reminders/tasks, then extend the read-only Android calendar agenda. No paid APIs, subscriptions or billing without explicit approval.
+
+
+## 0.11.4 candidate — voice-controlled alarm stop
+
+- VersionCode 43. A user can ask Juanita to stop the currently ringing Juanita alarm immediately, after a number of seconds, after a number of complete ringtone playbacks, or whichever of the two limits is reached first.
+- A plain “stop the alarm” request stops the current occurrence immediately. Timed/count-based stop affects only the currently ringing occurrence; future weekly recurrence remains scheduled.
+- If multiple alarms are ringing, Juanita must ask which one. Supported limits: 1–86,400 seconds and 1–100 complete ringtone playbacks.
+- The count is defined as one full playback of the configured Android alarm tone, not a short beep. Device testing is required to validate this behavior on Samsung hardware.
+- Notification reading remains deferred in the sideload candidate. Do not disable Play Protect.
+
+
+## 0.11.5 candidate — gender-separated Gemini Live voices
+
+- VersionCode 44. The voice selector groups the full 30-voice Gemini Live catalogue into 14 female and 16 male voices, following Firebase AI Logic's published gender labels.
+- Existing saved voice IDs remain unchanged; the selected voice continues to be used by Live conversations and the voice preview. Selection is persisted as before.
+- No Android system TTS is introduced. Each option can be auditioned through the existing Gemini Live preview; actual availability must be confirmed by a successful Live session on the configured model.
+
+
+## 0.11.6 candidate — assistant identity and background display lifecycle
+
+- VersionCode 45. First-run onboarding offers Juanita (female identity) or José (male identity); the choice is saved locally and can be changed later in Settings.
+- Persona instructions use matching grammatical gender and assistant name. The initial Gemini Live voice is aligned to the selected identity; a previously selected voice is retained when it already matches. The user can still choose any voice manually.
+- Existing installations default to the existing Juanita identity and retain their saved assistant name, voice and wake phrase. Switching identity updates the default wake phrase only when it still matches the previous app default; a custom phrase is preserved.
+- Identity switching does not clear memories, conversation archive, alarms, avatar profiles or other preferences.
+- The final source audit also updates the alarm screen's spoken instruction, retry buttons, alarm-tab labels and ringing notification to the selected assistant name and grammatical gender.
+- MainActivity now clears its keep-screen-on window flag while paused and restores it only when the active call screen requires it in the foreground. The alarm lock-screen activity clears show-when-locked, turn-screen-on and keep-screen-on overrides when it stops, then reapplies them only when visible.
+- The biometric symptom is not yet confirmed fixed: no overlay permission, accessibility service or fingerprint-control API is declared in the manifest. Validate on Note10+ Android 12 with the user's foreground/background/force-stop test sequence before claiming resolution.
+- No Android TTS, paid service, package ID or signing-key change.
+
+
+## 0.11.7 candidate — background power and alarm-session cleanup
+
+- VersionCode 46. An alarm-started Gemini Live session is now tagged to its originating alarm. Snoozing or dismissing that alarm stops only that matching voice session, releases its CPU partial wake lock and closes its foreground service; unrelated manually started voice calls are not stopped.
+- Explicit timed and ring-count alarm stops also stop the matching alarm-owned voice session. The normal first spoken morning response may stop the ringtone without stopping the conversation.
+- Alarm lock-screen activity listens for an alarm-closed event, clears its screen flags on stop, and refuses stale full-screen PendingIntents when the alarm is no longer active.
+- Main and avatar clocks update only while their Activity is RESUMED. Conversation archive refresh polling is also suspended outside the foreground.
+- If Gemini Live exhausts its reconnect attempts, the voice service now begins cleanup rather than retaining its foreground service and CPU wake lock indefinitely.
+- These are source-level fixes, not proof of battery improvement. Verify battery drain, screen wake behavior, microphone indicator and wake-lock release on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+## 0.11.12 candidate — background Live session continuity
+
+- A user-started Gemini Live session is not stopped when the launcher task is removed from Recents; the foreground service continues until the user taps **Termina** or explicitly ends the conversation in Juanita.
+- The voice foreground service declares both microphone capture and media playback, matching its duplex voice-call behavior.
+- The service returns `START_REDELIVER_INTENT` for an active explicit start so Android can redeliver the session start intent after reclaiming the app process. The normal startup path then restores the encrypted continuity snapshot before opening a fresh Live session.
+- This is best-effort recovery, not a guarantee against force-stop, user stop, Samsung deep sleep/power restrictions, loss of network, or server-side session expiry. Validate on Note10+ Android 12 and S22 Ultra Android 15 with Home, Recents removal, screen-off and long-duration tests. The service notification remains the visible stop control.

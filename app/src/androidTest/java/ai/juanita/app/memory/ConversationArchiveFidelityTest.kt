@@ -3,13 +3,27 @@ package ai.juanita.app.memory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.util.UUID
+import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ConversationArchiveFidelityTest {
+
+    @Before
+    fun enableArchiveForThisTest() {
+        // clearAll() is a privacy reset and deliberately disables archiving;
+        // each test opts back in explicitly before exercising archive behavior.
+        EncryptedMemoryStore(InstrumentationRegistry.getInstrumentation().targetContext)
+            .setConversationArchiveEnabled(true)
+    }
 
     @Test
     fun preservesLongUnicodeTurnExactlyAcrossStoreInstances() {
@@ -61,4 +75,343 @@ class ConversationArchiveFidelityTest {
             EncryptedMemoryStore(context).deleteConversation(sessionId)
         }
     }
+    @Test
+    fun appendsTranscriptAsIndependentEncryptedFramesAcrossStoreInstances() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "journal-${UUID.randomUUID()}"
+        val store = EncryptedMemoryStore(context)
+        val expected = (0 until 160).map { index -> "Turno $index — contenuto unicode áβč ".repeat(8) }
+        try {
+            expected.forEachIndexed { index, value ->
+                store.appendConversationTurn(sessionId, if (index % 2 == 0) "USER" else "ASSISTANT", value, 1_800_000_000_000L + index)
+            }
+            val journal = File(context.filesDir, "conversation_archive/$sessionId.journal")
+            assertTrue("New turns must use an append-only encrypted journal", journal.isDirectory)
+            assertEquals(expected.size, journal.listFiles { file -> file.isFile && file.name.endsWith(".enc") }?.size)
+            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
+            assertEquals(expected, restored.map { it.text })
+            assertEquals(expected.size, restored.size)
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
+    @Test
+    fun compactsJournalWithoutLosingTurnsAndAllowsSubsequentAppend() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "compact-${UUID.randomUUID()}"
+        val store = EncryptedMemoryStore(context)
+        try {
+            repeat(6) { index ->
+                store.appendConversationTurn(sessionId, "USER", "messaggio-$index", 1_800_000_000_000L + index)
+            }
+            store.deleteConversationRange(sessionId, 1_800_000_000_002L, 1_800_000_000_004L)
+            val directory = File(context.filesDir, "conversation_archive")
+            assertTrue(File(directory, "$sessionId.enc").isFile)
+            assertTrue(!File(directory, "$sessionId.journal").exists())
+            store.appendConversationTurn(sessionId, "ASSISTANT", "dopo-compattazione", 1_800_000_000_006L)
+            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
+            assertEquals(listOf("messaggio-0", "messaggio-1", "messaggio-4", "messaggio-5", "dopo-compattazione"), restored.map { it.text })
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
+    @Test
+    fun carriesForwardLatestInterruptedSnapshotToNewSession() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val olderSession = "interrupted-old-" + UUID.randomUUID()
+        val latestSession = "interrupted-latest-" + UUID.randomUUID()
+        val nextSession = "interrupted-next-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        try {
+            store.appendContinuityTurn(olderSession, "USER", "Argomento precedente non più attuale.", 1_800_000_000_000L)
+            store.appendContinuityTurn(latestSession, "USER", "Stavamo correggendo la riconnessione vocale.", 1_800_000_000_100L)
+            store.appendContinuityTurn(latestSession, "ASSISTANT", "Dobbiamo conservare il contesto dopo una caduta.", 1_800_000_000_200L)
+
+            val recovered = EncryptedMemoryStore(context).carryForwardLatestContinuitySnapshot(nextSession)
+
+            assertTrue(recovered.contains("riconnessione vocale"))
+            assertTrue(recovered.contains("conservare il contesto"))
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(latestSession).isBlank())
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(olderSession).isBlank())
+
+            store.appendContinuityTurn(nextSession, "USER", "Riprendiamo da dove eravamo rimasti.")
+            val continued = EncryptedMemoryStore(context).buildContinuityContext(nextSession)
+            assertTrue(continued.contains("riconnessione vocale"))
+            assertTrue(continued.contains("Riprendiamo da dove eravamo rimasti"))
+        } finally {
+            store.clearContinuitySnapshots()
+        }
+    }
+
+    @Test
+    fun activeConversationContinuitySurvivesStoreRecreationAndIgnoresArchivePause() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "continuity-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val archiveWasEnabled = store.isConversationArchiveEnabled
+        try {
+            store.setConversationArchiveEnabled(false)
+            store.appendContinuityTurn(sessionId, "USER", "Stiamo progettando il promemoria locale cifrato.")
+            store.appendContinuityTurn(sessionId, "ASSISTANT", "Prima completiamo il recupero della conversazione.")
+            val restored = EncryptedMemoryStore(context).buildContinuityContext(sessionId)
+            assertTrue(restored.contains("promemoria locale cifrato"))
+            assertTrue(restored.contains("recupero della conversazione"))
+            assertTrue(EncryptedMemoryStore(context).listConversationTurns(sessionId).isEmpty())
+            EncryptedMemoryStore(context).clearContinuitySnapshot(sessionId)
+            assertTrue(EncryptedMemoryStore(context).buildContinuityContext(sessionId).isBlank())
+        } finally {
+            store.clearContinuitySnapshot(sessionId)
+            store.setConversationArchiveEnabled(archiveWasEnabled)
+        }
+    }
+
+    @Test
+    fun liveRecallReturnsRecentActiveSessionTurnsEvenWhenQueryHasNoMatchingKeywords() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "recent-recall-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        try {
+            store.appendContinuityTurn(
+                sessionId,
+                "USER",
+                "Ho appena detto che la riunione è alle diciotto e trenta."
+            )
+            store.appendContinuityTurn(
+                sessionId,
+                "ASSISTANT",
+                "Va bene, terrò presente l'orario delle diciotto e trenta."
+            )
+
+            val recalled = EncryptedMemoryStore(context).buildRelevantRecallContext(
+                query = "te l'ho appena detto",
+                activeSessionId = sessionId
+            )
+
+            assertTrue("Recent user information must be returned without lexical matching",
+                recalled.contains("la riunione è alle diciotto e trenta"))
+            assertTrue("The immediate assistant context should be included as well",
+                recalled.contains("terrò presente l'orario"))
+            assertTrue(recalled.contains("RECENT ACTIVE CONVERSATION"))
+        } finally {
+            store.clearContinuitySnapshot(sessionId)
+        }
+    }
+
+    @Test
+    fun continuityWritesDoNotEnumerateOrDecryptIndependentMemoryFiles() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "continuity-isolation-" + UUID.randomUUID()
+        val memoryDirectory = File(context.filesDir, "encrypted_memories").apply { mkdirs() }
+        val unrelatedMemoryFile = File(memoryDirectory, "continuity-probe-" + UUID.randomUUID() + ".mem")
+        val store = EncryptedMemoryStore(context)
+        try {
+            // A damaged unrelated memory file must not block short-lived continuity updates.
+            // Full memory reads should still detect the damaged file through their normal path.
+            unrelatedMemoryFile.writeBytes(byteArrayOf(1, 2, 3, 4))
+            store.appendContinuityTurn(sessionId, "USER", "Continuità isolata dalle memorie permanenti.")
+            val restored = EncryptedMemoryStore(context).buildContinuityContext(sessionId)
+            assertTrue(restored.contains("Continuità isolata"))
+            assertTrue("Continuity persistence must leave unrelated memory ciphertext untouched",
+                unrelatedMemoryFile.isFile && unrelatedMemoryFile.readBytes().contentEquals(byteArrayOf(1, 2, 3, 4)))
+        } finally {
+            unrelatedMemoryFile.delete()
+            store.clearContinuitySnapshot(sessionId)
+        }
+    }
+
+    @Test
+    fun recallReportsUnreadableArchiveInsteadOfTreatingItAsNoHistory() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "corrupt-" + UUID.randomUUID()
+        val archiveDirectory = File(context.filesDir, "conversation_archive").apply { mkdirs() }
+        val corruptArchive = File(archiveDirectory, "$sessionId.enc")
+
+        try {
+            // Simulate an unreadable encrypted archive without touching any user data.
+            corruptArchive.writeBytes(byteArrayOf(1, 2, 3, 4))
+            val failure = runCatching {
+                EncryptedMemoryStore(context).buildRelevantRecallContext("ricordo conversazione")
+            }.exceptionOrNull()
+
+            assertNotNull("Recall must surface the unreadable archive instead of returning an empty result.", failure)
+            assertTrue(failure is IllegalStateException)
+            assertTrue(failure?.message.orEmpty().contains("retrieval is incomplete"))
+        } finally {
+            corruptArchive.delete()
+        }
+    }
+
+
+    @Test
+    fun storesMoreThanOneHundredMemoriesAndMoreThanThirtyTwoThousandCharacters() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val store = EncryptedMemoryStore(context)
+        val ids = mutableSetOf<String>()
+        val longText = "Ricordo esteso — " + "contenuto verificabile áβč. ".repeat(45)
+        try {
+            repeat(105) { index ->
+                val item = store.addMemory(
+                    text = "Memoria-$index — $longText",
+                    category = "general",
+                    source = "user_saved",
+                    confirmedByUser = true
+                )
+                ids += item.id
+            }
+            val restored = EncryptedMemoryStore(context).listMemories().filter { it.id in ids }
+            assertEquals("All 105 independent memory records must survive recreation", 105, restored.size)
+            assertTrue("Aggregate memory text must exceed the removed 32 KB ceiling",
+                restored.sumOf { it.text.length } > 32_000)
+            assertTrue("A single memory must no longer be truncated to 500 characters",
+                restored.all { it.text.length > 500 })
+        } finally {
+            store.deleteMemories(ids)
+        }
+    }
+
+    @Test
+    fun migratesLegacyTranscriptRecordsBeforeTheOldThreeHundredTurnLimitCanDropThem() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "legacy-migration-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val legacyRecords = JSONArray()
+        val expected = (0 until 301).map { index ->
+            val id = "legacy-turn-" + index
+            legacyRecords.put(JSONObject().apply {
+                put("kind", "turn")
+                put("id", id)
+                put("sessionId", sessionId)
+                put("role", if (index % 2 == 0) "USER" else "ASSISTANT")
+                put("text", "Legacy transcript entry " + index)
+                put("createdAt", 1_800_000_000_000L + index)
+                put("personaId", "persona-legacy")
+            })
+            "Legacy transcript entry " + index
+        }
+        try {
+            val writer = EncryptedMemoryStore::class.java.getDeclaredMethod(
+                "writeRecords",
+                JSONArray::class.java,
+                Boolean::class.javaPrimitiveType
+            ).apply { isAccessible = true }
+            writer.invoke(store, legacyRecords, true)
+            val restored = EncryptedMemoryStore(context).listConversationTurns(sessionId)
+            assertEquals("Legacy turns must migrate before the old 300-turn ceiling is applied", 301, restored.size)
+            assertEquals(expected, restored.map { it.text })
+            assertTrue(restored.all { it.personaId == "persona-legacy" })
+        } finally {
+            store.deleteConversation(sessionId)
+            store.clearAll()
+        }
+    }
+
+
+    @Test
+    fun readsEncryptedTranscriptInChronologicalPagesWithoutLosingOrRepeatingTurns() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "paged-journal-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val expected = (0 until 47).map { index ->
+            "Pagina archivio turno $index — contenuto áβč"
+        }
+        try {
+            expected.forEachIndexed { index, value ->
+                store.appendConversationTurn(
+                    sessionId,
+                    if (index % 2 == 0) "USER" else "ASSISTANT",
+                    value,
+                    1_800_000_000_000L + index
+                )
+            }
+
+            val first = EncryptedMemoryStore(context).listConversationTurnsPage(sessionId, 0, 10)
+            assertEquals(47, first.totalCount)
+            assertEquals(10, first.turns.size)
+            assertTrue(first.hasMore)
+            assertEquals(expected.take(10), first.turns.map { it.text })
+
+            val collected = mutableListOf<String>()
+            for (pageIndex in 0..4) {
+                val page = EncryptedMemoryStore(context).listConversationTurnsPage(sessionId, pageIndex, 10)
+                assertEquals(47, page.totalCount)
+                collected += page.turns.map { it.text }
+                assertEquals(pageIndex < 4, page.hasMore)
+            }
+            assertEquals("Every archived turn must appear exactly once across pages", expected, collected)
+
+            val beyondEnd = EncryptedMemoryStore(context).listConversationTurnsPage(sessionId, 99, 10)
+            assertTrue(beyondEnd.turns.isEmpty())
+            assertEquals(47, beyondEnd.totalCount)
+            assertTrue(!beyondEnd.hasMore)
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
+
+    @Test
+    fun archiveIndexIsRebuiltOnDemandInsteadOfRewrittenForEveryNewTurn() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "lazy-index-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val indexFile = File(context.filesDir, "conversation_recall_index.enc")
+        val archiveWasEnabled = store.isConversationArchiveEnabled
+        store.setConversationArchiveEnabled(true)
+        try {
+            store.appendConversationTurn(sessionId, "USER", "La riunione sul progetto Quercia è fissata per lunedì.")
+            val firstSearch = store.buildRelevantRecallContext("progetto Quercia")
+            assertTrue(firstSearch.contains("progetto Quercia"))
+            assertTrue("A search should build the derived archive index", indexFile.isFile)
+
+            store.appendConversationTurn(sessionId, "ASSISTANT", "Per il progetto Quercia, la scadenza concordata è venerdì.")
+            assertFalse("Appending a turn should invalidate, not rewrite, the derived index", indexFile.exists())
+
+            val refreshedSearch = EncryptedMemoryStore(context).buildRelevantRecallContext("progetto Quercia")
+            assertTrue(refreshedSearch.contains("lunedì"))
+            assertTrue(refreshedSearch.contains("venerdì"))
+            assertTrue("The next search should rebuild the derived index", indexFile.isFile)
+        } finally {
+            store.deleteConversation(sessionId)
+            store.setConversationArchiveEnabled(archiveWasEnabled)
+        }
+    }
+
+
+
+    @Test
+    fun retrievalPrefersRecentTurnWhenOlderTurnHasSameKeywords() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val sessionId = "recency-ranking-" + UUID.randomUUID()
+        val store = EncryptedMemoryStore(context)
+        val query = "zebraverde progetto ricorrente"
+        val olderText = "zebraverde progetto ricorrente — decisione precedente."
+        val recentText = "zebraverde progetto ricorrente — decisione aggiornata."
+        try {
+            store.appendConversationTurn(
+                sessionId, "USER", olderText,
+                System.currentTimeMillis() - 120L * 24L * 60L * 60L * 1000L
+            )
+            store.appendConversationTurn(
+                sessionId, "USER", recentText,
+                System.currentTimeMillis()
+            )
+
+            val hits = EncryptedMemoryStore(context).searchArchivedTurns(
+                query = query,
+                limit = 2,
+                personaId = null
+            )
+
+            assertEquals(2, hits.size)
+            assertTrue(
+                "Recent matching information should rank ahead of an older turn with identical keywords",
+                hits.first().turn.text.contains("decisione aggiornata")
+            )
+        } finally {
+            store.deleteConversation(sessionId)
+        }
+    }
+
 }

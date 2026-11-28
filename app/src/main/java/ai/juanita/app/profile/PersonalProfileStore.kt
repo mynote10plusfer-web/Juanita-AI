@@ -54,6 +54,8 @@ data class PersonalProfile(
         const val LANGUAGES = "languages"
         const val AGE = "age"
         const val BIRTH_DATE = "birth_date"
+        const val BIRTH_TIME = "birth_time"
+        const val BIRTH_PLACE = "birth_place"
         const val INTERESTS = "interests"
         const val LIFESTYLE = "lifestyle"
         const val GOALS = "goals"
@@ -61,7 +63,7 @@ data class PersonalProfile(
 
         val allowedKeys = setOf(
             PREFERRED_NAME, HOME_LOCALITY, CURRENT_LOCALITY, LANGUAGES,
-            AGE, BIRTH_DATE, INTERESTS, LIFESTYLE, GOALS, ASSISTANCE_PREFERENCES
+            AGE, BIRTH_DATE, BIRTH_TIME, BIRTH_PLACE, INTERESTS, LIFESTYLE, GOALS, ASSISTANCE_PREFERENCES
         )
     }
 }
@@ -156,8 +158,14 @@ class PersonalProfileStore(context: Context) {
 
     @Synchronized
     fun clear() {
-        if (profileFile.exists() && !profileFile.delete()) {
-            throw IllegalStateException("Impossibile eliminare il profilo.")
+        // Remove both the committed profile and any interrupted atomic-write
+        // temporary file. The Keystore key is intentionally retained so a future
+        // profile can be created without changing the app's security identity.
+        val temporaryFile = File(appContext.filesDir, "$FILE_NAME.tmp")
+        listOf(profileFile, temporaryFile).forEach { file ->
+            if (file.exists() && !file.delete()) {
+                throw IllegalStateException("Impossibile eliminare il dato profilo: ${file.name}")
+            }
         }
     }
 

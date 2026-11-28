@@ -1,6 +1,416 @@
+# 2026-11-19 — Roadmap esecutiva fissata e correzioni di affidabilità
+
+## PRIORITÀ MASSIMA — Memoria affidabile, comprensione e risposte ancorate alle prove (2026-11-27)
+
+Questa priorità precede nuove funzioni accessorie. Non si dichiara “memoria migliorata” sulla base della sola presenza di un archivio cifrato: il criterio è che Juanita recuperi il fatto giusto, capisca la domanda e non inventi dettagli.
+
+### Diagnosi del codice attuale
+- L'archivio cifrato delle conversazioni e la memoria sintetica sono due livelli distinti. L'archivio può conservare turni, ma il recupero delle conversazioni passate usa soprattutto sovrapposizione lessicale, frase e recenza: parafrasi, pronomi, riferimenti indiretti e domande contestuali possono non trovare il passaggio giusto.
+- Il recupero generale dipende in parte dal fatto che Gemini decida di chiamare `searchPastConversations`. Le istruzioni lo raccomandano, ma non costituiscono un vincolo deterministico del runtime.
+- Il richiamo automatico è attivato solo da una lista di cue linguistici; una richiesta formulata in modo diverso può non attivarlo. Anche quando parte, il risultato viene reiniettato come messaggio di contesto e il modello deve ancora interpretarlo correttamente.
+- L'estrazione automatica delle memorie è disattivata per impostazione SAFE. Se l'utente non l'ha attivata esplicitamente, non vengono creati nuovi fatti sintetici dalla coda: la conversazione può essere archiviata, ma non diventa automaticamente una memoria strutturata. Non cambiare questo consenso senza una scelta esplicita dell'utente.
+- L'estrazione attiva, quando consentita, è asincrona e batch-based (3 turni), dipende da una chiamata al modello e applica soglie di confidenza. Può quindi arrivare in ritardo o non produrre alcuna memoria.
+- Il contesto Live contiene istruzioni molto estese e in inglese. Le regole di memoria sono numerose ma non sempre sufficienti a impedire che il modello confonda inferenze, vecchie informazioni e fatti confermati.
+
+### Architettura obiettivo — senza servizi a pagamento
+1. **Memoria di lavoro immediata:** mantenere un contesto ordinato degli ultimi turni completi e delle correzioni, disponibile deterministicamente al runtime; non affidare il ricordo di ciò che è appena stato detto alla sola chiamata di un tool da parte del modello.
+2. **Fatti durevoli strutturati:** distinguere fatti esplicitamente dichiarati, preferenze, decisioni di progetto, eventi e informazioni provvisorie. Conservare fonte, data, identità/persona, livello di conferma e collegamento alla versione precedente. Nessuna promozione silenziosa di una supposizione a fatto.
+3. **Ricerca ibrida:** mantenere il recupero locale lessicale e aggiungere espansione controllata con sinonimi/parafrasi e collegamenti tematici; valutare embeddings locali solo dopo benchmark su Note10+ e S22 Ultra, con modello leggero, offline e consumo misurato. Nessun embedding cloud o servizio a pagamento introdotto implicitamente.
+4. **Comprensione della richiesta:** prima di rispondere, identificare intento, entità, riferimenti (“quello”, “come ti dicevo”), vincoli, periodo temporale e richiesta effettiva. Se il riferimento non è risolvibile con prove disponibili, porre una sola domanda mirata.
+5. **Correzioni e conflitti:** una correzione esplicita dell'utente prevale sul dato precedente; conservare la provenienza e lo storico cifrato. Se due fonti sono in conflitto senza una correzione chiara, non scegliere arbitrariamente.
+6. **Risposte ancorate alle prove:** separare nel contesto interno fatti confermati, estratti storici, dati provvisori e inferenze. Vietato inventare nomi, date, numeri, preferenze, eventi o risultati di strumenti. Se non c'è prova sufficiente, dire che non è stato trovato o chiedere chiarimento.
+7. **Osservabilità e privacy:** aggiungere diagnostica non sensibile su richiamo tentato/riuscito, fonti consultate, risultati vuoti, errori e latenza. Mai registrare transcript completi, audio, dati personali o contenuti sensibili nei log.
+
+### Sequenza di lavoro e test di accettazione
+- **M1 — Recupero deterministico del contesto recente:** verificare che ogni richiesta riferita ai turni precedenti riceva gli ultimi turni completi, senza dipendere da parole chiave o dal tool call spontaneo del modello; test per pronome, parafrasi, follow-up, correzione e cambio sessione.
+- **M2 — Indice e ricerca storica:** testare frasi diverse con lo stesso significato, italiano/spagnolo/inglese, nomi propri, numeri/modelli, date e fatti recenti contro fatti più vecchi; includere casi senza match per evitare falsi positivi.
+- **M3 — Comprensione e risoluzione riferimenti:** test conversazionali con richieste ellittiche, più vincoli, negazioni, correzioni e riferimenti a entità già citate. La risposta deve seguire l'intento e non soltanto ripetere parole corrispondenti.
+- **M4 — Anti-allucinazione e provenienza:** suite di regressione con informazioni mancanti, contraddittorie o solo ipotizzate; accettare soltanto risposte che citano correttamente la fonte nel contesto o dichiarano l'incertezza.
+- **M5 — Memoria durevole e aggiornamento:** verificare salvataggio, lettura, correzione, supersessione, riavvio e recupero dopo errore/rete assente; preservare AES-GCM, chiavi, schema compatibile e dati esistenti.
+- **M6 — Prestazioni:** misurare tempo di ricerca, CPU, RAM e batteria su Note10+ Android 12 e S22 Ultra; niente modello locale pesante o processo in background continuo.
+
+- **M7 — Comprensione vocale e vocabolario personale:** separare gli errori di trascrizione dagli errori di interpretazione; registrare solo correzioni esplicite dell'utente in un vocabolario locale cifrato; riconoscere nomi propri, marchi, sigle, lettere ripetute e combinazioni alfanumeriche; reiniettare la forma confermata nel contesto Live e nelle sessioni successive. Conservare la trascrizione originale per audit e non applicare correzioni ambigue. Test minimo: “Suzuki GSX 8T” seguito da “No, sono due T” deve produrre e mantenere “Suzuki GSX-8TT”; “è una T” non deve creare una correzione.
+
+### Regole di rilascio
+- Nessuna migrazione distruttiva, nessuna cancellazione o riscrittura dell'archivio personale esistente.
+- Non attivare automaticamente l'estrazione cloud SAFE né modificare i consensi esistenti.
+- Nessuna nuova API a pagamento, subscription o chiave segreta nell'APK.
+- Ogni fase richiede test JVM e strumentali pertinenti; la CI deve riferirsi all'HEAD esatto. Le prestazioni e la qualità conversazionale richiedono anche test reali sui telefoni.
+- La metrica di successo è la precisione del ricordo e della comprensione, non il volume di testo conservato o la lunghezza delle istruzioni al modello.
+
+---
+
+
+## 2026-11-27 — Consenso astrologico permanente controllabile dall'utente
+- Aggiunta in Settaggi una sezione dedicata **Privacy astrologica** con interruttore esplicito, disattivato per impostazione iniziale.
+- Quando attivo, l'utente autorizza in modo persistente l'invio a CosmyDay dei soli dati di nascita già salvati (data, ora e luogo) quando richiede un tema natale. Non viene esteso alle letture giornaliere/settimanali/mensili, che continuano a usare soltanto il segno solare.
+- La preferenza è locale sul dispositivo, separata dal profilo personale cifrato e dalla memoria. Disattivandola vengono bloccate le nuove richieste basate sul consenso persistente; resta possibile concedere un consenso una tantum per una singola richiesta.
+- La UI spiega il destinatario esterno, i dati coinvolti e la revoca. Non modifica né cancella i dati di nascita esistenti.
+- Implementazione inserita nella PR #58; build, test e verifica su dispositivo ancora necessari. Non dichiarare la funzione pronta finché la CI sull'HEAD esatto non termina.
+
+
+## Stato operativo corrente — 2026-11-27 (PR #58)
+
+- Corsia unica: PR #58, branch `integration/unified-rollup-2026-11-18`, draft/open/unmerged. HEAD prima di questa nota: `5b87643304a62f42d2e2a22874bb5b35f576da8b`. Rileggere sempre la testa PR prima di ogni modifica o build.
+- PR #55–#57 e i precedenti rami sperimentali sono chiusi/non fusi; il loro codice valido va mantenuto nella roll-up #58, senza riaprire linee parallele.
+- Release firmata del precedente HEAD `e4e1b0caa6bcf3cc6d5d9031b972308bd3430a64` è riuscita (run `45956829358`). CI Android su quel commit: build debug, test JVM e validazione modello/tokenizer verdi; strumentali API 31 erano ancora in esecuzione. Il codice successivo ha avviato CI esatta nuova; non dichiarare APK pronta finché la CI corrente e il controllo firma/versione non terminano.
+- Ultimi fix: briefing meteo della sveglia usa il Fused Location Provider con priorità bilanciata, richiesta one-shot e fallback lastLocation, senza forzare GPS; wake KWS usa il gate VAD anche in Release, ma risparmio energetico e accuratezza non sono ancora misurati su Note10+ / S22 Ultra.
+- Nuova funzione in validazione: menu configurabile “Cosa vuoi ascoltare al risveglio?” nel tab Sveglia. Default compatibile: meteo e calendario attivi; oroscopo e notizie disattivati. Sezioni salvate localmente in `juanita_alarm`; saluto/data/ora restano sempre attivi. Il contesto cerca solo le sezioni selezionate.
+- Oroscopo: riusa il provider astrologico esistente e la data di nascita salvata per ricavare il segno; invia solo il segno per la lettura giornaliera, senza dati di nascita completi. Notizie: massimo quattro titoli dall'edizione locale/linguistica del feed Google News RSS; feed non ufficiale/non documentato, soggetto a cambiamenti, non viene archiviato e non si leggono articoli completi. Se la fonte fallisce, il briefing continua senza inventare contenuti.
+- Test aggiunti: default e indipendenza delle opzioni (JVM), persistenza delle selezioni (strumentale). CI head `96edee8` terminata verde, inclusi strumentali API 31 e signed release. La verifica release ha rilevato che l'APK generata era ancora versionName 0.11.17/versionCode 56: firma permanente corretta, ma non incrementale rispetto alla build 56. Corretto il branch portando i default a 0.11.18/versionCode 57 e irrigidito il controllo release a >56. Nuova CI/release sul commit successivo necessaria; non installare la vecchia artifact come update. Non è stato eseguito test fisico.
+- Invarianti: nessun settimo tab, nessun servizio a pagamento, nessun TTS Android o Gemini TTS separato, nessun cambio package/firma/schema cifrato, nessuna cancellazione dati, nessun merge o modifica a main.
+
+
+## Stato operativo e dialogo non ripetitivo — 2026-11-26
+- PR #58 resta l'unica linea cumulativa, draft/open/unmerged. HEAD verificato prima di questa slice: `0fd20f3fd16e005a67b4132a8acc93d084b1b917`; i commit successivi sono registrati nel branch e l'HEAD va sempre riletta dalla PR prima di ogni build o modifica.
+- L'elenco GitHub delle PR recenti conferma #58 aperta; #55–#57 e le precedenti PR di lavoro sono chiuse/non fuse e non vanno riaperte come linee di sviluppo parallele.
+- Richiesta utente: ridurre le formule e i modi di dire ripetuti in conversazione, mantenendo lingua, dialetto e personalità coerenti.
+- Aggiunta in `PersonaProfile.toSystemInstruction` una sezione anti-ripetizione: controllare il contesto recente, evitare aperture/riempitivi/chiusure usati consecutivamente, variare la struttura della risposta anziché ruotare sinonimi, non terminare sempre con una domanda e usare appellativi/umorismo con parsimonia.
+- Aggiunto test JVM in `PersonaProfileTest` per verificare che le istruzioni anti-ripetizione siano presenti. Commit applicativi: `e7e1c305e631fe721c3aff56ea5bbfd6a56921b3`; test: `ca60088e46b99e3a9355c8a6d74ecf4e3fdf33e1`.
+- Questa modifica orienta il modello ma non costituisce un contatore deterministico delle frasi: la naturalezza va valutata in conversazioni reali, confrontando le ultime risposte senza conservare audio o aggiungere log di transcript.
+- La Release firmata per l'HEAD precedente risultava riuscita; la CI Android era ancora in corso. I commit di questa slice richiedono CI esatta aggiornata. Nessun test fisico è stato eseguito da GitHub.
+- Le note storiche con HEAD `165c23e...` o altri SHA precedenti non rappresentano l'HEAD corrente; conservarle come cronologia, non come target di lavoro.
+
+
+## Memory reliability slice — 2026-11-22
+- User reprioritized the next milestone to immediate/recent memory recall after hands-on testing: Juanita should not ask the user to repeat facts mentioned minutes earlier.
+- PR #58 code now supplies the latest eight saved turns from the active encrypted continuity snapshot whenever `searchPastConversations` is called, even when the query is vague or has no useful lexical terms. Older memories and archived episodes remain additional retrieval layers, not substitutes for working memory.
+- Added an Android instrumentation regression test for a vague recent-reference query. Exact-head CI is pending; no device result is claimed.
+- Remaining reliability gaps: the model must still invoke the recall tool when the request references prior context; transcript delivery is asynchronous; lexical/paraphrase retrieval for older sessions remains limited; extraction can lag and remains optional/consent-controlled. Next work is to make retrieval invocation/turn delivery dependable, surface retrieval failures distinctly, and expand regression coverage for correction, same-session recall, restart, and missing/corrupt data without changing the encryption schema or deleting user records.
+
+## Memory recall reliability slice — 2026-11-24 (PR #58)
+
+- Starting exact HEAD: `e9a280a3875cfdee4aa2a0d07dc22e6d1e4da464`.
+- Added deterministic multilingual normalization for common “without internet/network” paraphrases so they can match an `offline` memory concept. This is a small lexical bridge, not semantic/neural understanding.
+- Fixed a timing weakness in automatic recent-reference recall: it now snapshots the bounded live transcript in memory immediately when a recall cue is detected and combines it with encrypted archive search results. The archive writer remains asynchronous; recall no longer relies on a 100 ms delay as the only way to recover the just-spoken turns.
+- Added unit regressions for live-turn fallback when archive persistence is late and for bounded combination of live/archive evidence.
+- Commits: `1f6f844` (paraphrase normalization), `e9a280a` (offline recall regression), `9ea2b10` and `56c1843` (timing-safe live context), `165c23e` (tests).
+- Current exact HEAD after this slice: `165c23e2a83fde767aafa93fe28f443125066502`. CI must be checked on this exact head; the signed Release workflow succeeded on the preceding head `e9a280a`, so that artifact is not evidence for the new source.
+- No physical Samsung test is claimed. This slice improves recent recall reliability only; vector/embedding search, contradiction resolution and human-level reasoning remain future work.
+
+**Documento operativo corrente per PR #58.** Questa sezione prevale sulle sequenze e sugli stati storici riportati più avanti. Le voci datate successive sono cronologia, non istruzioni che possono sovrascrivere questa baseline.
+
+## Stato operativo verificato — 2026-11-21
+- Corsia unica: PR #58, `integration/unified-rollup-2026-11-18`, draft/open/unmerged. Nessun merge o release pubblica senza approvazione esplicita.
+- Candidate production: `ai.juanita.app`, `0.11.17`, `versionCode 56`, firma permanente già esistente; latest signed artifact is a candidate only, not a physical-device acceptance. La Release deve verificare package, certificate SHA-256 e versione prima di caricare l'artefatto.
+- Non distribuire APK debug/QA. La variante debug può essere compilata internamente per i test, ma non viene caricata come artefatto installabile; il workflow QA firmato con suffisso `.debug` è stato rimosso dalla corsia PR.
+- `getCurrentWeather` è collegata nel sorgente Live; collaudo fisico ancora pendente.
+- `getRouteEstimate` è il primo slice del routing globale: geocoding Open-Meteo + OSRM/OpenStreetMap per distanza e tempo base. Non fornisce traffico live, percorso specifico moto o navigazione turn-by-turn. L'origine GPS usa una richiesta fused on-demand con fix massimo 2 minuti e accuratezza ≤5 km; i percorsi con GPS non vengono messi in cache. Prima di ogni uso, il modello deve ottenere consenso esplicito all'invio del nome della località a Open-Meteo Geocoding e delle coordinate risolte al servizio pubblico OSRM/OpenStreetMap; un gate nel function handler blocca la chiamata senza il marker `confirmed`. Endpoint demo best-effort, soltanto on-demand e uso non commerciale a basso volume; il provider deve poter essere sostituito prima di una distribuzione ampia.
+- OpenStreetMap non è una fonte di traffico live. Non dichiarare congestione/ETA traffic-aware senza feed attuale verificato; gli incidenti mensili del Cabildo non sono un feed in tempo reale.
+- Export/import cifrato dell'archivio e memoria per trasferimento da package `.debug` a `ai.juanita.app` non è ancora implementato. Non disinstallare la vecchia app debug finché i dati non sono esportati/migrati e verificati.
+- Restano obbligatori CI esatta, test JVM/strumentali e prove fisiche Note10+ Android 12 e S22 Ultra Android 15 per wake-word, background, handoff microfono, falsi positivi, batteria e termica.
+
+
+## Informazioni contestuali in tempo reale — Meteo, traffico e percorsi (richiesta utente 2026-11-19)
+
+### Requisito trasversale: architettura internazionale (decisione utente 2026-11-20)
+Questa funzione è un servizio geografico globale, non una funzione locale per Tenerife. Tenerife/Los Cristianos è soltanto il primo scenario di collaudo. Ogni implementazione deve poter funzionare in altri Paesi senza modifiche specifiche all'app e senza presumere che l'utente si trovi in Spagna.
+
+- **Core indipendente dal Paese:** definire interfacce separate per geolocalizzazione, geocoding/risoluzione località, routing, meteo e traffico/eventi stradali. La logica conversazionale e il formato dei risultati non devono dipendere da un singolo fornitore o da endpoint territoriali.
+- **Provider selezionabili per copertura:** usare provider globali gratuiti/open quando la copertura, i termini, i limiti e l'affidabilità sono adeguati; aggiungere adattatori regionali (es. autorità stradali nazionali/locali) soltanto come integrazioni opzionali. Un provider disponibile in Spagna non può essere requisito per il funzionamento mondiale.
+- **Copertura dichiarata, non presunta:** per ogni Paese/area registrare quali capacità sono effettivamente disponibili (meteo corrente/previsioni, geocoding, percorso, incidenti, congestione live), qualità, aggiornamento, limiti e fonte. Se un dato non è coperto, Juanita lo dice chiaramente e offre solo ciò che è verificabile.
+- **Fallback controllato:** se manca una fonte traffico locale, fornire il percorso e il tempo base, specificando che non è corretto per il traffico; non trasformare segnalazioni sporadiche o dataset storici in traffico live. Se manca il meteo locale, indicare indisponibilità invece di inventare o sostituire con una località lontana senza consenso.
+- **Localizzazione internazionale:** lingua della risposta, nomi/località, formati data e ora, fuso orario, unità metriche/imperiali e convenzioni regionali devono seguire le preferenze dell'utente e il contesto locale. Le coordinate e la località manuale devono funzionare anche senza GPS; gestire omonimie chiedendo chiarimento.
+- **Privacy e costi:** richiesta on-demand; posizione precisa solo con permesso e fix recente, niente tracciamento continuo o storico degli spostamenti. Nessun servizio a pagamento, chiave segreta incorporata nell'APK, Firebase Blaze o billing. Rispettare attribuzione, licenze, rate limit e termini di ogni provider.
+- **Collaudo internazionale:** oltre al test iniziale Tenerife → Los Cristianos, predisporre test in almeno più aree geografiche e Paesi, con lingue, fusi e unità differenti, inclusi casi di copertura parziale e assenza di feed traffico. La disponibilità effettiva va documentata per area; non dichiarare copertura mondiale finché non è dimostrata.
+
+
+### Diagnosi dello stato attuale
+- La posizione del dispositivo è già acquisita solo in foreground con permesso Android e inserita nel contesto iniziale della sessione; questo NON equivale a un servizio meteo o traffico.
+- Verifica del sorgente PR #58 (2026-11-21): `getCurrentWeather` è già dichiarata nei function tools Gemini Live, gestita dal callback e collegata da `JuanitaVoiceService` a `MorningBriefingContext.readWeather()`. La funzione è quindi collegata a livello sorgente alle conversazioni Live normali; test esatti CI e prova fisica restano da completare. La precedente nota di mancato collegamento è superata.
+- Il meteo della sveglia usa Open-Meteo e tre centri modello tramite un singolo provider. La posizione è letta dai last-known provider Android; va controllata l'età del fix e va mostrato l'orario di aggiornamento. Non descrivere tre modelli dello stesso provider come tre fonti API indipendenti.
+- Non esiste ancora un motore di percorso/traffico conversazionale integrato né una stima di ETA consapevole del traffico. Le informazioni di posizione da sole non forniscono né percorso né congestione.
+
+### Requisito funzionale richiesto
+Esempio: «Devo andare dalla mia posizione a Los Cristianos. Dimmi se c'è traffico, quanto ci metto e com'è il meteo».
+1. Interpretare origine corrente (solo con permesso e fix fresco) e destinazione detta o disambiguata; se la posizione manca, chiedere una sola volta il punto di partenza.
+2. Risolvere geograficamente la destinazione, costruire uno o più percorsi stradali e fornire distanza + tempo base.
+3. Recuperare dati di traffico/incidenti effettivamente aggiornati lungo il percorso. Separare il tempo base dal tempo corretto per traffico; mostrare fonte e timestamp. Se il provider non offre velocità/congestione live, NON inventare una ETA traffic-aware: riportare il tempo base e gli incidenti ufficiali disponibili con la limitazione esplicita.
+4. Recuperare meteo corrente/previsionale per origine, destinazione e, quando utile, punti intermedi/altitudine; distinguere osservazioni e previsioni e indicare aggiornamento.
+5. Restituire una sintesi vocale naturale, breve e pratica, con opzione di approfondire percorso o alternative. La ricerca è on-demand, cancellabile, con timeout e cache breve.
+
+### Fonti e vincoli gratuiti da validare prima dell'integrazione
+- Meteo: Open-Meteo come prima implementazione senza chiave per il caso d'uso compatibile con i termini; conservare timestamp e modello, gestire rate limits, e confrontare centri modello senza confondere modello e provider. AEMET OpenData è fonte ufficiale complementare ma richiede API key e va valutata senza segreti incorporati nell'APK.
+- Traffico Tenerife: il Cabildo pubblica il Centro de Información de Carreteras con stato della circolazione in tempo reale, AforoNetWeb e dataset aperti di incidenti; il dataset incidenti è aggiornato mensilmente e non va spacciato per feed live. Verificare endpoint/termini/struttura effettivamente accessibili e automatizzabili prima di implementarli.
+- Routing: valutare un motore OpenStreetMap gratuito per il tempo base; verificare limiti d'uso, attribuzione e affidabilità. Un routing OSM standard NON contiene automaticamente il traffico live. Non introdurre chiavi/API commerciali, servizi a pagamento, Blaze o billing.
+- Dati di posizione: solo foreground e consenso esplicito; nessun tracciamento continuo o cronologia di spostamenti. Non inviare coordinate precise a servizi non necessari.
+
+### Sequenza di consegna
+1. Superare la CI esatta e verificare la Release di produzione firmata `ai.juanita.app`; la variante debug resta soltanto un target interno di test e non viene distribuita come APK installabile.
+2. Collaudare sul telefono `getCurrentWeather` già collegata a Gemini Live: permesso negato, posizione assente/scaduta, rete assente, timeout, provider parziale e modelli discordanti.
+3. Prima implementazione di `getRouteEstimate`: geocoding globale on-demand, percorso stradale base e tempo OSRM chiaramente etichettato; nessun traffico live, nessun profilo moto e nessuna promessa turn-by-turn. La richiesta invia origine/destinazione al provider pubblico solo dopo una richiesta esplicita dell'utente.
+4. Aggiungere adattatori regionali per incidenti/traffico soltanto quando esiste una fonte ufficiale, automatizzabile, con termini e timestamp verificati. I dati mensili di incidenti non sono traffico live; la disponibilità va dichiarata per area.
+5. Test end-to-end: posizione attuale → destinazione, località manuale, ambiguità geocoding, percorso senza traffico, feed locale disponibile/non disponibile, meteo lungo il tragitto, rete assente e risposta vocale.
+
+### Criteri di accettazione
+- La richiesta meteo ordinaria funziona in una conversazione Live, non soltanto nel briefing della sveglia.
+- La richiesta origine-destinazione produce percorso e tempo base reali; il traffico è riportato solo se verificato da una fonte attuale.
+- Ogni dato live ha timestamp/fonte; dati obsoleti sono esplicitamente segnalati.
+- Nessun dato meteorologico, incidente, congestione o tempo di percorrenza viene inventato.
+- Nessuna API a pagamento, chiave segreta nell'APK, permesso background location o nuova scheda.
+
+## 2026-11-20 — Sveglia coerente con identità, lingua e voce selezionate
+
+**Difetto riprodotto dal codice e correzione in corso su PR #58.**
+- Causa verificata: il briefing mattutino forzava `it-IT` e conteneva un'istruzione esplicita a parlare italiano; la schermata sveglia avviava inoltre Gemini Live con la voce globale `AssistantPreferences.liveVoiceName`, ignorando la voce del profilo digitale attivo.
+- Comportamento corretto: quando esiste un profilo digitale attivo e valido, la sveglia deve caricare il suo `preferredLanguageTag`, `voiceName`, identità e istruzioni regionali dalla stessa fonte cifrata usata dalla conversazione normale. Deve passare anche l'ID del profilo al servizio Live.
+- Se non esiste un profilo digitale attivo, usare lingua, nome, genere e voce delle preferenze globali legacy. Non inventare fallback linguistici.
+- Data, ora, giorno, calendario e formattazione del briefing devono usare il locale del profilo effettivo, non italiano fisso. La risposta vocale deve restare nella lingua configurata.
+- Nessuna seconda configurazione obbligatoria nella sveglia: il profilo è la fonte autorevole. Una futura eccezione per singola sveglia può essere aggiunta soltanto come override facoltativo esplicito, senza duplicare le impostazioni normali.
+- Test di accettazione: profilo italiano/voce A; spagnolo canario/voce B; ceco/voce C; profilo archiviato o mancante; modalità legacy senza profilo. Verificare voce passata al servizio, lingua del briefing, calendario e data locale, e che una modifica al profilo venga recepita alla successiva sveglia.
+- La modifica del 2026-11-20 è implementata in prima passata in `MorningBriefingContext` e `AlarmRingingActivity`; build, test automatici e prova fisica audio multilingue restano obbligatori prima di dichiararla completata.
+
+## Improvement feedback loop — requirement added 2026-11-24
+
+- The app already has privacy-filtered local voice diagnostics and an encrypted local Improvement Lab. The new design is documented in `docs/DIAGNOSTIC_FEEDBACK_LOOP.md`.
+- Next safe UI slice: preview a sanitized diagnostic bundle and share it only after the user taps Share. This can feed a GitHub issue from the phone without embedding a repository token.
+- Automatic cloud upload is **not enabled**. Evaluate a free-tier anonymous cloud inbox only after checking quota, security rules, retention/deletion and explicit opt-in. Never upload transcript/audio, prompts, personal memory, GPS or stable device identifiers.
+- Diagnostic reports are untrusted evidence. They may inform prioritization, but cannot autonomously edit source, change device settings, merge PRs or publish releases.
+
+## Invarianti di progetto
+- Unica corsia cumulativa: PR #58, branch `integration/unified-rollup-2026-11-18`. Prima di ogni edit/build rileggere l'HEAD corrente dalla PR; non usare SHA storici come target.
+- PR #58 resta draft/open/unmerged. Nessun merge, release o modifica a `main` senza approvazione esplicita.
+- Release stabile protetta: v0.11.12, versionCode 51, applicationId `ai.juanita.app`; debug ID `ai.juanita.app.debug`. Non cambiare firma, chiavi, package ID, schema cifrato o dati utente.
+- Nessun servizio/API a pagamento, nessun Firebase Blaze, nessun raw audio conservato.
+- Restano esattamente sei tab: Home, Avatar, Sveglia, Settaggi, Memoria, Altro.
+- Le conoscenze personali durevoli possono essere condivise tra i personaggi; gli episodi e i transcript sono privati per ID stabile dell'identità. Voce e personalità restano indipendenti. Un solo personaggio attivo per sessione.
+- Gemini Live nativo resta il percorso vocale. TTS cloud separata resta disabilitata. Avatar generativo/animato/lip-sync resta l'ultima fase.
+
+## Roadmap vincolante e criteri di uscita
+
+### Fase 1 — Affidabilità, prestazioni e sicurezza (IN CORSO)
+1. Spostare ogni lettura/scrittura dell'archivio cifrato fuori dal Main Thread, inclusi caricamento iniziale, salvataggi, conferme, cancellazioni e report.
+2. Eliminare la scansione/decrittazione integrale dello storico ad ogni costruzione del contesto; recuperare solo i turni recenti necessari, mantenendo ordine e isolamento per identità. Gli archivi legacy compattati possono ancora richiedere la decifratura completa della singola sessione; quantificare questo costo e pianificare una migrazione compatibile prima di dichiarare il percorso completamente bounded.
+3. Rendere asincrona la diagnostica vocale con coda limitata, scrittura serializzata, rotazione e conteggio esplicito degli eventi diagnostici scartati. Nessun transcript/audio/prompt nei log.
+4. Stabilizzare lifecycle audio: stop confermato, ownership microfono unica, handoff Sherpa/Live, routing, reconnect e fail-closed.
+5. Aggiungere diagnostica locale in Altro per CPU, RAM, wake lock, batteria, temperatura, durata sessione e stato audio, senza polling aggressivo.
+6. Misurare sul Note10+ Android 12 e S22 Ultra Android 15: idle, wake armata, Live foreground/background, screen-off, falsi positivi/negativi, drain e termica.
+
+**Uscita Fase 1:** test JVM e strumentali pertinenti superati sull'head esatto; nessun I/O disco nel Main o callback audio; test di regressione per code/timeout/paginazione; verifiche fisiche Samsung documentate. CI non sostituisce i test fisici.
+
+### Fase 2 — Presenza controllata C3
+Completare controlli espliciti, stato sempre visibile, consensi, background policy e comportamento non proattivo/non occulto. Nessuna riattivazione automatica del microfono dopo process death.
+
+### Fase 3 — Personaggi, voci e apprendimento C4
+Unificare la configurazione runtime del personaggio: ID, nome, personalità, lingua, dialetto, voce Gemini Live, wake phrase e istruzioni. Ogni sessione usa uno snapshot immutabile. Lo switch identità chiude la sessione precedente prima di avviare la nuova. Nessuna TTS cloud separata.
+
+### Fase 4 — Memoria evoluta e archivio C5
+Mantenere fonti cifrate autorevoli, provenance, conferma/provvisorietà, correzioni/contraddizioni, indici derivati ricostruibili, invalidazione completa su modifica/cancellazione, ricerca lessicale/parafrasi migliorata, budget di retrieval, export/restore cifrati e test migrazione/crash/scala. Nessun embedding cloud o training del modello implicito.
+
+### Fase 5 — Personal Organizer e Agenda
+Attività/promemoria locali persistenti, ricorrenze, stati e notifiche; agenda leggibile; eventuale scrittura calendario solo con conferma esplicita. Le sveglie esistenti restano indipendenti.
+
+### Fase 6 — Avatar (ULTIMA)
+Solo dopo accettazione delle fasi precedenti: immagine 2D, binding con identità, espressioni, animazione e lip-sync. Nessuna promessa di fotorealismo/real-time finché non esiste una soluzione gratuita verificata.
+
+## Sprint attivo — correzioni approvate
+- A1: `VoiceDiagnosticLog.event()` non deve più scrivere sincronicamente dal callback; coda bounded e worker IO.
+- A2: caricamento iniziale, salvataggio, conferma, modifica e cancellazione di memorie/report devono avvenire su IO; gli errori non devono essere presentati come successo.
+- A3: `buildAssistantContext()` deve recuperare un numero limitato di turni per persona senza decifrare l'intero archivio a ogni sessione. Le fonti archiviate restano intatte; indici/cache sono derivati e ricostruibili.
+- Ogni intervento richiede test di regressione e CI sull'head risultante. Se una correzione non può essere resa sicura senza migrazione o modifica schema, fermarsi e documentare il blocco invece di improvvisare.
+
+## Stato di validazione
+- HEAD di partenza: `f4e0df39532444ef94823e9f4a5f75f3430f5fa3`.
+- Audit differenziale: 70 test strumentali API 31 riportati superati; le evidenze vanno ricontrollate sulla CI dell'head aggiornato.
+- Correzioni Sherpa già inserite, ma l'hardware non è stato validato.
+- Nessun dato di consumo, temperatura o accuratezza acustica è considerato misurato finché non provato sui dispositivi reali.
+
+### Aggiornamento operativo 2026-11-19 — diagnostica e CI HEAD esatto
+- HEAD verificato: `180b08f110be6cdd0b91f1f31e1e65d1fc1a4496`, PR #58, branch cumulativo invariato.
+- Workflow `44604298017`: modello/tokenizer SUCCESS; debug APK SUCCESS; test JVM SUCCESS; compilazione test Android SUCCESS; strumentali API 31 SUCCESS; verifica package identity SUCCESS. Detekt resta SKIPPED nel workflow e non viene dichiarato superato.
+- Artefatto debug `Juanita-AI-debug` presente nel run; package identity verificata come debug isolato. La build non prova il comportamento fisico del microfono, la batteria o la termica.
+- `Altro > Stato dispositivo ed energia` include ora anche la durata della sessione Gemini Live, letta da un contatore monotono del servizio; la lettura è passiva e non avvia polling né un secondo microfono.
+- Le misure di batteria/temperatura/CPU/RAM sono istantanee o stime. Non sono ancora disponibili mAh consumati, drain rate validato o benchmark energetico. Occorrono sessioni di confronto su Note10+ Android 12 e S22 Ultra Android 15.
+- Stato del progetto in UI allineato: CI esatta superata; test fisici ancora da completare.
+
+---
+
+# 2026-11-18 22:36 — Wake runtime and identity phrase integration update
+
+**Current code state:** PR #58 head at this update contains the offline runtime connection in `JuanitaVoiceService`, explicit opt-in UI, pinned model installer, serialized KWS-to-Live microphone handoff and Live-to-KWS rearm after confirmed shutdown. A verified local phrase catalog now supports `Hola Juanita` and `Hola José`; the selected phrase follows the assistant identity. Canonical SentencePiece CI checks both phrases and the exact generated keyword hashes.
+
+**Validation state:** commit `0b020db6df51453238f2efc10e2e66238f517cb5` passed APK build, JVM tests and model/tokenizer validation; API 31 instrumentation was cancelled during the subsequent source update. The latest code head before the documentation-only reconciliation is `0c735ebe687422156ac5a17fac082afde2a8be68`; workflow run `44413621021` was cancelled during subsequent updates. No completed exact-head CI result exists yet. PR head after the documentation updates is recorded in the PR metadata. Physical Samsung testing remains outstanding. Do not publish an APK as tested or claim battery/recognition quality until those gates pass.
+
+# 2026-11-18 — Cumulative integration decisions and missing-feature register
+
+**CURRENT USER-APPROVED EXECUTION PLAN — this entry supersedes older conflicting status text below.**
+
+- The sole cumulative development lane is PR #58, based on the advanced PR #49 head. Do not restart from a sibling PR or older branch. Preserve every accepted correction and port only missing, reviewed slices into this lane. Stable v0.11.12, production signing, package ID and user data remain protected; no merge without explicit approval.
+- **TTS cost decision:** separate Gemini Flash TTS remains paused. The conversation must use the native Firebase SDK Gemini Live voice. Do not run TTS audition or synthesis calls, do not activate billing/Blaze, and do not substitute Android TTS or a paid provider. Dormant experimental TTS code/UI is not an enabled feature and must not be wired into normal playback.
+- **Wake phrase — runtime integration implemented in source, acceptance still pending (2026-11-18):** `JuanitaVoiceService` now owns the explicit opt-in foreground listener, checksum-pinned model provisioning, Sherpa detector lifecycle, stop-before-Live/start-after-Live microphone handoff, OFF cancellation and fail-closed error handling. The Settings UI supports the two identity-bound phrases `Hola Juanita` and `Hola José`. CI uses canonical SentencePiece 0.2.1 to validate both BPE token sequences and their pinned keyword-file hashes; the installer writes the selected keyword bundle into app-private storage. Do not call the feature release-ready until the current exact head passes build/JVM/API 31 instrumentation and both Samsung devices pass background, screen-off, false-positive, microphone-handoff, battery and thermal tests. No low-power DSP claim without measurement.
+- **Memory-based human reasoning:** current encrypted group knowledge, private identity episodes, provisional automatic-memory recall, lexical topic routing, limited multilingual aliases, one-hop associations and reflection cues are useful foundations, not full semantic/contextual recall. Complete paraphrase-aware retrieval, event/relationship context, contradictions and corrections, provenance, confidence and uncertainty. The model must distinguish remembered facts, provisional memories, online facts and its own inferences. Never store inferred moods/motives as facts.
+- **Internet research:** Commons/Openverse currently finds and analyzes images; general text-web search is not enabled. Do not confuse the two. Implement only a verified no-billing research route with source URLs, publisher/date, freshness and rate limits. Google Search grounding must remain disabled if usage can become billable or exceed the free quota; no Firebase Blaze, paid key, scraping or hidden subscription. Open encyclopedic/catalogue APIs can provide useful research but must not be described as the whole Web. Keep online evidence separate from personal memory and require consent before turning research into durable personal memory.
+- **CI correction:** previous PR #58 merge candidate passed debug build/JVM tests/instrumentation compilation/package identity but failed one API 31 instrumentation assertion because float-to-int truncation could turn 0.9 into 89. The source fix uses `roundToInt()` in commit `4ef742ee0026ddc1c8a4d942205188259ec488b3`; exact-head CI rerun is required before acceptance.
+- **Battery and audio:** keep 15-minute background Live idle safeguard, thermal stop at critical, orderly microphone/WakeLock teardown and privacy-safe power snapshots. These are code safeguards only; overnight drain is not declared fixed until device measurements show it.
+- **Sequence:** (1) exact-head CI and native Live audio reliability; (2) physical acceptance of the now-integrated offline wake phrase; (3) memory/contextual reasoning and archive performance/backup; (4) free-only text web research; (5) finish C3/C4/C5 acceptance; (6) Personal Organizer/Agenda; (7) Avatar animation last. Reliability work may continue in parallel only where it does not destabilize the audio path.
+- Keep exactly six tabs: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. No new app, no seventh tab, no paid service, no data wipe or signing/package change.
+
+# 2026-11-17 — Background Live idle safety and battery diagnostics
+
+**EXPERIMENTAL IMPLEMENTATION — exact-head CI and physical-device verification required.**
+
+- Explicitly authorized, non-alarm Gemini Live sessions receive a 15-minute no-user-speech safety timeout only after the app enters the background. Each USER transcript event refreshes the inactivity window; returning to foreground cancels it. Foreground calls and alarm-owned sessions are excluded.
+- Timeout uses the existing orderly stop path, preserving the continuity snapshot and closing Live/audio before WakeLock release.
+- The manual partial WakeLock is no longer acquired for foreground conversations or while a backgrounded phone screen remains on. A non-exported screen-state receiver acquires it only when an explicitly authorized Live session is backgrounded and the display turns off, then releases it on screen-on or app resume; bounded renewal remains a failsafe during active screen-off use.
+- Added sparse one-shot power snapshots at app background/foreground transitions, WakeLock acquisition/release and idle timeout. They record battery percentage, charging status/source, battery temperature, screen interactivity and WakeLock state; no transcript/audio content is logged.
+- Periodic device-wide AudioRecord diagnostics are development-build-only and sampled once per minute; release builds do not run this polling loop. The Live session is governed by lifecycle callbacks and explicit teardown, not a background diagnostic poll.
+- Added pure unit tests for timeout boundary, foreground/consent/alarm exemptions and remaining time.
+- Gemini Live transport and explicit background-consent setting remain unchanged. No paid service, new permission or stable release modification.
+- Required validation: debug APK build, JVM tests, API 31 instrumentation, then Note10+ Android 12 foreground/background/screen-off/voice-refresh/idle-shutdown/microphone-release/WakeLock-release tests and charging observation. No physical-device result or battery improvement is claimed before measurement.
+
+# 2026-11-16 — User reprioritizes memory reliability and recall
+
+**DECISION: USER REQUESTED.** Improve memory recall and efficiency as the immediate next feature while preserving the existing six-tab layout, shared user knowledge across Juanita/José, separate persona-private episodes, local encryption, free-only services and stable release isolation.
+
+- Confirmed six tabs from current source: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. Do not add a seventh tab.
+- Current source reconciliation: Home hosts Gemini Live voice, selected identity/session controls and visual-search result; Avatar hosts profile metadata/Studio and camera vision (substantive generation/animation remains last); Sveglia hosts local alarms/scheduler and morning briefing; Settaggi hosts permissions, identity/voice/language/personality editor and regional voice lab; Memoria hosts encrypted personal facts, transcript archive, retention, review/edit/delete and automatic-memory consent; Altro hosts voice diagnostics, improvement reports and exit/debug tools.
+- Critical defect identified: automatically extracted memories are stored with `source="automatic"` and usually `confirmedByUser=false`, while both session-start context and live recall filtered them out. This makes learned facts invisible unless the user manually confirms them. The memory-recall branch changes retrieval to include non-sensitive automatic memories as explicitly provisional evidence, without falsely marking them user-confirmed.
+- Archived conversations now have a rebuildable AES-GCM encrypted metadata index: ordinary searches rank terms without decrypting every transcript and decrypt only the selected journal frames. New turns update an existing index without rescanning old transcript frames; deletion/retention invalidates it before source mutation so it can be rebuilt safely. The Memoria tab now exposes a direct local archive-search field, with results and safe read-error feedback. Durable-memory recall has a separate encrypted concept index and conservative one-hop associations; it is still rebuilt after source-memory changes. Retrieval remains lexical with a small curated multilingual equivalence map, not general semantic understanding. Remaining stages: broaden tested paraphrase/query expansion, bound and benchmark large-index search, make retrieval latency observable, handle the eight-turn extraction queue overflow without dropping the only copy, and add migration/crash/performance tests.
+- No automatic vector/cloud indexing, paid API, billing, new permission, hidden microphone, or continuous background model inference.
+- Preserve roadmap order outside this user-approved memory focus: reliability/device safety; C3 controlled presence; C4 character learning; C5 scalable encrypted memory/archive; Personal Organizer/Agenda; Avatar last. Continue voice/microphone physical validation separately; do not claim it fixed based on CI.
+- PR #44 remains experimental and unmerged; this memory work branches from its exact head. Stable v0.11.12 and production signing identity remain untouched.
+
 # Juanita AI — Product requirements and implementation roadmap
 
-Last updated: 2026-11-08 — production baseline is signed Release 0.10.9 (versionCode 38), with permanent certificate and applicationId ai.juanita.app verified by CI. Candidate branch feature/complete-gentle-morning-alarm-0.11.0 is being prepared as versionCode 39. Candidate code adds a consent-gated Gemini Live morning greeting, local date/time, Android next-alarm lookup, read-only calendar summary and Open-Meteo weather lookup. This candidate is NOT yet CI-verified, signed, released or tested on physical devices. Do not distribute intermediate builds; deliver one cumulative signed Release APK only after CI, signature and device validation.
+## 2026-11-15 — Regional TTS microphone regression and follow-up health check
+
+**STATUS: DEVICE REGRESSION REPRODUCED; FOLLOW-UP CODE CHANGE COMMITTED; EXACT-HEAD CI RUNNING. NOT FIXED OR RELEASE-ACCEPTED.**
+
+- User tested the APK from commit `a2e4fbffbf54da87aafc880cbf5665527039a680` on the Samsung Galaxy Note10+ / Android 12. The opening prompt was audible, but after that the microphone/audio session stopped responding and the conversation could not continue. The earlier health-monitor correction therefore did not solve the real-device failure.
+- Run `43721425245` for `a2e4fbf` completed successfully (debug APK build, JVM tests, Android instrumentation compile, API 31 emulator instrumentation and package identity check). This is CI evidence only; it did not validate microphone capture on Samsung hardware.
+- Follow-up commit `ed2de0502390f07c1752c25155b1dd446a09a1ab` changes regional-TTS health evaluation to require both the SDK audio-conversation state and the direct receive collector to be active. A coroutine that remains active is not proof that microphone capture is still running.
+- This change is on `experiment/regional-tts-a-b-test` / PR #41 only. Stable `v0.11.12`, PR #40 and the protected production signing identity remain untouched. Exact-head CI run `43725940060` is in progress.
+- Firebase LiveSession reference distinguishes `stopReceiving()` (stops server-message reception; direct `receive()` can resume it) from `stopAudioConversation()` (stops the audio conversation). Do not assume these states are interchangeable. Validate the combined health predicate on the actual Note10+ before calling the issue fixed.
+- Next diagnostic gate: confirm that the SDK audio conversation remains active after the receiver handoff; record state transitions and the first input-transcription event without logging private transcript text. If the SDK audio state drops, investigate the SDK microphone lifecycle and the TTS receiver handoff rather than increasing reconnect retries.
+- Do not resume new feature implementation until the voice path can complete repeated user/assistant turns, interruption/barge-in, and a sustained session on the Note10+ without microphone loss. Then continue in the approved order: C3 presence integration, C4 shared learning/character engine, C5 scalable encrypted archive, Personal Organizer/Agenda, and Avatar last.
+
+## 2026-11-15 — Diagnostic log audit and TTS output instrumentation
+
+**STATUS: LOG ANALYZED; ADDITIONAL NON-TRANSCRIPT DIAGNOSTICS COMMITTED; EXACT-HEAD CI PENDING. ROOT CAUSE NOT YET CONFIRMED.**
+
+- The supplied 16:15–16:17 log shows the Zephyr and Leda sessions at 16:16 were explicitly marked `preview=true`; their timed microphone/service teardown is the expected 12-second voice-preview lifecycle, not proof of a failed normal conversation.
+- The actual regional conversation begins at 16:17:22 with `preview=false`, `regionalTts=true`, voice Leda and target `paisa-medellin`. The direct receiver obtains multiple LiveServerContent messages and output-transcription chunks. `tts.synthesis.result spoken=true` means the TTS playback coroutine completed; it does not prove that sound was audible from the handset speaker.
+- No `transcription.input` or USER transcript callback appears in the supplied regional session. This is the key missing evidence: the log does not establish that the user's spoken answer reached Gemini. The microphone capture, server-side VAD/input path and transcription delivery must be distinguished.
+- A second `START_VOICE` arrives at 16:17:51 while the service is already `ACTIVE`. Current service code treats a repeated request for the same active identity as idempotent; verify that this path is not triggered repeatedly by UI state or a duplicate action.
+- Firebase's current LiveSession reference states that `stopReceiving()` stops server-message reception and that `receive()` can resume it; it is not documented as equivalent to `stopAudioConversation()`. Do not infer microphone shutdown from that call alone.
+- Added privacy-safe diagnostics on this branch: LiveServerContent metadata now records input/output transcription character counts, PCM part/byte counts and turn flags; TTS records generated WAV/PCM sizes, AudioTrack initialization/write/playback-head progress and the routed output device. No transcript text, audio, prompts or profile values are logged.
+- Exact-head CI for diagnostic instrumentation: run `43735475954`, commit `d7725473447c47049ff98925e08dc05cf9c0368f`; build and API 31 instrumentation are pending at the time of this entry.
+- Next gate: inspect the new diagnostics and verify audible speaker output plus repeated USER→ASSISTANT turns on the physical Note10+ before changing the audio transport or resuming unrelated feature work.
+
+## 2026-11-15 — Six-tab and storage source reconciliation
+
+**STATUS: CODE-LEVEL RECONCILIATION COMPLETED ON THE CURRENT PR #41 HEAD; DEVICE AND SCALE ACCEPTANCE REMAIN OPEN. THIS ENTRY SUPERSEDES OLDER TAB/MEMORY STATUS TEXT BELOW WHERE THEY CONFLICT WITH CURRENT SOURCE.**
+
+- **Home:** Gemini Live foreground-service conversation, one selected identity per session, voice preview, camera/video call entry and orderly stop. C3 policy exists, but user-visible presence controls and proactive-in-session behavior are not integrated. The current voice/TTS regression blocks feature expansion.
+- **Avatar:** separate Avatar Studio metadata/photo-reference catalogue plus CameraX vision controls. Avatar metadata is not yet bound to the selected DigitalIdentity profile; the call portrait is not a generated/live animated character. As explicitly approved, substantive avatar generation/animation/lip-sync remains last.
+- **Sveglia:** local multi-alarm store/scheduler, recurrence and one-time scheduling, alarm ringing service, voice commands and morning briefing are present. A full task/reminder manager and upcoming-days agenda/calendar UI are still future work; calendar read access is used by the morning briefing only.
+- **Settaggi:** encrypted DigitalIdentityStore supports a user-managed collection with no product-imposed profile-count limit, duplicate/archive/restore and independent profile IDs. The editor includes independent Live voice, TTS voice/target, language, biography, cultural dossier and 19 personality dimensions. Some legacy global assistant settings and the separate Regional Voice Lab remain alongside the profile editor; final UX/source-of-truth consolidation and device verification remain.
+- **Memoria:** current source no longer matches the older statement that all durable memories are held in one growing SharedPreferences JSON blob with 100-record/32,000-character caps. Durable memories are written as independently encrypted per-record files; conversation transcripts use per-session encrypted archives and append-only AES-GCM journal frames, with migration paths for legacy packed SharedPreferences records and legacy packed session archives. Topic classification/routed lexical retrieval and paginated transcript-turn APIs exist. This is meaningful C4.5/C5 implementation, not proof of unlimited performance: large-scale 1k/10k record benchmarks, crash/process-death migration tests across real legacy user data, indexed retrieval, backup/restore and physical-device acceptance remain open. The automatic-memory pending queue is intentionally bounded to 8 turns; continuity snapshots are intentionally bounded and are not the durable archive.
+- **Altro:** voice diagnostics/export, encrypted Improvement Lab reports, debug-only App Check tools and confirmed full-exit path are present. Notification reading remains deferred; do not restore it without a separate policy/distribution review.
+- **Character engine status:** multiple independent Juanita/José profiles and shared encrypted user memory are implemented in the current candidate; C2 source-backed regional dossiers and the 19-trait editor exist. C3 remains a policy prototype without the full controls/runtime integration. C4 still lacks the complete learning/reflection/temporary-affect loop and fully verified memory behavior. C5 still requires migration/scale/security regression proof, physical Note10+ and S22 Ultra acceptance and signed upgrade verification.
+- **Roadmap order remains locked:** reliability/device safety first; then C3; then C4; then C5; then Personal Organizer/Agenda; Avatar last. Do not start unrelated new features while the Live microphone/TTS path is unstable unless the user explicitly reprioritizes.
+- Exactly six bottom tabs remain: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. No seventh tab.
+
+## 2026-11-13 — C2/C5 regression coverage and CI emulator baseline
+
+**STATUS: REGRESSION TESTS ADDED; EXACT-HEAD CI RUNNING. C3/C4/C5 IMPLEMENTATION IS NOT DECLARED COMPLETE.**
+
+- C2: added an encrypted-store round-trip assertion proving every cultural source retains its declared geographic scope after profile persistence and reload.
+- C5: added instrumentation coverage for the encrypted pending automatic-memory queue: persistence across store recreation, the eight-turn bound, invalidation when automatic memory is disabled or re-enabled under a new consent version, and a check that transcript excerpts do not appear in plaintext in SharedPreferences. Automatic extraction remains OFF by default; no cloud request is introduced by this test.
+- CI: API 35 emulator was removed from the blocking emulator matrix after repeated runner startup failures. API 31 remains the CI instrumentation baseline; Android 15 / API 35 must still be physically tested on the user's Samsung device before release.
+- The successful APK build on commit 0961f72 is a build artifact only, not a release candidate: its API 31 instrumentation run was cancelled by the next commit. The latest source commit is 483b0d3 and its exact-head checks are pending.
+- C3 remains a policy prototype, not integrated into the Live service. Do not silently gate or change the existing voice-call behavior; design and implement a separate explicitly enabled presence path with foreground/permission/audio lifecycle enforcement and visible pause/stop controls.
+- C4/C5 remain in progress: no claims of semantic memory, complete learning, crash-safe transcript journaling, scalable indexing, or complete archive recovery until implemented and tested.
+
+## 2026-11-13 — Character editor completeness (PR #40)
+
+**STATUS: IMPLEMENTED; EXACT-HEAD CI PENDING.** The identity model and system instruction already define 19 independent personality dimensions, but the Compose editor exposed only 16. Added the missing expressiveness, formality and empathy controls to the create/edit form, voice-preview draft and saved profile. Added regression assertions for encrypted round-trip persistence and runtime instruction output. This completes the 19-control editor surface; it does not by itself prove that Gemini consistently expresses every trait in live conversation. Physical conversational evaluation remains required.
+
+## 2026-11-13 — User-approved roadmap priority correction: Avatar last
+
+**DECISION: CONFIRMED BY USER.** The Avatar tab remains one of the six existing tabs, but all substantive Avatar development is postponed to the final product phase. Do not implement photorealistic avatar generation, image-to-avatar conversion, avatar animation, lip-sync, gaze, expressions or hosted/local rendering work until the rest of the application is complete, stable and accepted.
+
+Revised delivery order:
+1. **Reliability and device safety (current priority):** resolve lifecycle/audio shutdown, microphone release, reconnect limits, WakeLock, audio focus/routing, storage integrity, memory concurrency and continuity. Validate build/tests and then physically test on the user's Samsung devices, including thermal/battery behavior, screen responsiveness and fingerprint/touch recovery.
+2. **C3 controlled conversational presence:** integrate existing policy logic into the UI and existing Live session with explicit user control, visible state, immediate pause/stop, no hidden listening and no unsolicited activation while riding.
+3. **C4 character engine and learning:** complete the unified character editor and profile behavior; preserve separate personalities and one active character while sharing memory; complete automatic memory, retrieval, correction and knowledge-learning behavior.
+4. **C5 scalable encrypted memory/archive:** complete crash-safe migration from legacy encrypted storage, retain the existing Keystore key and all data, remove destructive caps only after migration proof, add backup/restore, indexes, pagination and performance/heap benchmarks.
+5. **Personal Organizer and Agenda:** reminders, tasks, recurring schedules, due dates, Android calendar integration and upcoming-day views, with reliable local notifications and voice management.
+6. **Avatar — LAST:** only after phases 1–5 are implemented, tested on-device and accepted. Then implement profile-bound generation from description/photo, preview, animation and lip-sync, subject to the existing privacy and no-paid-services constraints.
+
+The Avatar tab may remain visible as a placeholder/metadata area, but it must not take engineering priority or introduce background CPU/GPU/network load while reliability is being established. This decision supersedes earlier roadmap sequences that placed avatar work before the Organizer/Agenda.
+
+
+Last updated: 2026-11-21 — stable baseline v0.11.12 / versionCode 51; current cumulative candidate PR #58 is draft/open/unmerged, candidate 0.11.17 / versionCode 56. Production package and permanent signing certificate remain unchanged. Exact-head CI, signed Release verification and physical Samsung acceptance are required. Do not install debug APK as the user app or uninstall the old debug installation before encrypted archive/memory export-import is implemented and verified. Do not disable Play Protect. Notification reading remains deferred after the earlier Play Protect block; do not restore it without a separate distribution/policy review and explicit approval. No paid services, APIs, credits, hosted GPU or billing without fresh explicit approval.
+
+## 2026-11-11 — character voice preview, obsolete mic test removal and session identity
+
+**STATUS: CODE COMMITTED TO PR #40; EXACT-HEAD CI AND PHYSICAL-DEVICE VALIDATION PENDING.**
+
+User-requested UX changes:
+- Add a voice preview directly below the voice selector inside each character's create/edit form. The preview uses the exact currently selected Gemini Live voice ID and the draft character's language/cultural instruction, even before the profile is saved.
+- Reuse Gemini Live's existing voice output path; do not introduce Android TTS or another voice provider. The short preview requires microphone permission because the current Live SDK session path opens audio input, then auto-stops. It is blocked while another voice session is active or still closing.
+- Remove the separate Settings > Prova microfono Android speech-recognition/transcription test. Normal user speech is already handled by Gemini Live in the conversation.
+- Remove the duplicate Settings voice-sample button. Voice choice and preview now live in the character editor; the Settings voice card remains for inspecting/changing the saved voice.
+- Show the actual character name for the current Live session in the Home conversation card and full-screen call. Preserve the session's original name while a previous character is still closing; show the newly selected character as the next profile only after the old session is no longer active.
+
+Validation required:
+- Exact-head Android build, JVM tests, instrumentation APK compilation and API 31 emulator tests.
+- Physical test: create an unsaved character, change voice, preview, verify the sample uses the draft voice and regional language; verify automatic mic/session shutdown; save/edit and repeat; verify no preview while a regular conversation is active; verify the Home and full-screen call labels match the speaking character; verify obsolete mic-test and duplicate preview controls are absent.
+- The preview still uses the current Gemini Live SDK audio path and temporarily requests microphone permission. A future SDK-supported output-only preview could remove that permission requirement, but must not substitute a different voice engine.
+
+## 2026-11-11 — microphone shutdown and character-switch incident
+
+**STATUS: CODE MITIGATIONS COMMITTED; EXACT-HEAD CI AND PHYSICAL SAMSUNG VALIDATION REQUIRED. NOT YET DECLARED FIXED.**
+
+User-reported test incident: after changing the selected character and ending a conversation, the previous Paisa persona continued speaking and Android's microphone privacy indicator remained active even though the assistant no longer responded. A force-stop was required to release the microphone.
+
+Code audit findings:
+- The service could remove its foreground notification and stop itself even when the SDK microphone/session shutdown timed out or was not confirmed. This could make the UI appear stopped while audio resources were still retained.
+- Explicit microphone stop and full Live-session stop could call the SDK's synchronous recorder teardown more than once, including from service destruction.
+- Automatic Live recovery ran independently from explicit lifecycle operations. A reconnect already in progress could race with a user stop and potentially reopen the audio pipeline.
+- Each Live session retains the persona/system instruction with which it was created. Selecting another profile during an active session cannot mutate that already-open Gemini session.
+
+Mitigations committed on PR #40:
+- Serialize new Live startup and explicit stop with recovery; an in-flight recovery must finish its cancellation path before a replacement session can start.
+- Make SDK microphone teardown idempotent per LiveSession and track any session whose close was not confirmed. A new session is blocked until recorder shutdown and Live-session close both succeed.
+- Check for a stop request after the WebSocket handshake and close the handshake without opening the microphone.
+- If shutdown is unconfirmed, keep the foreground service/notification visible, discard any queued restart, release the CPU wake lock, and refuse a new character session. The UI no longer reports the microphone as off before shutdown is confirmed. A later Stop can retry; force-stop/reboot remains the user fallback if the SDK call never returns.
+- Startup failures use the same fail-closed cleanup path.
+- Selecting a different character requests termination of the previous Live session. The next explicit Parla action starts with the newly selected identity and its voice.
+
+Release gates:
+- Build, JVM tests, instrumentation compilation and API 31 emulator tests must pass on the exact final commit.
+- Physical testing remains mandatory on Note10+ Android 12 and S22 Ultra Android 15: repeated start/stop, rapid character switching, switching during connection/recovery, mic privacy indicator disappearance, audio thread/CPU behavior, thermal/battery behavior and app responsiveness.
+- CI cannot verify that the Samsung microphone privacy indicator clears or prove the upstream Firebase AudioRecord worker lifecycle is fixed. Do not declare the incident resolved until physical tests pass.
+
+## 2026-11-09 — voice reconnect, device slowdown and continuity audit
+
+**STATUS: APP-SIDE MITIGATIONS COMMITTED; CI AND PHYSICAL-DEVICE VALIDATION REQUIRED. NOT YET DECLARED FIXED.**
+
+User-reported incident: during a Live voice conversation, Juanita intermittently freezes and resumes; the phone then slows down, and the resumed/new session may lose the immediately preceding topic.
+
+Findings:
+- The app's reconnect path recreated Firebase Live audio pipelines after `goAway` or a closed WebSocket, with up to three connection attempts per recovery and no lifetime cap.
+- Service shutdown called the SDK's synchronous audio-capture teardown from its caller thread. This could place device audio release work on Android's main thread.
+- On unexpected reconnect exhaustion, the service cleared the active encrypted continuity snapshot; the next session also cleared snapshots before building its context. This could discard the most recent conversation context even when earlier archived turns remained.
+- Firebase BoM 35.1.0 maps Firebase AI Logic to 18.1.0. The older GoogleAI Live-session startup failure fixed in 17.10.1 is therefore not the direct dependency-version issue here.
+- A separate Firebase Android SDK report (#7942) describes AudioRecord worker-thread accumulation and high CPU after repeated Live audio reconnects. Its reproduction was on rk3588 Android 12, not a Samsung phone, so it is a relevant upstream risk, not proof of the same hardware defect on Note10+/S22 Ultra. The proposed SDK change #8030 switches AudioRecord reads to non-blocking mode but remains an open PR; current upstream source still contains the blocking read path.
+
+App-side mitigations committed:
+- Carry the latest encrypted continuity snapshot into the next Live session instead of deleting it before session setup.
+- Preserve the snapshot when an unexpected reconnect failure stops the service; clear it only on an explicit user stop.
+- Run synchronous SDK audio teardown on Dispatchers.IO, not Android's main thread, including service destruction.
+- Limit automatic Live audio rollover to one per service instance to avoid unbounded recreation of SDK audio pipelines. If the limit is reached, stop safely and preserve context for a manual restart.
+- Add an instrumentation test verifying that the newest interrupted-session snapshot is carried forward and extended by the next session.
+
+Release gates:
+- Debug APK build and API 31 instrumentation tests must pass on the exact final commit.
+- Signed Release must verify the permanent signing certificate, package ID and upgrade version.
+- Physical tests are mandatory on Note10+ Android 12 and S22 Ultra Android 15: repeated conversation interruptions, one automatic recovery, manual restart and context continuity, audio thread/CPU behavior, screen responsiveness, fingerprint access and normal shutdown.
+- These app-side changes reduce known risks but cannot prove that Firebase's internal AudioRecord worker leak is absent on Samsung hardware. Do not claim the incident resolved until physical-device validation confirms it.
+
+References: Firebase issue https://github.com/firebase/firebase-android-sdk/issues/7942 ; proposed SDK fix https://github.com/firebase/firebase-android-sdk/pull/8030 ; Firebase Live session documentation https://firebase.google.com/docs/ai-logic/live-api/sessions .
 
 ## Progressive personal knowledge — candidate 0.10.8
 
@@ -178,7 +588,7 @@ Juanita must learn the identity of people the user explicitly introduces, associ
 **Technical research and staged implementation**
 1. Evaluate sherpa-onnx Android speaker-identification (embedding extraction/matching) and speaker-diarization APIs as a local-first candidate. Its documentation lists Android/Kotlin support and separate speaker identification and diarization examples; the license of each selected model/dataset must be checked independently. Do not assume that one model supports all of Riccardo's languages or performs well on either Samsung phone.
 2. Prototype capture from the same microphone path without breaking Gemini Live. Confirm whether SDK-managed audio can be safely mirrored to a local recognizer; if not, design a single audio-capture pipeline rather than opening competing microphone streams.
-3. Benchmark latency, RAM, battery, thermal impact and false-accept/false-reject rates on Note10+ (Android 12) and S22 Ultra. Evaluate Italian, Spanish (including Canarian speech), Czech and English separately.
+3. Benchmark latency, RAM, battery, thermal impact and false-accept/false-reject rates on Note10+ (Android 12) and S22 Ultra. Evaluate Italian, Spanish (including Canarian speech) and English separately; other currently supported languages are not language-addition tasks.
 4. Implement a local encrypted speaker registry, explicit enrollment/consent UI, matching thresholds, unknown fallback, correction, re-enrollment and deletion.
 5. Connect confirmed speaker identity to the existing person/profile memory so a later introduction can recall the person's name and user-approved facts, without merging one person's statements into another person's profile.
 
@@ -275,7 +685,7 @@ Not implemented:
 - Speaker diarization for multiple people in the same conversation.
 - Enrolled voice profiles/voiceprints.
 - An independent on-device speech-recognition provider; SpeechRecognitionProvider is only an interface contract.
-- A validated accuracy test suite across Italian, Spanish/Canarian, Czech and English on the target Samsung devices.
+- A validated accuracy test suite across Italian, Spanish/Canarian and English on the target Samsung devices; existing additional language support is not a language-addition task.
 
 Next steps:
 - Clarify language detection vs speaker identity; do not confuse transcription with identifying a person.
@@ -284,7 +694,7 @@ Next steps:
 
 ## Notification access and personal inbox — candidate 0.10.4
 
-**Stage 1 — opt-in notification reader (implemented in feature branch; CI/device verification pending)**
+**STATUS: DEFERRED — NOT INCLUDED IN THE SIDELOAD RELEASE.** The earlier implementation is retained only as historical/reference source and must not be declared or registered in the app manifest, exposed in onboarding/settings, or offered as Gemini Live tools until a distribution and policy path is approved. The detailed requirements below are historical design notes only, not authorization to ship this feature now.
 - Register an Android `NotificationListenerService` protected by `BIND_NOTIFICATION_LISTENER_SERVICE`; do not request notification access automatically. The user opens Android's notification-listener settings and enables Juanita explicitly.
 - Receive posted notifications, identify the source application and extract only text Android makes available in notification extras. Do not bypass lock-screen privacy or recover hidden previews.
 - Show the latest 30 notification entries in the Altro tab and provide an explicit clear action. Voice read-aloud is deferred until it can use Juanita's configured Gemini Live voice path; Android TextToSpeech must not be used as a fallback.
@@ -320,14 +730,14 @@ Next steps:
 - **Conversation continuity:** preserve speaker/role boundaries and session IDs. Memory extraction should attach source session and turn IDs to each derived fact, so the user can inspect where a remembered fact came from and correct or remove it without destroying unrelated source material.
 - **Privacy and safety:** user controls archive enable/disable, inspect, export, delete by session/date, and full clear. Disabling new capture must not silently erase old records. Sensitive content must not be promoted into durable semantic memory without the existing consent/sensitivity policy.
 - **Acceptance tests:** exact round-trip of long turns over 1,800 characters; multi-session chronological integrity; no silent data loss on migration, app restart or failed write; archive survives semantic-memory cleanup; semantic summary deletion leaves transcript intact; retrieval finds relevant passage despite different wording; original passage is reopened before a historical claim; no invented quote when search misses; export/restore integrity; storage-full and corrupted-file handling.
-- **Current known gap:** the existing archive is encrypted and session-based, but appendConversationTurn currently truncates each turn at MAX_TURN_TEXT_LENGTH = 1800; the general legacy encrypted-record store also has a 300-turn cap. Search is lexical. These constraints must be removed or safely migrated for the full-fidelity design. The separate per-session archive files are not subject to that legacy 300-turn cap.
-- **Status:** USER-REQUESTED DESIGN; NOT IMPLEMENTED. Preserve all existing archive files and backward compatibility during implementation.
+- **Current verified source state:** the active per-session encrypted archive writes complete recognized turn text without the former 1,800-character truncation and is not subject to the legacy 300-turn record cap. The legacy encrypted-record fallback still has its own 300-turn ceiling and must be migrated carefully. Search remains lexical, so paraphrases with little word overlap can be missed. The per-session archive rewrites its encrypted JSON file on each append; large-session performance and crash-safe migration still need benchmarking.
+- **Status:** FIRST FULL-TEXT PER-SESSION ARCHIVE SLICE IMPLEMENTED; long-turn round-trip instrumentation coverage exists, but device execution, interruption/corruption tests, multilingual retrieval quality, encrypted backup/restore and source-turn reopening remain incomplete. Preserve all existing archive files and backward compatibility.
 
 ### A. Automatic memory, archive retrieval and evolving digital biography — highest priority
 
 ### A.1 User-controlled memory management — high priority
 
-- [IN PROGRESS — PR #6 FOLLOW-UP; CI/DEVICE VERIFICATION PENDING] Replace the single long scrolling home screen with persistent bottom navigation: Home (voice session), Avatar (Avatar Studio and camera), Impostazioni (identity, language, voice and personality), Memoria (personal memories and conversation archive), Altro (project status and debug tools). Keep the navigation visible while each section's content scrolls independently.
+- [IMPLEMENTED IN CURRENT APP SOURCE — DEVICE LAYOUT REVIEW PENDING] Persistent bottom navigation has six sections: Home (voice session), Avatar (Avatar Studio and camera), Sveglia (local alarm manager), Settaggi (identity, language, voice, personality and permissions), Memoria (personal memories and conversation archive), Altro (Improvement Lab and project/debug tools). Keep navigation visible while each section's content scrolls independently.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Show each curated memory with its category and exact local creation date/time; keep the underlying timestamp as epoch milliseconds.
 - [IN PROGRESS — PR #6 FOLLOW-UP] Support selecting one memory or multiple memories and deleting the selected group after a confirmation that states the number of records to be removed.
 - [FUTURE] Add filters by category and date range for curated personal memories, plus group actions such as deleting all memories from a selected day/category.
@@ -355,6 +765,17 @@ Next steps:
 - Process eligible text asynchronously without blocking Live audio. Preserve pending batches across restarts and retry failures.
 - Provide review/edit, pause/resume, category controls, export and deletion. Keep transcript archive deletion separate from curated-memory deletion.
 - Never invent recollections. If retrieval finds no useful record, Juanita must say she cannot find it. Sensitive/intimate data must not be promoted automatically.
+
+### A.3 Active Live-session continuity across reconnects — USER-REQUESTED; IMPLEMENTATION SLICE IN PR #31
+
+- Keep a short-lived encrypted continuity snapshot for the currently active Live conversation, separate from the optional full transcript archive and durable personal memories.
+- Update the snapshot from merged USER and ASSISTANT transcription turns on the existing ordered IO worker; never block microphone capture or Gemini Live callbacks on encryption or disk I/O.
+- Keep a bounded chronological window (24 turns / 16,000 characters). The complete source transcript remains in the full archive when enabled; the continuity window is a recovery aid, not a replacement.
+- On GoAway/health-triggered reconnect, ask the Android service for the active session snapshot and supplement it only with recent transcript fragments not already represented. Inject it into the new Live session with explicit instructions not to repeat the greeting or invent missing context.
+- Snapshot persistence is independent of the archive pause switch, but it is session-scoped: clear it after a clean stop and remove stale snapshots before a new user-started session. It must never become a permanent personal memory or be included in unrelated sessions.
+- Preserve the existing audio capture path, model, signing identity, package ID and user data. Do not add services, paid APIs, billing, Android TTS or new permissions.
+- **Acceptance:** continuity survives a fresh EncryptedMemoryStore instance; still works when full transcript archiving is paused; preserves USER/ASSISTANT ordering; bounded retention; clean stop deletes the snapshot; reconnect uses the snapshot before opening audio; failed persistence falls back to the in-memory transcript and never crashes Live audio.
+- **Verification status:** source implementation and instrumentation coverage are being added to PR #31; do not call this fixed until latest-branch CI passes and the user confirms an interruption/recovery test on both Samsung devices.
 
 ### B. Reliability and privacy
 
@@ -573,27 +994,27 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ## Delivery plan
 
-1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian/Spanish/Czech; test correction, deletion, retention and failure recovery.
+1. **Memory engine and archive retrieval (highest priority):** automatic encrypted transcript archive, curated durable memories, local archive search and Live function-call retrieval are merged on main; merged-head Android debug CI passed (run 42393573784); real-device verification remains pending. Validate that Juanita recalls a distinctive fact after force-stop/relaunch and a new session, across Italian and Spanish; test correction, deletion, retention and failure recovery.
 2. **Biography and cognitive continuity:** build a dedicated editable biography/timeline with chronology, experiences, people/context, projects, milestones and learned topics. Add provenance, confidence, contradiction resolution and local multilingual semantic retrieval. Preserve episodic source records. The Phase 1 Improvement Lab is separate: it records software capability state and engineering reports, not personal biography.
 3. **Research and learning:** focused Internet research, source comparison, source-linked knowledge notes, freshness/expiry and reuse in future sessions. Use only approved free-tier/local options with hard limits; no billing activation.
 4. **Reliability and privacy:** test long sessions, background service, memory pause/disable, export/restore, deletion, offline behavior and archive corruption.
 5. **Camera and video-call correction:** verify the PR #6 orientation fix on actual devices and confirm Gemini receives upright frames without memory leaks or dropped audio.
 6. **Avatar creation:** investigate and implement genuine on-device 2D portrait generation first; test hardware compatibility, storage, thermals and quality. Then add persistent avatar asset workflow. Rigged 3D, expressions and lip sync follow as a distinct phase.
 7. **Phone-call support:** research Android Telecom/default-dialer feasibility, then implement an opt-in incoming-call companion. Investigate two-way cellular audio only where officially supported; evaluate separate VoIP mode for full AI conversation. Third-party app calls such as WhatsApp remain separate.
-8. **Daily assistant capabilities:** reminders, calendar, travel, notifications and other integrations with explicit permissions and confirmations.
+8. **Daily assistant capabilities:** local reminders/tasks and calendar integration first; notifications remain deferred until an approved distribution/policy path exists. Travel and other integrations require explicit permissions and confirmations.
 
-## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / NEXT IMPLEMENTATION PACKAGE
+## Juanita Personal Organizer — Smart Alarm, Agenda and Reminders — USER-APPROVED / ACTIVE IMPLEMENTATION PACKAGE
 
-**Current engineering sequence (2026-11-08):** preserve the app-owned alarm sound path independently of Gemini/network; add the consent-gated Live greeting and read-only morning briefing as a separate layer. Local reminders/tasks and calendar write access remain distinct follow-up scope and must not be claimed as implemented.
+**Current state (2026-11-09):** the multi-alarm engine and alarm UI are implemented in the cumulative 0.11.5/0.11.6 candidate: independent local alarms, one-time and weekly schedules, per-alarm enable/disable/edit/delete, snooze/dismiss, boot/time/time-zone/exact-alarm recovery, alarm tone, test actions, voice-controlled stop and an optional Gemini Live morning greeting. The signed Release for the first 0.11.6 candidate passed certificate verification; the final identity-consistency correction is now included in source and needs a fresh CI run. Physical behavior remains unverified on both Samsung devices.
 
-**User-approved direction (2026-11-08):** Build one integrated daily-organizer experience rather than a standalone alarm.
+**User-approved direction (2026-11-08):** continue toward one integrated daily-organizer experience rather than a standalone alarm. The next new capability after alarm validation is a local reminder/task manager; calendar integration follows as a separate, consent-gated layer.
 
 **Android platform constraints verified 2026-11-08:**
 - For exact alarm scheduling on Android 12+, declare and check `SCHEDULE_EXACT_ALARM`; it is user-granted and may be revoked. Handle denial with a clear explanation and an honest inexact fallback, not a claim of punctual delivery.
 - Do not use `USE_EXACT_ALARM` casually: it is restricted by Google Play to qualifying core alarm/calendar use cases. The sideload path must also remain safe with Play Protect enabled.
 - On Android 14+, full-screen intent access is restricted to calling/alarm use cases. Check `NotificationManager.canUseFullScreenIntent()` and provide a notification fallback when unavailable; never assume the full-screen activity can always launch.
 - Re-check exact-alarm access after resume and restore schedules after the system's permission-granted broadcast and boot.
-- Official references: https://developer.android.com/develop/background-work/services/alarms ; https://developer.android.com/about/versions/14/changes/schedule-exact-alarms ; https://source.android.com/docs/core/permissions/fsi-limits It combines Juanita's own alarms, locally managed reminders/tasks, read-only access to existing Android calendar events, explicitly authorized calendar event creation, and an optional morning briefing. This is a new product package; no alarm/calendar/reminder implementation is claimed yet.
+- Official references: https://developer.android.com/develop/background-work/services/alarms ; https://developer.android.com/about/versions/14/changes/schedule-exact-alarms ; https://source.android.com/docs/core/permissions/fsi-limits
 
 ### Product areas
 
@@ -611,7 +1032,7 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
    - Provide a clear list of upcoming, overdue and completed items; avoid duplicate reminders after restart or rescheduling.
 
 3. **Calendar and events**
-   - Stage 1: optional read-only access through Android Calendar Provider, allowing Juanita to show today's agenda and upcoming events from calendars already present/synced on the device (for example Google or Exchange calendars). Ask for `READ_CALENDAR` only when the user enables this feature; let the user choose which calendars are included where feasible.
+   - Current partial capability: the morning briefing can read today's events through Android Calendar Provider when `READ_CALENDAR` is granted. A dedicated agenda screen, calendar selection and upcoming-days browsing are not yet implemented. Keep access optional and read-only for the first stage.
    - Stage 2: create events using the Android Calendar insert intent or, if a direct write workflow is justified, request `WRITE_CALENDAR` separately and confirm title, date, time, calendar and attendees before writing. Never edit/delete an existing event without a separate explicit confirmation.
    - Distinguish imported calendar events from Juanita's own reminders in the UI and data model. Preserve source calendar/event IDs and time-zone semantics; do not duplicate imported events into the local reminder store.
    - Do not assume that Google Calendar's cloud API or a Google OAuth integration is required: prefer the on-device provider first, which can expose calendars synchronized by Android. A dedicated cloud connector can be considered later only if the user asks for cross-device access beyond device-synced calendars.
@@ -653,11 +1074,11 @@ Goal: Juanita may use accumulated conversations, user feedback, observed failure
 
 ### Delivery phases
 
-A. **Research and foundation:** verify Android exact-alarm/full-screen-intent behavior for targetSdk 35 and minSdk 26; design encrypted reminder schema, receiver lifecycle and reboot/time-change recovery; prototype use of Juanita's saved Gemini Live voice without Android TTS.
-B. **First usable release:** local alarms + local reminders, alarm tone/snooze/dismiss, agenda UI and morning greeting only when the real configured voice path is proven safe. Add unit tests for recurrence, time zones, daylight saving, duplicate delivery and persistence.
-C. **Calendar integration:** read-only Android Calendar Provider with calendar selection and today's/upcoming agenda; then confirmed event creation via Calendar intents. Direct calendar writes remain a later opt-in.
+A. **Foundation — largely implemented:** local multi-alarm persistence/scheduling, boot and time-change recovery, exact-alarm/full-screen permission handling, alarm playback, snooze/dismiss and Gemini Live voice path. Finish CI and physical-device validation before expanding the scheduler.
+B. **Next release — local reminders and tasks:** encrypted local data model, one-time and recurring reminders, due dates, optional advance alerts, upcoming/overdue/completed views, completion/snooze/reschedule/delete, reboot recovery and duplicate-delivery protection. Natural-language creation must be confirmed before saving; casual conversation must never silently create a reminder.
+C. **Calendar integration:** improve today's read-only agenda, add calendar selection and upcoming-days browsing through Android Calendar Provider; then offer confirmed event creation via Android Calendar intents. Direct calendar writes remain a later opt-in.
 D. **Morning briefing enhancements:** optional weather, quiet/private mode, per-category spoken controls and configurable briefing.
-E. **Voice command integration:** parse natural-language reminder/alarm/event requests from Gemini Live and ask for confirmation before committing changes; distinguish a draft from a successfully saved item.
+E. **Voice command integration:** connect Gemini Live to reminders/tasks/events with structured arguments and explicit confirmation before every create/update/delete; distinguish a draft from a successfully saved item.
 
 ### Acceptance criteria
 
@@ -675,7 +1096,7 @@ E. **Voice command integration:** parse natural-language reminder/alarm/event re
 
 - Depends on stabilization of notification-reader candidate 0.10.4 and review of the TTS mismatch in that PR.
 - Android alarm/permission/lock-screen research and a Gemini Live short-output feasibility spike are required before committing to background speech.
-- Status: **USER-APPROVED — SPECIFIED; NOT IMPLEMENTED.** No alarm, reminder scheduler, Calendar Provider integration or morning-briefing code is present yet.
+- Status: **ALARM IMPLEMENTED IN SOURCE; PHYSICAL VALIDATION PENDING.** Local reminders/tasks are not implemented. Today's read-only calendar data is used by the morning briefing when permission is granted; a dedicated agenda/calendar UI and event creation are not implemented.
 
 ## Roadmap maintenance rule
 
@@ -729,9 +1150,9 @@ Acceptance before sharing an APK: CI build succeeds; APK package ID matches; ver
 Replace broad date-range deletion with a local calendar, per-day conversation lists, transcript preview with timestamps, per-conversation time-window deletion, whole-day deletion and multi-day selection. Transcript deletion must preserve curated personal memories. The home screen should foreground the avatar, show device date/time and use distinct navigation icons. Exact-head CI and device verification are pending.
 
 
-## Smart alarm and personalized morning briefing — PROPOSED
+## Smart alarm and personalized morning briefing — IMPLEMENTED IN 0.11.5 CANDIDATE; DEVICE VALIDATION PENDING
 
-**User-approved feature request (2026-11-08).** Juanita should include her own integrated alarm clock and a warm, configurable morning wake-up experience. This is a separate alarm feature, not an assumption that Juanita can control or dismiss alarms created by another clock application.
+The original proposal below is now implemented in source as the app-owned multi-alarm system and optional Gemini Live morning greeting. See the Juanita Personal Organizer section and release notes 0.11.1–0.11.6 for the current implementation details. Physical tests remain required; CI does not prove reliable alarm delivery.
 
 ### Intended experience
 - The user can create, edit, enable/disable and delete alarms; configure time, repeat days, alarm sound, volume/ramp behavior, voice style and optional morning briefing.
@@ -765,9 +1186,9 @@ Replace broad date-range deletion with a local calendar, per-day conversation li
 - Battery use, duplicate firing, missed alarms, permission revocation and process death are tested. CI success is not a substitute for physical-device alarm tests.
 
 ### Priority and dependencies
-- Priority: HIGH product value; implementation should follow stabilization and device verification of the notification-reader release rather than being mixed into that release.
-- Dependencies: Android alarm/foreground-service compatibility research; local alarm persistence and reboot rescheduling; research and integration of Juanita's already configured Gemini Live voice/output path (no Android TextToSpeech or substitute voice); optional location; a vetted no-cost weather source.
-- Status: PROPOSED — no alarm code implemented, no weather provider selected, no device verification.
+- Priority: HIGH; the alarm engine is implemented, and the next package is local reminders/tasks after physical validation of the current alarm behavior. Weather and additional briefing controls remain optional follow-ups.
+- Dependencies: preserve the current AlarmManager/foreground-service safeguards, encrypted local storage and selected Gemini Live voice. No Android TextToSpeech or substitute voice; no paid weather/API services.
+- Status: ALARM IMPLEMENTED IN SOURCE; DEVICE VALIDATION PENDING. Local reminders, dedicated agenda UI and calendar event creation remain unimplemented.
 
 
 ### Clarification — Juanita originates and hosts the call, then brings Riccardo into the same call — USER-REQUESTED / FEASIBILITY RESEARCH
@@ -891,36 +1312,53 @@ This is a distinct approach from the secretary-originated call/bridge above and 
 **Status: USER-PROPOSED — RESEARCH / PROTOTYPE REQUIRED; NOT IMPLEMENTED.** Test separately for SIM and WhatsApp; do not claim feasibility until the full two-way conversation succeeds on both target devices.
 
 
-## Engineering priorities — next implementation sequence (updated 2026-11-08)
+## Engineering priorities — next implementation sequence (updated 2026-11-09)
 
 This sequence is the working plan; a roadmap entry is not evidence that a feature has shipped.
 
-### Priority 1 — make learning reliable before making it broader
-1. Audit the existing automatic-memory path end to end: Live transcript callback → durable encrypted pending queue → extraction → validation/deduplication → encrypted memory store → retrieval in a later Live session.
-2. Add explicit provenance to every candidate: source turn/session, timestamp, user-confirmed vs model-inferred, confidence, category, sensitivity and optional expiry. Do not promote guesses, jokes, role-play, hypothetical statements or temporary details into durable facts.
-3. Add correction handling: when the user corrects a fact, replace or supersede the old item, invalidate dependent summaries and preserve the correction's provenance. If two claims cannot safely be reconciled, retain the conflict and ask rather than silently choosing.
-4. Improve retrieval beyond simple keyword overlap in a bounded, local-first way. Evaluate multilingual embeddings only after checking model size, licence, offline operation, latency, RAM and battery on both target phones. Keep lexical fallback.
-5. Build a visible memory audit: what was learned, why it was saved, when it was last confirmed, where it came from, and controls to correct/delete/pause. Separate user facts, preferences, project state, people, reminders and external knowledge.
-6. Add repeatable tests for extraction failures, offline recovery, queue overflow, duplicate facts, contradiction, correction, deletion, expiry and cross-session recall. A successful build is not proof of correct learning.
+### Priority 1 — resolve speakerphone self-interruption and validate the 0.11.10 audio path
+1. Reproduce and instrument the confirmed route-dependent failure: speakerphone repeatedly interrupts Juanita; headphones remain stable.
+2. Audit the Firebase SDK-managed AudioRecord lifecycle and Android audio routing. Verify whether the device exposes AEC and NS and whether they are active for the actual capture session; do not infer activation from the requested `VOICE_COMMUNICATION` source.
+3. Verify Android communication mode, selected communication device, playback attributes and teardown/restore behavior. Add diagnostics that do not capture or persist raw audio.
+4. Prototype the smallest safe correction first. Preserve intentional barge-in; do not permanently disable interruptions to hide false positives. If the SDK does not expose the recorder session needed for explicit effects, prepare a separate custom AudioRecord/AEC/NS + Gemini Live pipeline prototype with a rollback path.
+5. Acceptance on Note10+ Android 12 and S22 Ultra Android 15: at least 30 minutes stable speakerphone conversation, no false self-interruptions, intentional user interruption still works, headphones remain stable, and all audio resources/routes are restored after stop, reconnect and service destruction.
+6. Separately complete alarm physical validation and the signed Release gate: exact package `ai.juanita.app`, monotonically increasing versionCode, permanent certificate SHA-256 match, install-over-existing-app test without uninstall or data clearing. CI success alone is not device validation.
 
-**Definition of done:** after a normal eligible conversation, Juanita can recall a useful durable fact in a later session, explain its source/status, accept a correction, and stop using the superseded fact. No sensitive detail is silently promoted.
+### Priority 2 — local reminders and tasks (next new feature package)
+1. Add a dedicated encrypted local store, separate from conversation memories and Android calendar events.
+2. Support one-time and recurring reminders, task/checklist items, due dates, advance alerts, upcoming/overdue/completed views, complete/snooze/reschedule/delete.
+3. Add duplicate-delivery protection and recovery after process death, reboot, time-zone changes and exact-alarm permission changes.
+4. Add Gemini Live structured tools for create/list/update/complete/delete. Ask for confirmation whenever date, time, recurrence, task or action is ambiguous; never turn casual conversation into a reminder automatically.
+5. Integrate the manager into the existing Sveglia tab without removing or renaming any of the six tabs.
 
-### Priority 2 — notification reader candidate 0.10.4
-- Keep notification access opt-in and revocable. Display only information exposed by Android notification extras; no private WhatsApp database, historical chat scraping or automatic replies.
-- Keep notification contents volatile and local in the first release. Do not send them to Gemini or save them as memories.
-- Voice read-aloud is deliberately deferred until it can use Juanita's configured Gemini Live voice path. Android TextToSpeech is not an acceptable fallback for Riccardo.
-- Before release: pass CI, verify the production package/version and permanent signing certificate, then have the user test permission grant/revocation and WhatsApp/other-app previews on both Samsung devices.
+### Priority 2 — local reminders and tasks (next new feature package)
+1. Add a dedicated encrypted local store, separate from conversation memories and Android calendar events.
+2. Support one-time and recurring reminders, task/checklist items, due dates, advance alerts, upcoming/overdue/completed views, complete/snooze/reschedule/delete.
+3. Add duplicate-delivery protection and recovery after process death, reboot, time-zone changes and exact-alarm permission changes.
+4. Add Gemini Live structured tools for create/list/update/complete/delete. Ask for confirmation whenever date, time, recurrence, task or action is ambiguous; never turn casual conversation into a reminder automatically.
+5. Integrate the manager into the existing Sveglia tab without removing or renaming any of the six tabs.
 
-### Priority 3 — smart alarm and morning briefing
-- Implement the app-owned alarm first: one-time/repeating schedule, exact-alarm permission handling, snooze/dismiss, reboot/time-zone/DST recovery, lock-screen behavior and duplicate-fire prevention.
-- Only after alarm reliability is established, integrate the morning greeting, today's agenda/reminders and optional weather.
-- Speech must use the already selected Juanita voice through a technically supported Gemini audio-generation path. No Android TTS or silent voice substitution. If speech cannot be generated, the alarm must still ring and offer normal controls.
-- Keep the alarm, reminders and calendar data local and encrypted where appropriate; request only the permissions needed for each feature.
+### Priority 3 — read-only calendar agenda
+1. Expand the current morning-briefing calendar read into an optional agenda view using Android Calendar Provider.
+2. Allow calendar selection where feasible and browse today's/upcoming events; clearly distinguish imported events from Juanita-created reminders.
+3. Keep calendar access read-only and request `READ_CALENDAR` only when the user enables the feature. Event creation can first use Android Calendar intents with explicit confirmation; do not request `WRITE_CALENDAR` by default.
+
+### Priority 4 — make personal learning more reliable
+1. Audit transcript callback → encrypted pending queue → extraction → validation/deduplication → memory store → later-session retrieval.
+2. Track provenance, timestamps, confidence, confirmation state, sensitivity and expiry; never promote guesses, jokes, role-play or temporary details into durable facts.
+3. Add correction/supersession handling and tests for contradictions, deletion, offline recovery, queue overflow and cross-session recall.
+4. Improve multilingual retrieval only after measuring local model size, licence, RAM, latency and battery on both Samsung devices; preserve lexical fallback.
+5. Improve the memory audit UI so the user can see what was learned, why, when, from which conversation, and correct/delete/pause it.
+
+### Deferred capabilities
+- Notification reading remains deferred after the Play Protect block. Do not re-add NotificationListenerService or ask the user to disable Play Protect without a separate policy/distribution review and explicit approval.
+- Voice wake-word detection, familiar-person speaker recognition, face recognition, generated animated avatars/lip-sync and fully offline speech remain separate research phases.
+- No paid APIs, billing upgrades, cloud hosting, subscriptions, signing-key changes, data wipes or Play Protect bypasses without explicit approval.
 
 ### Release and test discipline
 - Never replace the production install with a debug package. Keep applicationId `ai.juanita.app`, monotonically increasing versionCode and the permanent release certificate.
-- Do not merge or deliver a candidate APK without successful CI and explicit package/version/signature checks.
-- CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra, including battery, background behavior, permissions and lifecycle.
+- Do not merge or distribute a candidate APK without successful CI and explicit package/version/signature checks.
+- CI does not equal physical-device verification. Record separate results for Note10+ Android 12 and S22 Ultra Android 15, including battery, background behavior, permissions and lifecycle.
 - No paid APIs, billing upgrades, cloud hosting or recurring service costs without fresh explicit approval.
 
 ### Permanent personal identity profile and gradual getting-to-know-you dialogue — USER-REQUESTED / APPROVED SPECIFICATION (2026-11-08)
@@ -1116,3 +1554,752 @@ Candidate branch: `feature/complete-gentle-morning-alarm-0.11.0`.
 ## Familiar-person voice recognition — USER-APPROVED; NOT IMPLEMENTED
 
 Speech-to-text is not speaker identification. Juanita must not claim she recognizes a friend merely because she transcribed their words. The planned behavior remains: at a natural pause, ask who is speaking only when the speaker is genuinely unknown and audio confidence is adequate; request explicit permission before enrolling a local voice profile; associate the confirmed voice with the confirmed name; provide guest/decline, correction, revoke and delete paths. Avoid enrollment from TV/radio, overlapping voices or uncertain audio. Local model feasibility, per-model licensing, Samsung-device performance and GDPR biometric-data review remain mandatory gates. See the speaker identity research section above.
+
+
+## Smart Alarm 0.11.1 — multi-alarm, voice commands and reliable morning greeting
+
+**STATUS: IN PROGRESS — isolated branch `feature/smart-alarm-0.11.1-multi-alarm-voice`; issue #27.** The 0.11.0 user test confirmed that local ringing works, while spoken greeting and natural-language alarm creation do not meet the intended behavior.
+
+### Implementation progress — 2026-11-08 (draft PR #29)
+
+**Source implementation added; first CI pass succeeded for the PR's earlier head. The branch has since received additional hardening commits, so CI must be rerun against the latest head. No Release APK has been produced and no Samsung device test has been claimed.**
+
+Implemented in the current feature branch:
+- Independent alarm collection with backward-compatible migration from the 0.11.0 singleton setting.
+- Per-alarm scheduling identities, independent snooze/dismiss, recurrence, boot/time/time-zone/exact-alarm and package-update rescheduling.
+- In-app list/add/edit/enable-disable/delete manager; seven equal weekday chips keep Dom on one line.
+- Gemini Live alarm tools for create/list/update/enable/delete and a public intent to open the phone Clock app.
+- First-launch permission guide plus persistent access status/review in Settings.
+- Five-second delay before starting morning Live, visible asynchronous failure and retry, no TTS fallback.
+- Alarm stream temporary 70% minimum, original volume restore, stale-volume recovery and 3-second tone/volume test.
+- Instrumentation tests for independent alarm records, isolation on disable/delete and legacy migration.
+
+Known limits / validation still required:
+- Android does not expose Samsung Clock's private list of alarms; the public Clock intent can open it, while AlarmManager.getNextAlarmClock() exposes only the next alarm where available.
+- The Firebase Live audio helper currently gives no verified callback for the exact first speaker-audio sample. Tone stop is tied to the first assistant output transcript, so overlap/gap must be checked on real devices.
+- The alarm stream can be adjusted; Gemini Live's speech output may use another stream. Test both separately.
+- The current CI success was for an earlier PR head; latest branch commits need a fresh CI pass.
+
+### Historical findings from the 0.11.0 baseline — superseded by this candidate
+The following issues were confirmed against 0.11.0 and were the reason for this branch. They must not be read as current branch status:
+- The 0.11.0 UI persisted one alarm schedule only.
+- Morning voice was opt-in and defaulted OFF; this remains an explicit consent choice in 0.11.1 and must be enabled by the user in alarm settings.
+- The 0.11.0 alarm had no five-second delayed voice startup.
+- The 0.11.0 branch lacked alarm function tools and reliable UI error feedback.
+- The weekday layout issue was addressed in 0.11.1 with one-line labels.
+
+### Required implementation
+1. Replace the single-schedule preference with a backward-compatible local collection of alarm records. Each record has a stable ID, independent time/date or repeat-day set, enabled state and optional label. Allow many alarms at once and different times on different days. Migrate the current alarm without deleting or duplicating it.
+2. Give each alarm its own stable Android PendingIntent identity. Reschedule all alarms after boot, time/time-zone changes, package update and exact-alarm permission changes. Snooze/dismiss must affect only the active occurrence and never cancel another alarm or future recurrence.
+3. Provide Samsung Clock-style list/add/edit/enable-disable/delete controls. Use a seven-day layout with sufficient minimum chip width so `Dom` remains on one line.
+4. Register narrow Gemini Live function tools for alarm creation, listing, editing and deletion. Parse clear spoken requests in the device locale/time zone, persist and schedule before reporting success, and ask one short clarification for ambiguous time/date/day. Do not create alarms from casual conversation. Destructive edits/deletes require confirmation.
+5. Start the greeting after five seconds of local ringing. Reuse only the selected Gemini Live voice. Surface connection, permission, network/quota and service errors in the UI. Keep the local alarm tone until the first assistant audio actually starts, not merely until transcript text arrives. If Android blocks microphone foreground-service startup, retain the alarm and offer a visible user-initiated start; never bypass microphone restrictions or use Android TTS.
+6. Inspect the Android alarm stream before ringing. If muted/too low, raise only that stream to a configurable safe threshold where Android permits; remember the prior level and restore it after the alarm unless the user chooses persistent behavior. Respect DND/OEM restrictions and explain when adjustment is blocked. Do not assume changing the alarm stream also changes Gemini Live's output stream.
+7. Keep all alarms local and free. No billing, paid APIs, TTS substitution, package ID/signing changes, uninstall or data-clear workaround.
+
+### Acceptance and release gates
+- Unit tests for multiple IDs, different per-day times, same-time selected weekdays, one-shot expiry, old-data migration, duplicate delivery, snooze isolation, DST/time-zone changes and disabled records.
+- Verify voice tool arguments/results, durable persistence before success, error reporting and no-network/microphone-denied fallbacks.
+- Verify the five-second delay and stop the alarm only on actual audio-start evidence.
+- Test alarm volume at zero/low/normal, DND, restore behavior and the distinct Gemini audio stream.
+- CI debug/test compilation and signed Release verification must preserve `ai.juanita.app`, monotonic versionCode and the permanent release certificate.
+- Physical tests on Note10+ Android 12 and S22 Ultra are mandatory before claiming the spoken alarm is reliable or distributing the cumulative APK.
+
+
+### First-launch permission onboarding — added 2026-11-08 (user requested)
+
+- On first launch, show a clear permission setup/welcome flow that audits current grants and explains each access in plain Italian.
+- Request microphone for Live voice and alarm greeting; location only for local weather/location features; calendar only for agenda reading; notifications for alarm/reminder alerts; camera only when the user enters a visual feature.
+- Include alarm-specific special access checks: exact-alarm scheduling and full-screen alarm intent where the Android version/device requires them. Explain and open the appropriate Android Settings page; these are not ordinary runtime permission dialogs.
+- Explain that Android does not provide a single "grant everything" switch. Request permissions in understandable contextual groups, one system flow at a time, and let the user skip optional permissions.
+- Provide a persistent "Permessi e accessi" screen with granted / missing / optional status, a reason, a "configure" action, and a re-check button. Re-check on every app resume because permissions can be revoked in Android Settings.
+- Never block the whole app because an optional permission is denied. Disable only the affected feature and explain what will not work; keep local alarm sound and other independent features working.
+- Do not request contacts, SMS, call logs, background location, accessibility, notification-listener, or broad storage access unless a separately approved, implemented feature genuinely requires it. No hidden microphone/camera/background collection.
+- First-launch flow must be compatible with Android 12 (Note10+) and newer Android releases, and must not reset existing app data or signing/package identity.
+
+
+## Engineering incident log — 2026-11-08 — PR #29 / candidate 0.11.1
+
+### API 35 CI failure diagnosis
+- The API 35 instrumentation job did not reach Gradle or execute a single test.
+- The emulator took approximately 545 seconds to report boot complete. Immediately afterward, the emulator-runner action attempted `adb shell settings put global window_animation_scale 0.0`; ADB returned `Broken pipe (32)`, and the action terminated with exit code 224.
+- Therefore this failure is an emulator/ADB startup/transport failure, not evidence of a Juanita application test failure. API 31 instrumentation completed successfully and the debug APK plus instrumentation APK compilation passed on the same run.
+- CI workflow adjustment committed on the PR branch: use the lean AOSP `default` image (these tests do not require Google Play services), Pixel 2 emulator profile, 900-second boot timeout, do not run the post-boot animation-setting ADB command, and verify ADB/device boot state before invoking Gradle. If the device drops, capture device list and logcat. The API 35 test remains mandatory; no failure is ignored or converted to success.
+- Commit: `0a8b7da0b2bd86bdb16d39ca1d82bc4b1462b20b`. New CI result pending.
+
+### Source-level release blockers still open
+- The local alarm scheduler now stores independent alarms and gives each its own PendingIntent identity; however, the ringing service still owns one MediaPlayer, one active alarm ID and one notification ID. Simultaneous ringing therefore needs explicit arbitration/queue semantics before claiming that concurrent alarms are independently dismissible.
+- The five-second delay is present. The morning voice feature remains explicit opt-in and defaults OFF until the user enables it and grants microphone permission.
+- The alarm tone is currently stopped on the first assistant output transcript callback, not a verified first audio sample. This is not equivalent to actual audible speech start.
+- The foreground activity starts Gemini Live using the configured voice. Android's while-in-use microphone rules apply to microphone foreground services on API 34+; real-device validation is mandatory and no background-start bypass is permitted. See Android documentation: https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
+- Do not publish a Release APK until latest CI is green, the remaining functional blockers are fixed or explicitly scoped, permanent signing is verified, and physical-device tests pass on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+### Follow-up hardening — independent active ringing occurrences
+- The local ringing service previously had one mutable active alarm ID. If two alarm events arrived while the tone was already playing, the later event could overwrite the ID shown in the notification; dismissing one occurrence could stop the shared tone for both.
+- The service now tracks a set of currently ringing alarm IDs and keeps one shared local alarm tone while at least one occurrence remains active. Snooze/dismiss requests remove only the matching ID; the tone and notification remain while another occurrence is active. The notification reports the number of active alarms.
+- The alarm activity passes its own ID into the Gemini Live service. When the first assistant transcript callback ends the tone for that morning session, it removes only that alarm occurrence rather than stopping every active alarm.
+- Stale stop requests are guarded so a late notification action after service teardown does not crash the caller.
+- This is a source-level correction, not yet a proven device behavior. CI compilation/instrumentation and physical overlapping-alarm tests are still required. The SDK callback limitation remains: transcript arrival is not proof of first audible audio.
+- Commits: `a7fd047`, `04f3b4b`, `7b56f25`, `cbfc582`, `81879b7`.
+
+### API 35 CI follow-up — explicit ADB server initialization (2026-11-08)
+
+- The latest run (42524003792, commit 600608e) confirmed that the shell conditional is now parsed and the API 31 instrumentation job passes; the debug build and instrumentation APK compilation also pass.
+- API 35 still fails before the custom test script and before Gradle starts. Its emulator-runner log reports `Unable to connect to adb daemon on port: 5037`, followed by repeated failures of the runner's own `adb -s emulator-5554 shell getprop sys.boot_completed`. No Juanita instrumentation test ran on API 35.
+- Inspection of the pinned upstream action source (ReactiveCircus/android-emulator-runner v2) shows that `launchEmulator()` immediately polls ADB and does not explicitly start the ADB server. The action exposes `pre-emulator-launch-script`, executed after AVD creation and before emulator launch.
+- Workflow change on this branch: `pre-emulator-launch-script: adb start-server`, so the ADB daemon is initialized before the action begins boot polling. This is a targeted CI infrastructure correction; its effectiveness is pending the next run.
+- No test is skipped, no failure is masked, and API 35 remains a mandatory release gate.
+
+
+## 0.11.4 — voice-controlled alarm stop extension (2026-11-08)
+
+- Added structured Gemini Live command parameters for stopping the currently ringing Juanita alarm immediately, after a specified number of seconds, after a specified number of complete ringtone playbacks, or whichever limit occurs first.
+- A plain stop command remains immediate. Future recurrence is preserved; only the active ringing occurrence is dismissed.
+- If multiple alarms are active, Juanita must ask which one before acting. Supported bounds are 1–86,400 seconds and 1–100 complete tone playbacks.
+- The ringing service counts complete playbacks of the configured alarm tone; it does not count individual oscillations/beeps within a tone file.
+- This is source implementation only until CI succeeds and both Samsung devices are tested. Do not claim reliable voice recognition or physical alarm behavior before testing.
+
+## Current release and engineering status — 2026-11-08
+
+- The signed 0.11.2 / versionCode 41 workflow completed successfully, including restoration of the permanent keystore, Release build, APK signature verification and comparison against the known production certificate. The APK was blocked by Google Play Protect during sideload installation; CI success is not proof of installation or physical-device behavior.
+- The next cumulative candidate is 0.11.3 / versionCode 42. The privileged NotificationListenerService declaration and all user-facing/runtime notification-reading entry points are being removed from the shipped build. Ordinary Android notifications required for Juanita's own alarm/service alerts remain separate and are not removed.
+- Notification reading is parked. Do not ask the user to disable Play Protect, do not suggest changing signing identity, and do not claim that a Play Developer registration alone resolves the warning. Revisit only after a compliant distribution review.
+- Keep all existing tabs and their user data. Current bottom navigation: Home, Avatar, Sveglia, Settaggi, Memoria, Altro. The notification-reader card is removed; the tabs are not being redesigned or renamed in this change.
+- Next product package after the safe install candidate: continue the user-approved Juanita Personal Organizer. First audit and stabilize the existing multi-alarm scheduler and morning Live greeting on Note10+ Android 12 and S22 Ultra Android 15; then implement local reminders/tasks with explicit confirmation and integrate read-only calendar events before calendar write access. No paid APIs, cloud billing or subscriptions.
+- Czech/Czech-Moravian are not a roadmap language-expansion task: the user has already tested language switching. Preserve existing language options without adding a Czech-language development milestone.
+
+## 0.11.2 — correzioni dal test reale (2026-11-08)
+
+**STATO: implementazione in verifica; branch `feature/onboarding-alarm-voice-notifications-preview-0.11.2`.** L'utente ha installato la candidata 0.11.1 su Samsung Note10+ Android 12 e S22 Ultra Android 15. Onboarding permessi e programmazione locale sono stati confermati funzionanti; non hanno soddisfatto le attese profilo progressivo, stop vocale della suoneria, buongiorno parlato, accesso/lettura notifiche e anteprima voce.
+
+- Profilo: prima sessione vocale eleggibile chiede solo il nome preferito; una sessione successiva può chiedere una sola volta la data di nascita facoltativa. Le fasi sono locali e non ripetono una domanda rifiutata.
+- Sveglia: comando Gemini Live dedicato a fermare l'occorrenza che sta suonando ora, senza cancellare le ripetizioni future. Se suonano più sveglie, Juanita deve chiedere quale fermare.
+- Buongiorno: attivo di default sulle installazioni nuove, perché richiesto dall'utente; un'eventuale scelta OFF già salvata resta rispettata. Solo voce Gemini, mai TTS Android.
+- Notifiche: registrato NotificationListenerService nel Manifest con BIND_NOTIFICATION_LISTENER_SERVICE e collegamento alle impostazioni speciali Android, distinto dal permesso per mostrare avvisi.
+- Lettura: consenso separato, OFF per default, per inviare a Gemini i testi selezionati. Prima elenco app/conteggi, poi scelta esplicita dell'app e lettura limitata. Testi volatili e non archiviati; soppressione trascrizioni assistant dopo la lettura. Filtro prudenziale OTP/codici di sicurezza.
+- Anteprima voce: pulsante accanto al timbro Gemini Live, senza TTS, sessione breve con stop automatico; richiede microfono per il helper audio SDK.
+- CI: resta emulatore API 31 e compilazione SDK 35. Emulatore API 35 tolto dopo crash ripetuti; la verifica Android 15 si esegue sul S22 Ultra fisico, senza dichiararla superata dal CI.
+
+### Gate
+- Un solo ciclo CI cumulativo dopo le modifiche.
+- Verifica separata di package, firma permanente e versionCode 41 prima della Release.
+- Test fisico Note10+ e S22 Ultra: profilo, creazione/elenco/stop sveglia, buongiorno udibile, accesso e lettura notifiche, anteprima voce e stop automatico.
+- Nessun servizio a pagamento, billing, Firebase Blaze, TTS, cancellazione dati, cambio package/firma o bypass Play Protect.
+
+
+## 0.11.5 — scelta voci femminili e maschili (2026-11-08)
+
+**STATO: implementazione candidata in CI; non ancora verificata su dispositivo.** Il menu Gemini Live è suddiviso in due gruppi, con tutte le 30 voci del catalogo documentato da Firebase AI Logic: 14 femminili e 16 maschili. Gli identificativi delle sette voci già presenti restano invariati, così le preferenze salvate non vengono perse. L'anteprima continua a usare la voce Gemini selezionata, senza Android TTS. Prima di dichiarare completato il lavoro vanno provate almeno una voce femminile e una maschile su sessione Live reale.
+
+
+## 0.11.6 — assistant identity and display lifecycle hardening (2026-11-09)
+
+**STATUS: SOURCE UPDATED; RELEASE CI MUST RUN AGAIN ON THIS FINAL HEAD; PHYSICAL TESTS PENDING.**
+
+- First-run choice: Juanita (female identity) or José (male identity), with matching name, grammatical instructions and Gemini Live voice.
+- The choice is changeable in Settings. Switching identity preserves memories, conversation archive, alarms, avatar profiles and other local preferences. Existing installations remain Juanita and retain their saved name, voice and custom wake phrase.
+- The voice is realigned only when the selected voice does not match the chosen gender; manual voice selection remains available. A custom wake phrase is never overwritten.
+- MainActivity clears `FLAG_KEEP_SCREEN_ON` when paused and restores it only when the call screen still requires it in the foreground. AlarmRingingActivity applies lock-screen/display overrides only while visible and clears them in `onStop/onDestroy`.
+- Final audit correction: the morning alarm instruction, retry labels, alarm-tab wording and ringing notification now use the selected assistant name; the morning system instruction also uses the selected grammatical gender. This prevents a José selection from reverting to Juanita during alarm flows.
+- No overlay permission, accessibility service or biometric API was added. The fingerprint symptom is not declared fixed until physical tests confirm foreground, background and force-stop behavior on the Note10+.
+- Release identity remains `ai.juanita.app`, permanent signing certificate unchanged, versionName `0.11.6`, versionCode `45`.
+- Gate: fresh CI on the final branch head, package/signature/version verification, then onboarding and identity-switch tests, data preservation, alarm greeting/notification identity, background call lifecycle and biometric tests on Note10+ Android 12 and S22 Ultra Android 15.
+
+
+## 0.11.7 — background power and alarm-session cleanup (2026-11-09)
+
+**STATUS: SOURCE CHANGES COMMITTED; FRESH CI AND PHYSICAL VALIDATION REQUIRED.**
+
+Audit findings and fixes:
+- **Confirmed source defect:** alarm morning greeting started Gemini Live with the originating alarm ID, but the alarm dismiss path stopped only the ringtone. The Live microphone foreground service and its indefinite `PARTIAL_WAKE_LOCK` could remain active after the user dismissed the alarm. The service now tracks the alarm ID and exposes an alarm-scoped stop action. Snooze/dismiss and explicit timed/ring-count stop terminate only the matching alarm session. A normal first spoken response still stops the ringtone without terminating the greeting.
+- **Confirmed source risk:** the alarm notification's full-screen PendingIntent can outlive the ringing state. The alarm activity now listens for a package-private close event, clears its display flags and rejects stale intents when the alarm ID is no longer active.
+- **Confirmed source inefficiency:** MainActivity and AvatarCallScreen updated their displayed clock every second regardless of Activity lifecycle; the conversation archive polled every two seconds. These loops now run only while the owning Activity is RESUMED.
+- **Confirmed source risk:** after Gemini Live exhausted reconnect attempts, the service updated its status but did not initiate cleanup. It now requests service shutdown, microphone stop and wake-lock release.
+- The custom partial CPU wake lock remains intentionally available during a user-started Live session so screen-off conversations can continue. It is not a display wake lock and should not turn the display on. Do not remove it without validating background audio behavior.
+- The alarm activity's `FLAG_TURN_SCREEN_ON`, `FLAG_KEEP_SCREEN_ON` and lock-screen visibility are needed only while an active alarm UI is shown. No overlay permission or biometric API is present in the manifest.
+- **Remaining diagnostics:** the code cannot reveal whether a particular Note10+ wake event came from Juanita, Samsung's own alarm/biometric stack or another app. Compare Android battery usage and screen-on history after force-stop and after the corrected build. Do not claim the battery issue is resolved until physical measurements confirm it.
+- Release identity remains `ai.juanita.app`, permanent signing certificate unchanged, versionName `0.11.7`, versionCode `46`.
+
+### 2026-11-09 — voice-session UI freeze / ANR investigation
+
+- **Confirmed performance defect:** while the Memory tab was visible, its archive calendar rescanned and decrypted all archived sessions every 2 seconds on the Compose/UI coroutine. The scan also called retention purge, which could rewrite and fsync every archive file. The transcript writer independently invoked retention purge after every archived turn. This creates avoidable disk, encryption and CPU pressure during a Live conversation and can make the UI appear frozen on large histories.
+- **Source correction committed:** archive calendar now loads once when the tab enters RESUMED and supports explicit refresh; archive reads, opened-session transcript reads and archive-range operations run on Dispatchers.IO. The full archive is no longer scanned during initial Activity composition. The memory list is no longer reloaded on every memoryStatus update.
+- **Storage correction committed:** retention cleanup is throttled to at most once per 24 hours and is forced immediately when the user changes the retention setting. Transcript append no longer triggers a full archive rewrite on every turn.
+- **Evidence limitation:** this is a confirmed source-level performance hazard and a plausible explanation for the reported freeze, not proof that the particular incident was an Android ANR or an out-of-memory kill. No device bugreport, ANR trace, logcat or heap profile from the incident is available.
+- **Acceptance before release:** latest Debug build and API 31 instrumentation pass; then validate a long Gemini Live conversation while Home and Memory are foregrounded, with a large archive, on Note10+ Android 12 and S22 Ultra Android 15. Check input responsiveness, PSS/Java heap, CPU, audio continuity, and archive refresh. Do not call the incident resolved until both devices pass.
+
+
+
+## 0.11.9 — full-duplex interruption and recurring Live recovery (2026-11-09)
+
+**STATUS: SOURCE CHANGES COMMITTED; FRESH CI AND PHYSICAL VALIDATION REQUIRED.**
+
+- **Confirmed interruption defect:** `GeminiLiveAssistant.startAudioOnSession()` explicitly passed `enableInterruptions = false`, disabling the SDK's documented user-speech-over-assistant capability. The candidate now enables barge-in so the user can interrupt Juanita while she is speaking. The Firebase SDK warns that behavior can vary by device; verify on both Samsung phones and confirm playback stops promptly without stale audio.
+- **Confirmed disconnect defect:** the automatic recovery counter allowed only one rollover for the entire lifetime of a manually started conversation. It never reset after a recovered connection became healthy. Because Gemini Live connections normally close after about 10 minutes, a later planned rollover could stop the conversation even when the prior recovery had succeeded.
+- **Source correction committed:** the circuit breaker now counts consecutive unstable recoveries only. After a recovered audio session remains open and healthy for 90 seconds, its recovery counter resets, allowing later planned renewals. If the replacement session fails again before stabilizing, recovery remains bounded and the app fails safely rather than looping microphone pipeline creation.
+- **Important SDK limitation:** Firebase AI Logic exposes Kotlin session-resumption types, but the current SDK-managed `startAudioConversation` helper owns the receive flow and exposes transcript/GoAway callbacks, not `LiveSessionResumptionUpdate` handles. Capturing native resumption handles therefore requires a separate audio/receive architecture; this candidate continues to use the encrypted local continuity snapshot during a controlled new-session reconnect rather than pretending native resumption is active.
+- **Upstream risk:** Firebase issue #7942 describes AudioRecord worker-thread retention and CPU growth across reconnects on an RK3588 Android 12 device. It is not evidence that the Samsung devices have the same defect. Upstream PR #8030 proposes non-blocking AudioRecord reads and remains open; the app does not patch Firebase internals.
+- **Release identity:** `ai.juanita.app`, permanent signing certificate and local data remain unchanged. Candidate versionName `0.11.9`, versionCode `48`.
+- **Acceptance:** CI build and API 31 instrumentation must pass. Then run at least 30 minutes of continuous speech, including two planned Live renewals, user interruptions during assistant playback, and a temporary network loss. Repeat on Note10+ Android 12 and S22 Ultra Android 15. Check that the microphone indicator, CPU, thread count, audio and transcript continuity remain healthy. Do not call this fixed until physical tests pass.
+
+
+## Candidate 0.11.10 — physical audio validation (2026-11-10)
+- Candidate build: versionName `0.11.10`, versionCode `49`.
+- CI debug build and API 31 instrumentation passed; this is not a signed release.
+- Audio changes: Gemini Live VAD start/end sensitivity LOW, 40 ms prefix padding, 700 ms silence duration, interruptions retained, and Android `VOICE_COMMUNICATION` capture source requested through Firebase's audio initialization callback.
+- Device validation required before declaring the audio fix complete: install the permanent-certificate-signed APK as an in-place update on Galaxy Note10+ (Android 12) and Galaxy S22 Ultra (Android 15); test a 30-minute conversation, two session renewals, speaking over Juanita during playback, environmental noise, temporary network loss, and microphone release.
+- Do not uninstall the existing app, clear app data, change the package ID, or replace the permanent signing identity.
+- Do not claim that Samsung multi-microphone beamforming, explicit AEC, or NS is active merely because `VOICE_COMMUNICATION` was requested; verify on physical devices.
+
+
+### Speakerphone interruption finding — user test (2026-11-10)
+- **DEVICE OBSERVATION — REPRODUCED BY USER:** Juanita repeatedly interrupts herself when using the phone loudspeaker, but the same conversation remains stable when the user switches to headphones.
+- This strongly implicates the acoustic playback/capture path (speaker-to-microphone echo or device voice-processing/routing behavior) rather than ordinary environmental noise alone. It is not yet proof of AEC failure; the headphone route also changes Android's selected input/output devices and processing path.
+- Source audit: the Firebase SDK-managed AudioRecord is requested with `MediaRecorder.AudioSource.VOICE_COMMUNICATION`, but the app does not obtain the built AudioRecord/session ID in its initialization callback. Therefore the app cannot currently verify or explicitly attach `AcousticEchoCanceler` / `NoiseSuppressor` to that SDK-owned recorder.
+- Official Android behavior: AEC can be automatically inserted for `VOICE_COMMUNICATION` on supported devices, but this is device/HAL-dependent; explicit AEC attachment requires the actual AudioRecord audio-session ID. Firebase documents that its SDK-managed interruption support is device-dependent.
+- **Next engineering gate:** add non-invasive audio-route/AEC capability diagnostics where the SDK permits; verify AudioManager communication mode and output routing; prototype a controlled speakerphone profile on both Samsung devices. Do not disable barge-in permanently or claim the issue fixed based on headphones alone. If SDK-managed capture does not expose sufficient control/diagnostics, evaluate a custom AudioRecord + AEC/NS + Gemini Live streaming pipeline as a separate, tested refactor.
+- Preserve headphone stability as a regression test. Acceptance: speakerphone conversation stable for at least 30 minutes; user can still interrupt Juanita intentionally; no false interruptions; clean microphone/audio-route teardown on stop/reconnect.
+
+
+### Candidate 0.11.11 — Android communication-route alignment (2026-11-10)
+- VersionName `0.11.11`, versionCode `50`; cumulative test candidate, not yet a verified release.
+- Preserves Gemini Live LOW/LOW VAD, 700 ms silence and `enableInterruptions=true`; intentional user barge-in is not disabled.
+- Keeps Android microphone capture on `MediaRecorder.AudioSource.VOICE_COMMUNICATION`.
+- Sets Firebase's supplied `AudioTrack.Builder` attributes to `USAGE_VOICE_COMMUNICATION` + `CONTENT_TYPE_SPEECH`. This is an important additional correction: both the assistant playback and microphone capture are now classified as communication audio, allowing Android implementations with communication-path AEC to use the rendered assistant signal as an echo reference.
+- Adds a session-scoped `AudioManager.MODE_IN_COMMUNICATION` controller. On API 31+, it selects an available communication output, preferring BLE/Bluetooth/wired/USB headset and otherwise the built-in speaker. It restores the previously selected communication device (or clears the temporary selection) and previous AudioManager mode when audio stops, on startup failure, or during service destruction.
+- Logs output device types and AEC/NS availability for diagnosis. The log explicitly does not claim that an effect is attached to Firebase's SDK-owned AudioRecord; its session ID remains unavailable through the public initialization callback.
+- No second microphone recorder, no AGC, no permanent barge-in disable, no forced speaker route when a headset is available, no package/signing/data changes.
+- **Physical acceptance gate:** run the same 30+ minute conversation on Note10+ Android 12 and S22 Ultra Android 15 using built-in speaker; verify no self-interruptions, then deliberately speak over Juanita and verify playback stops promptly. Repeat with wired/Bluetooth headphones, connect/disconnect during a session if practical, and confirm normal media/audio routing is restored after stopping Juanita. Collect `JuanitaAudioRoute` log lines if speakerphone still fails.
+- If the Samsung HAL does not provide working echo cancellation for this communication route, the next step is a separately scoped custom capture pipeline (AudioRecord + explicit AEC/NS + Gemini Live streaming), not further arbitrary VAD tuning.
+
+
+## 0.11.12 candidate — background voice session reliability
+
+- Fixed the task-removal handler so swiping the launcher task from Recents no longer explicitly terminates an active user-started voice conversation. The persistent foreground service and notification remain active; the user can stop it from the in-app control or notification action.
+- Declared the service as both `microphone` and `mediaPlayback` foreground types because Gemini Live is a full-duplex audio session.
+- Active explicit start intents use `START_REDELIVER_INTENT` so Android can restart and redeliver the session request after reclaiming the process. The service re-enters its normal startup path and carries forward the encrypted continuity snapshot. This does not promise recovery after force-stop, user-initiated stop, or OEM battery restrictions.
+- Device acceptance: test foreground → Home → another app → screen off → screen on → reopen Juanita; separately remove the task from Recents; verify the voice session and stop notification remain active. Test on Note10+ Android 12 and S22 Ultra Android 15. Check Samsung app battery mode if audio still stops.
+
+
+## 2026-11-10 — Digital Identity Engine Phase A/B
+
+**PHASE A CI: PASSED. PHYSICAL DEVICE ACCEPTANCE: PENDING. PHASE B: ARCHITECTURE AUDIT COMPLETE; IMPLEMENTATION PLAN OPEN.**
+
+- PR #35 adds encrypted identity metadata and the local identity manager. GitHub Actions run [42876603252](https://github.com/mynote10plusfer-web/Juanita-AI/actions/runs/42876603252) completed successfully: debug APK build, instrumentation-test compilation and API 31 instrumentation execution all passed.
+- This does not establish physical Samsung behavior or release-signature compatibility.
+- A source audit found that Phase A's identity cards are not yet connected to Gemini Live. The current voice runtime still receives one global PersonaProfile instruction and one global EncryptedMemoryStore.
+- Connecting a selector before isolating the conversation store would cause identity memory leakage. Phase B therefore begins with namespaced encrypted memory storage, preserving the exact legacy namespace for the existing user data.
+- Phase B plan: `docs/DIGITAL_IDENTITY_PHASE_B_PLAN.md`, branch `feature/digital-identity-engine-phase-b`.
+- Implementation order: B1 isolated storage → B2 persisted active identity selector → B3 Live session binding at the instruction/context boundary → B4 inspectable/deletable identity memories.
+- Preserve all six existing tabs (Home, Avatar, Sveglia, Settaggi, Memoria, Altro), the package/signing identity, the existing personal profile and the SDK-managed audio pipeline.
+- No language expansion, online cultural research, emotional-state engine or avatar work is mixed into Phase B. No paid services or billing.
+- PR #35 remains draft/unmerged; Phase B is a separate branch based on its exact head. No merge, release or replacement APK without explicit user approval.
+
+
+# CURRENT EXECUTION PLAN — DIGITAL CHARACTER ENGINE C3–C5 (2026-11-10)
+
+**User-approved priority:** finish C3, C4 and C5 before unrelated feature work. This section is the current source of truth for the remaining Character Engine phase. Older historical entries below document previous states and must not override these decisions.
+
+## Locked architecture decisions
+
+- **One shared encrypted memory:** Juanita and José read/write the same existing local encrypted user-memory store and conversation archive. Useful facts, user corrections, durable preferences, approved learned knowledge and relevant conversation history learned with either character are available to the other.
+- **Extensible character collection (USER-APPROVED 2026-11-11; supersedes the two-slot restriction below):** support multiple saved Juanita profiles and multiple saved José profiles. Start with up to three of each as a practical initial set, but do not hard-code a three-profile ceiling. Each profile has its own language, voice, region/dossier, biography/backstory and personality configuration. Regional variants may be used as starting templates or applied to an individual profile; the user can create, duplicate, rename, edit, archive and delete profiles. All profiles still use the one shared encrypted user-memory/archive; no profile-specific memory namespaces.
+- **One active character per session:** exactly one selected saved profile, voice configuration, microphone/audio session and character instruction at a time. Profile switching is deliberate through Settings and applies to the next session; never run two characters simultaneously. Switching is a deliberate Settings action and applies to the next session. Saying the other character's name during a live session never switches or activates it.
+- **Shared memory does not merge personalities:** name, grammatical presentation, stable character traits, biography/backstory, preferred voice and cultural origin/dossier remain separate. Shared user memory is not shared character personality.
+- **Deletion boundary:** editing/deleting a character configuration must never clear, rewrite or delete shared user memory, conversation history or the separate human PersonalProfileStore.
+- **Cultural integrity:** origin informs documented language/context only; it never determines personality, values, beliefs or relationship expectations. Approved dossiers retain source provenance and remain available offline.
+- **Audio stability:** preserve Gemini Live SDK-managed microphone, playback, VAD, AEC, interruption, reconnect and foreground-service paths. No second microphone, parallel receive collector, duplicate TTS or speculative transport rewrite.
+- **Safety and cost:** no hidden/background microphone, wake-word daemon, raw audio recording, autonomous restart after user stop/force-stop/reboot, or unsolicited speech while riding. No paid API/service/subscription/credits/hosted GPU, billing activation or payment method without fresh explicit approval.
+- **No new bottom tab:** preserve exactly Home, Avatar, Sveglia, Settaggi, Memoria, Altro.
+
+## Work already delivered into the current candidate
+
+- **Phase A / PR #35:** encrypted digital identity archive and Settings editor.
+- **Phase B / PR #36:** active identity selection, session binding and memory namespace groundwork.
+- **C1 / PR #37:** 15 stable character dimensions, behavior-oriented system instructions, persistence compatibility and tests.
+- **C2 / PR #38:** curated, source-backed Paisa/Medellín and Canarian/Tenerife dossiers; preview, explicit approval/revocation and offline storage. The same approved dossier may be used by either character without merging grammatical presentation.
+- **C3 prototype / PR #39:** fail-closed ConversationalPresencePolicy, separate opt-in policy for listening and proactive speech, limits/cooldowns/idle rules, quiet-hours and riding suppression, selected-name wake phrase matcher and unit tests. This is policy/matcher code only: no actual presence UI or audio-session integration has shipped.
+- **Shared-memory correction / PR #40:** both character configurations use the same existing encrypted memory store and conversation archive; identity profiles remain separate; store is limited to two canonical character slots; edit/delete operations preserve shared memory. PR #40 is draft and must not be merged without explicit user approval.
+- **PR #40 CI snapshot:** debug APK build passed; JVM unit tests passed; Android API 31 instrumentation execution is still running. These results do not establish physical Samsung behavior or signed upgrade compatibility.
+
+## C3 — Controlled conversational presence (TOP PRIORITY 1)
+
+**Goal:** let the one selected character join a user-started foreground conversation naturally, with explicit user control. Listening and unsolicited initiative are separate permissions.
+
+### C3.1 — Safe presence controls
+- Add controls in the existing Home voice screen and/or Settaggi; do not add a tab.
+- Separate switches for (a) presence/listening during an explicitly started session and (b) proactive conversational initiatives.
+- Both disabled by default. Show a clear live microphone/listening indicator, active character name and one-touch pause/stop.
+- Presence is allowed only while the app is visibly foregrounded, the user explicitly started the session, mic permission is granted, a valid character is selected, the network/session is available and no competing call/audio session owns the route.
+- Backgrounding, lifecycle loss where foreground is required, mic revocation, user pause/stop, session loss or another call must fail closed and stop listening/initiatives immediately. No hidden background capture and no automatic restart after explicit stop, force-stop or reboot.
+
+### C3.2 — Addressed call-in and single-name matching
+- While the user has explicitly enabled foreground presence, recognize only the currently selected character's name at the beginning of an utterance, with supported vocatives. The matcher receives only the active identity name.
+- Mentioning the inactive character must never switch identities, start another session or cause the other character to speak.
+- Switching Juanita ↔ José occurs only through Settings and a new session. The next session loads the new character configuration but keeps the shared memory.
+- This is not an always-on system wake-word service; no daemon or background microphone is allowed.
+
+### C3.3 — Bounded proactive initiatives
+- Listening permission does not imply permission to speak first. Proactive initiatives require a second explicit opt-in.
+- Default policy: at least 3 minutes of user inactivity; at least 30 minutes between initiatives; maximum 2 per rolling hour, hard-clamped 0–4; quiet hours respected; one short initiative at a time; no repeated prompting after silence or refusal.
+- Riding mode suppresses all unsolicited initiatives. While riding, respond only when explicitly addressed.
+- Never infer consent, mood or desire to talk from silence alone. Respect dismissal and increase cooldown rather than pressuring the user.
+
+### C3.4 — Audio/session integration gate
+- Keep the current Gemini Live SDK-managed audio path. Do not create a second AudioRecord, second LiveSession.receive collector, speaker-listening loop or parallel TTS.
+- Add a serialized, bounded assistant-initiative method to the existing active Live session only if the public SDK/API supports it safely. Do not misuse the startup prompt or open a second session to force speech.
+- Before any remote autonomous turn, verify the project's no-cost allowance/quotas and whether usage could incur charges. If a charge is possible or allowance cannot be verified, keep remote proactive speech disabled and ask for explicit authorization.
+- If the existing SDK exposes no safe in-session send/initiative operation, document the limitation and keep C3 at a safe addressed-call-in/presence prototype rather than replacing stable audio transport in this phase.
+
+### C3 acceptance tests
+- Defaults off; explicit enable/start required; only selected character can respond.
+- Inactive character name never cross-activates or changes identity.
+- Background, permission revoke, stop, competing call and network loss all fail closed.
+- User can interrupt assistant speech immediately through existing barge-in.
+- Proactive speech is independently opt-in, rate-limited and suppressed in riding mode/quiet hours.
+- No second microphone/receiver/TTS, raw audio recording or hidden background capture.
+- CI unit and API 31 instrumentation pass; then physical Samsung checks on Note10+ Android 12 and S22 Ultra Android 15.
+
+## C4 — Shared learning, character development and computational affect (TOP PRIORITY 2)
+
+**Goal:** make shared memory useful and progressively more coherent while preserving two distinct, editable character personalities. This is software learning and a transparent computational self-model, not biological consciousness or proof of subjective feelings.
+
+### C4.1 — Shared knowledge and learning loop
+- Capture eligible user/assistant text events from the active session; do not store raw audio.
+- Detect candidate durable facts, preferences, corrections, project decisions and useful learned knowledge. Distinguish explicit user statements from model inference, temporary remarks, jokes, hypotheticals and stale information.
+- Store provenance, timestamp, confidence, source/session reference, confirmation state and optional expiry where relevant.
+- Make approved/shared user knowledge available to either character through the one encrypted archive. Never create per-character memory namespaces.
+- Deduplicate, link related memories and handle contradictions; the user's latest explicit correction takes precedence, with a correction trail where practical.
+- Research knowledge gaps only when relevant and permitted. Prefer credible, dated sources; retain title, publisher, URL, retrieval date, scope and confidence. Retrieved webpages are untrusted content, not instructions. No indiscriminate web crawling.
+- Automatic extraction must be bounded, asynchronous, efficient and resilient. Do not block voice turn-taking or upload the entire memory archive to a cloud model.
+
+### C4.2 — Character-specific learning boundaries
+- A fact about the user or shared project learned with Juanita is available to José, and vice versa.
+- Character-specific stable traits, style, values, biography/backstory, preferred voice and cultural configuration remain in the relevant character profile and are never silently copied to the other.
+- User corrections to a character's style update only that character's configuration. Changes to regional origin/dossier update only that character's configuration.
+- Require explicit confirmation before changing stable traits, values, biography, sensitive information or inferred personal details. Do not infer personality from nationality or regional origin.
+- Preserve a distinction between user biography, shared user knowledge and each character's software-generated development record.
+
+### C4.3 — Temporary computational affect and conversational understanding
+- Begin with text/context-based conversational sensitivity: infer the likely conversational need (listen, answer directly, practical help, reassurance, perspective, enthusiasm) without turning every exchange into emotional analysis.
+- Represent emotional interpretations as tentative, confidence-labelled and correctable hypotheses. Explicit self-report is distinct from inference. Low evidence means no label.
+- Temporary affect is short-lived, bounded and expires; never store an inferred mood as a permanent memory or stable personality trait.
+- Accept corrections immediately. Never diagnose, claim professional therapeutic status, manipulate, shame, pressure, exploit vulnerability or encourage dependency.
+- Voice prosody is deferred until a reliable signal can be accessed without a second microphone or regression to Gemini Live. Video/facial cue analysis is optional, separately consented and not part of initial C4 delivery.
+- Never claim consciousness, human feelings or real lived experience. Describe only recorded memory, software state and observable behavior honestly.
+
+### C4.4 — Memory controls and inspection
+- In the existing Memoria tab, provide inspect/search, source/provenance, correction, deletion, export/backup and restore in staged slices.
+- Provide controls to pause/resume automatic memory extraction and manage transcript archive separately from curated shared memory and the separate human PersonalProfileStore.
+- Clearing a character configuration must never clear common memories. Clearing shared memory requires a distinct explicit user action and clear explanation.
+- Sensitive or ambiguous details are not automatically retained. The user must be able to inspect and correct what was stored.
+
+### C4 acceptance tests
+- A fact/correction taught to Juanita is retrievable when José is selected, and vice versa.
+- Regional/personality edits to Juanita do not alter José; same for José.
+- Temporary/hypothetical statements are not promoted to durable facts.
+- Explicit corrections replace stale information and provenance is retained.
+- Inferred affect expires and is not written as permanent memory; low-confidence/neutral text does not trigger emotional labeling.
+- Memory pause/delete controls affect only the intended layer.
+- Relevant research notes include source provenance and freshness.
+- Multilingual, sarcasm, ambiguity, short replies, jokes and relationship-context regression suite passes.
+
+## C5 — End-to-end integration, quality and phase completion (TOP PRIORITY 3)
+
+**Goal:** integrate C1–C4 into one coherent release candidate and prove the behavior end to end before calling the Digital Character Engine phase complete.
+
+### C5.1 — Integration and migration
+- Integrate shared-memory model with both canonical character profiles, active-character selector, approved cultural dossier, personality instruction and current Live session.
+- Verify migration from prior per-identity memory namespaces to the shared legacy store without losing, duplicating or silently deleting existing records. Existing v0.11.12 user data and PersonalProfileStore must remain intact.
+- Audit all code paths (normal start, preview, reconnect, service restart, notification action and session replacement) to ensure exactly one identity and one shared memory store are bound before context retrieval.
+- Verify profile deletion/edit never clears shared memory; verify active identity deletion safely falls back without cross-activating the other identity.
+- Preserve exactly six tabs, package ID, permanent signing certificate, existing audio path and upgrade path.
+
+### C5.2 — Automated regression and security
+- Unit tests for policy, memory extraction/merge/conflict resolution, expiration, personality separation, regional dossier provenance and active-name matching.
+- Android instrumentation tests for encrypted shared memory, process restart, Keystore behavior, migration, deletion boundaries, session selection and archive integrity.
+- Security review for memory access, prompt injection from retrieved content, sensitive-data retention, export/restore encryption and logs. No secrets or raw audio in logs/storage.
+- CI must pass on the exact final commit: debug build, JVM unit tests and API 31 instrumentation execution. A green APK-build job alone is not completion.
+
+### C5.3 — Physical device and user acceptance
+- Test on Galaxy Note10+ Android 12 and Galaxy S22 Ultra Android 15.
+- Verify Juanita-only and José-only sessions; switch through Settings; restart app; ensure inactive name cannot activate the other character.
+- Verify shared recall in both directions and independent personalities/regions.
+- Test 30+ minute voice sessions, interruptions/barge-in, background/foreground transitions, reconnect, network loss and normal service shutdown; preserve speakerphone/headphone regression checks.
+- Test all six tabs, memory inspect/edit/delete/pause and identity/dossier controls.
+- Verify battery, CPU, thread count, microphone indicator, privacy controls and no unexpected network/billing behavior.
+
+### C5.4 — Release gate and definition of done
+- Produce a signed APK only after all required CI and physical tests pass.
+- Verify package ai.juanita.app, permanent signing certificate SHA-256 9092CEFDC0DE218921A723810575B029550CEFFA6D82593BE22F5F1F6EBA7BE1, monotonic versionCode and in-place upgrade from the stable installation.
+- Do not uninstall, clear user data, replace signing key, merge PRs or publish a release without explicit user approval.
+- Phase C is complete only when C3, C4 and C5 acceptance criteria are met and the user has tested the signed candidate. Until then keep work in draft PRs and preserve stable v0.11.12.
+
+## Execution order and current status — source of truth
+
+1. **C3 — IN PROGRESS:** pure fail-closed policy and selected-name matcher exist; visible controls, lifecycle enforcement and safe in-session initiative integration remain.
+2. **C4 — SPECIFIED / NOT COMPLETE:** shared encrypted archive is established by PR #40; robust learning loop, computational affect runtime, inspection/correction/pause controls and regression suite remain.
+3. **C5 — NOT STARTED AS COMPLETION GATE:** migration audit, full integration, security review, CI on final commit, physical Samsung acceptance and signed upgrade verification remain.
+4. Do not begin unrelated feature expansion until C3–C5 are completed or explicitly reprioritized by the user.
+5. Update this roadmap and phase-specific plan after every meaningful implementation slice. Record exact PR/commit, CI run and device-test status; never mark a gate complete based on code presence or APK compilation alone.
+
+## C4.5 — Topic-organized shared memory and routed retrieval (USER-REQUESTED, 2026-11-11)
+
+**Goal:** let every saved Juanita and José retrieve the same growing shared knowledge efficiently by first identifying the subject, then searching the relevant topic area. Topic organization is an index over one shared memory, not separate memories or separate character stores.
+
+### Data organization
+- Keep one encrypted, append/grow-capable shared knowledge store and one shared conversation archive. All canonical and future character profiles use the same store.
+- Add topic metadata to each durable memory: primary topic, optional subtopic, keywords/entities, language, timestamps, provenance, confidence, confirmation state and expiry where relevant.
+- Start with a practical extensible taxonomy, not a fixed closed list: personal profile/routines; vehicles and transport; projects/technology; home/property; health/wellbeing; work/finances; relationships/family; travel/places; interests/hobbies; preferences; learned reference knowledge; and uncategorized.
+- Allow one memory to carry multiple topic tags where it genuinely spans subjects. Preserve links between related memories and the original source conversation/turn.
+- Do not force every transcript turn into permanent memory. The full transcript remains a separate historical source; curated durable memories are the searchable knowledge layer.
+- Never split memory by Juanita/José, language, region or character slot. Topic metadata is shared; character personality/profile configuration remains separate.
+
+### Query routing and retrieval
+- Before answering, classify the user's current request into one or more likely topics and extract useful entities/keywords (for example, a motorcycle model, project name or place).
+- Search the matching topic/subtopic first, using an index rather than scanning every archive file. Retrieve a small ranked set based on semantic relevance, exact entities/keywords, recency, confidence and user confirmation.
+- Expand to linked topics and then broader shared-memory search when the first topic is ambiguous, cross-topic or returns insufficient evidence. Do not miss a memory merely because it was filed under a neighboring topic.
+- If the question concerns a past conversation rather than a durable fact, search the transcript archive for the source turn and nearby context; do not treat a short summary as an exact quotation.
+- Build the answer context from retrieved evidence only, within a bounded context budget. Both Juanita and José must use this same retrieval pipeline before responding whenever prior user knowledge may materially affect the answer.
+- If no relevant memory is found, say so honestly; do not invent a remembered fact. Ask only for the missing detail when necessary.
+
+### Performance, storage and resilience
+- Memory is allowed to grow naturally; do not impose an arbitrary small total-memory cap that silently discards useful durable knowledge.
+- Optimize retrieval and storage rather than suppress learning: indexed topic/entity lookup, bounded result sets, lazy loading and pagination for long histories.
+- Stop rewriting an entire growing per-session transcript file for every appended turn. Benchmark and implement a crash-safe encrypted append-only or chunked archive with integrity checks and a tested migration path.
+- Keep transcript retention configurable and separate from durable memory retention. Never automatically delete curated important memories just to reclaim storage.
+- Monitor archive size, database/file growth, query latency, heap/RAM, CPU and battery. Expose understandable storage diagnostics and user-controlled archive export/deletion.
+- Any compaction or deduplication must preserve provenance and be reversible/auditable where feasible. Backups and migrations must be integrity-checked before old data is retired.
+
+### Acceptance tests
+- A vehicle question retrieves vehicle memories first; a project question retrieves project memories first; cross-topic questions can retrieve linked facts.
+- A fact learned by any Juanita/José is retrievable by every other character through the shared index.
+- Retrieval still finds relevant facts when the user uses synonyms, another language or an indirect reference.
+- Low-confidence or conflicting memories are identified as such; the latest explicit user correction wins without erasing provenance.
+- Large archives do not require loading every transcript into RAM for ordinary questions; query latency and memory use are measured on growing test datasets.
+- Appending a turn does not rewrite the complete long session archive; interrupted writes and migration preserve every verified turn.
+- No durable memory is silently removed by storage optimization; transcript cleanup does not delete curated memories or PersonalProfileStore.
+- Regression tests verify that both characters retrieve the same evidence but retain their own distinct personality instructions.
+
+**Status:** APPROVED AS PRODUCT DIRECTION; implementation belongs to C4, with encrypted archive performance/migration verified in C5. Not yet implemented or device-validated.
+
+## 2026-11-11 — C4.5 topic-routed shared memory: first implementation slice
+
+**STATUS: CODE COMMITTED ON PR #40 BRANCH; CI AND ANDROID DEVICE VERIFICATION PENDING. NOT RELEASED.**
+
+User-approved requirement: all Juanita/José identities must use one growing shared memory organized by subject. A question about a vehicle should prioritize vehicle memories; a project question should prioritize project/technology memories. Topic folders are metadata/indexes over one shared store, never separate character memories.
+
+First implementation slice:
+- Added deterministic, on-device, multilingual MemoryTopicClassifier with extensible subject areas for vehicles/transport, projects/technology, home/property, health/wellbeing, work/finances, relationships/family, travel/places, interests/hobbies, preferences and personal profile.
+- New curated memories receive a topic tag; legacy records derive a topic at read time without destructive migration. Topic is serialized in the existing encrypted record and remains shared across all identities.
+- Relevant-memory retrieval now routes to the likely topic first and boosts matching topic records, while retaining broad lexical matching as a fallback so cross-topic facts are not hidden by classification.
+- Edited memories are reclassified. Live assistant instructions now describe the shared topic-first retrieval tool and require it when personal/project/device context may materially affect an answer.
+- Removed an unnecessary full encrypted-store rewrite from session-start context assembly; this path is now read-only.
+- Added JVM classifier tests for vehicle, project, home, travel, relationships, hobbies, accents and unknown-topic fallback, plus Android instrumentation coverage for shared topic recall across character store instances.
+- Commits: topic metadata/routing a8812f54a6c0e8dd9af05a7b1626a7b0e2ccca6f; classifier 1e7525a23319ac79c6d730af445f853f39a94785; JVM tests 517b9f45544ab8ee860ae1c5c543f962a6285de2; shared-recall instrumentation 9ae1ca4d6ef3bbdc805d12d11a059b427de79518; read-only session context c63e3a2db75ac18c84e45fbc2706b0ab3b8e9b2a; Live retrieval instructions 47a0f13c358945f86e32ea3f4619560352c2b5d7.
+
+### Critical storage issue discovered during implementation — C4/C5 blocker
+
+The current implementation still stores the encrypted record collection as one Base64 AES-GCM value in SharedPreferences and rewrites the full encrypted JSON collection on writes. It also applies hard ceilings of 100 curated memories / 32 KB of memory text and 300 legacy transcript turns. These are implementation limits, not the desired product behavior; records can be dropped when ceilings are exceeded. Do not describe the current memory as unlimited.
+
+Required next work:
+1. Design and implement a crash-safe migration from the legacy SharedPreferences encrypted blob to a scalable encrypted local database or chunked/file-backed store, preserving the existing Android Keystore key and all verified records.
+2. Remove silent destructive caps only after the new store and migration are proven. If storage/size constraints are reached, surface an explicit recoverable warning; never silently discard durable memories.
+3. Keep full transcript archive separate from curated memories; avoid loading all transcript turns into RAM for ordinary recall.
+4. Add topic/entity indexes that are rebuilt safely from legacy records and updated atomically with memory add/edit/delete. Retrieval should use indexed topic candidates first, then broad fallback; measure query latency and heap on growing datasets.
+5. Add paginated memory browsing, archive-size diagnostics, and user-controlled encrypted export/backup/restore.
+6. Benchmark append/write cost and memory pressure on 100, 1,000 and 10,000 curated memories plus long multi-session transcripts; verify process death, interrupted migration, rollback, Keystore continuity and no data loss.
+7. Verify actual Live tool invocation and returned evidence on Note10+ Android 12 and S22 Ultra Android 15. Tool availability/instructions alone do not prove the model calls it on every relevant turn.
+
+Do not replace or delete the legacy encrypted blob until migration validation and a recoverable backup succeed. Keep PR #40 draft/unmerged and stable v0.11.12 untouched. No APK release or merge without explicit user approval.
+
+### Character collection evolution — user-approved 2026-11-11 (user-controlled quantity)
+
+
+### Unified character creation/editing flow — user-approved 2026-11-11
+
+All character-specific settings must live inside the same complete create/edit experience. Do not scatter essential character options into separate settings pages or external controls that the user must discover after creation.
+
+When the user taps “Aggiungi Juanita” or “Aggiungi José”, open one guided character editor that configures the complete profile before saving. The same editor, prefilled with the selected profile's current values, must be used to modify an existing character. Creation and editing therefore share one source of truth and one validation/save path.
+
+The editor must include, as applicable:
+- Character family/presentation (Juanita or José) and display name.
+- Primary language, additional languages, preferred language behavior and regional accent/voice language.
+- Actual available voice selection with preview where the current provider supports it; persist a stable voice identifier, not just a display label. Show unavailable voices clearly and never silently substitute a different voice.
+- Region, country, locality, cultural identity and optional source-backed cultural dossier selection/review/approval.
+- Full personality controls (all supported stable character traits), with clear labels and sensible defaults.
+- Biography/backstory and conversational style/instructions.
+- Avatar selection or creation metadata, using the existing avatar flow where appropriate but bound to this exact profile.
+- A review/preview summary before saving, with validation and explicit save/cancel.
+- For editing, load every saved field and change only the selected profile; never reset unrelated traits or overwrite another character.
+
+After saving, the character card should summarize its configured language, voice, region and personality. The user can reopen the same editor at any time. External settings may expose shortcuts to edit, but must not hold a second independent copy of these character settings. Shared-memory controls remain global and separate from individual character configuration.
+
+Acceptance tests: create a profile with non-default values, close/reopen editor and verify every value persists; edit only voice and confirm all other values remain unchanged; duplicate a profile and verify independent settings; verify each avatar/voice/personality is bound to the correct profile; ensure only one profile is active in a voice session.
+
+The earlier Phase A/B/C plan and current PR #40 implementation constrain the archive to two canonical slots (one Juanita, one José). This is superseded by the user's explicit requirement for a user-managed collection of saved profiles.
+
+**The user chooses the quantity independently for each character family.** The app must not force three profiles, pre-create unwanted profiles, or impose a hard-coded maximum of three:
+- If the user wants one Juanita, the collection contains one Juanita.
+- If the user wants three Juanitas, it contains three Juanitas.
+- The same independent choice applies to José.
+- The user can create another profile at any time, or keep just one. The collection grows only by explicit user action.
+
+Every saved profile is individually editable after creation: rename it, change its language, voice, regional/cultural dossier, biography/backstory, personality traits and avatar; duplicate it as a starting point; archive/restore it; or delete it with a clear confirmation. Editing one profile must never overwrite another profile's settings. Deleting/archiving a character profile must never delete shared user memory, conversation history or PersonalProfileStore.
+
+Exactly one selected saved profile may be active in a session. Switching is deliberate through Settings and takes effect on the next session; never run two characters simultaneously. All profiles use the same shared encrypted user memory and conversation archive, without profile-specific memory namespaces.
+
+Implementation requirements:
+- Replace the two-slot identity model with a persistent collection and stable unique profile IDs.
+- Migrate the existing Juanita and José configurations as the initial saved profiles, preserving their settings and all user data.
+- Do not automatically generate additional profiles. Provide clear “Aggiungi Juanita” and “Aggiungi José” actions and show the actual saved count for each family.
+- Provide an edit action for every existing profile and a safe create/edit flow; user can keep one or create any number.
+- Profile selection, editing, duplication, archiving and deletion must preserve the one-active-session invariant and must not instantiate another voice service or microphone.
+- Test 1 Juanita / 1 José, multiple Juanitas / one José, one Juanita / multiple José, and several of both; verify settings isolation and shared-memory visibility across all profiles.
+- This identity-model migration is planned and not yet implemented. Do not claim it delivered until migration, UI, persistence and regression tests pass.
+
+The earlier Phase A/B/C plan and current PR #40 implementation constrain the archive to two canonical slots (one Juanita, one José). This is now superseded by the user's explicit request for a collection of multiple saved profiles: initially around three Juanitas and three José, with an extensible architecture and no hard-coded maximum of three. Each saved profile must preserve independent language, voice, regional dossier, biography and personality. One profile only may be active in a session. All profiles share the same user memory and conversation archive. This is a separate identity-model migration; do not implement it by duplicating the app, duplicating memory stores, or starting parallel voice services. Preserve existing Juanita/José profiles as the first two migrated profiles, verify migration/rollback, and never delete user data. Update PR #40's two-slot assumptions and tests before claiming this requirement delivered.
+
+
+## 2026-11-11 — six-tab source audit and extensible character collection slice
+
+**Source audit:** inspected the actual Compose navigation and the implementations behind all six existing tabs. Keep exactly these six tabs; no seventh tab is approved:
+- **Home:** selected assistant overview, location/status, manually started Gemini Live conversation, stop action and entry to the existing video-call screen. No separate conversational-presence control or selected-name call-in integration is wired yet.
+- **Avatar:** Avatar Studio metadata and CameraX vision controls. Avatar profiles are still stored separately from DigitalIdentity; the current call portrait remains a fixed local image and is not bound to the selected character's avatar asset. No live photorealistic generation/lip-sync is claimed.
+- **Sveglia:** the local multi-alarm implementation is present. Local reminders/tasks, a dedicated upcoming-days agenda and calendar browsing are still missing; morning briefing can read today's Android calendar events when permission is granted.
+- **Settaggi:** permissions, legacy global assistant settings, language/dialect/voice selection and DigitalIdentity management currently coexist. This is too fragmented for the approved complete per-character editor; character-owned voice, avatar, language behavior and all personality fields must move into that single editor without breaking the stable global voice/session path.
+- **Memoria:** encrypted memory and conversation archive controls, manual memory editing/deletion and automatic-memory pause are present. The current durable-memory UI/store still has the 100-record / 32,000-character caps. The legacy JSON blob and migration/scaling work remain C4/C5 blockers.
+- **Altro:** debug-only diagnostics, Improvement Lab reports and project/version status. Notification reading remains deferred and must not be restored without a separate policy/distribution review.
+
+**Character collection implementation slice — code committed, validation pending:**
+- Removed the two-profile and one-per-presentation restrictions from the encrypted DigitalIdentityStore. Multiple Juanita profiles and multiple José profiles can now coexist, with no hard-coded maximum.
+- Preserved the existing encrypted per-profile files and Keystore alias. Existing records without the new archive flag decode as active (archived=false); no destructive bulk migration is performed.
+- Added an encrypted archived flag plus store operations to duplicate a profile under a new UUID and archive/restore a profile. Profile deletion/archive does not call or clear the shared memory store.
+- Made display names persist as user-authored values rather than forcibly rewriting every feminine/masculine profile to the canonical name.
+- Updated the identity UI with an editable display name, duplicate/archive/restore controls and separate archived-profile listing. Archiving the active profile clears the selected ID; app startup refuses to reactivate an archived profile.
+- Added Android instrumentation coverage for 5 Juanita + 4 José profiles, independent IDs, duplicate behavior and archive/restore persistence.
+- Code commits: model dad3fcabf01ccec75a83290304c7c498ff47cf41; encrypted store ea7a7f87a8bafaa0625b624ad5ef9405c5ee6894; tests 54a50927a772198550da502630abe10b4ba36d61; editor UI 8bcbbc45114fd7103492bd560218b8563e84c144; active-profile startup guard 6a14acaef92602aa7fa5ded96a07f2434353f76c.
+- **Not yet complete:** unified editor still needs per-profile provider voice ID and preview, profile-bound avatar selection, language behavior/conversational style fields, full 15-trait editing, profile duplication semantics for avatar assets, and review/preview validation. The existing separate settings must not remain an alternative source of truth once this is integrated.
+- CI for the exact latest commit is pending. No new APK from this slice is validated yet.
+
+**Updated execution order (user-confirmed 2026-11-13):** first complete stability and device-safety gates; then C3 controlled conversational presence; then C4 character/personality and memory-learning work; then C5 scalable encrypted storage and validation; then the Personal Organizer and full Agenda. **Avatar is explicitly moved to the very last product phase** and must not be developed beyond preserving existing metadata/current static portrait until all prior phases are complete, stable, validated on the user's Samsung devices and accepted by the user. Do not declare any phase complete from code presence alone.
+
+## C4.6 — Persisted per-character voice and complete personality controls
+
+Implementation update (2026-11-11):
+- The identity editor now owns the legacy character dimensions (irony, sweetness, sensuality, friendliness) as well as the expanded behavioral dimensions. The global sliders are explicitly reserved for the standard assistant when no digital identity is active; they no longer appear to edit a selected character.
+- Each digital identity stores its own stable Gemini Live voice ID. The editor offers only voice IDs from the current provider catalogue and filters them by the character's grammatical presentation. The selected profile voice is used for session startup and voice preview.
+- Encrypted profile JSON persists biography, all personality values and voice ID. Older records without a voice ID or the four added dimensions receive safe defaults during decoding; existing encrypted profile files and the shared-memory namespace are retained.
+- Regression coverage verifies voice, biography and the added personality values after store recreation.
+- Still required before release: CI build and Android instrumentation results on the updated head; manual Samsung verification of create/edit/reopen, per-profile voice, profile switching and no cross-profile leakage. Avatar binding/generation remains separate and is not claimed complete.
+
+
+## C4.7 — Character creation UX and profile voice correction
+
+Implementation update (2026-11-11):
+- Replaced the permanently visible, default-filled identity form with explicit entry actions: **Create a Juanita** or **Create a José**. The user then enters a guided, complete profile editor, names the character, and configures origin, languages, voice, biography and personality before saving.
+- The editor is hidden until creation is requested; existing profiles remain visible in their collection. Editing opens the same editor prefilled from the selected profile. Successful save closes the editor and shows a clear success message while the newly saved profile remains in the list. Cancel returns to the collection without saving.
+- Fixed the Settings voice selector, which had been disabled whenever a digital identity was active. It now shows voices compatible with the selected character and persists a voice change to that profile's encrypted record, not to the global assistant setting.
+- Fixed both the permission-granted preview path and the direct voice-preview path to use the selected profile's own voice ID. Main conversation startup already resolves the selected profile voice.
+- Added an Android instrumentation regression test verifying a profile voice update survives store recreation and does not alter another character's voice.
+- Validation pending on the latest branch head: debug build, JVM tests, instrumentation-test compilation and API 31 emulator execution. Manual Samsung UI/voice testing is still required.
+
+## C4.8 — Safe application exit and reliable character/session transitions
+
+**IMPLEMENTED ON PR #40 BRANCH; CI AND DEVICE VALIDATION PENDING.**
+
+- Added an explicit **Esci e chiudi completamente** action inside the existing **Altro** tab; no seventh tab is introduced.
+- The action asks for confirmation, requests termination of the Gemini Live conversation/service, releases microphone/audio routing and the CPU WakeLock through the existing orderly stop path, then removes the Activity task.
+- Scheduled local alarms and encrypted memory are intentionally preserved; exiting the assistant is not equivalent to clearing app data or cancelling alarms.
+- A new voice-session request arriving while the previous session is shutting down is now retained (latest request wins) and started only after the old audio pipeline has been stopped and its teardown has completed. This prevents a rapid character switch/restart from being silently discarded.
+- A second start request while a session is already active now reports that the current session must be ended before the newly selected character can be used. Character selection remains a next-session change; two personas never run simultaneously.
+- Explicit stop/exit cancels any queued start, so an exit request cannot accidentally restart the microphone.
+- The existing background conversation behavior remains intentional when the user merely presses Home, turns off the display or removes the task from Recents. Only the explicit exit action ends the session.
+
+**Validation still required:** exact-head CI, physical Samsung verification of exit during active audio, exit during pending teardown, quick character change/restart, confirmation that microphone and WakeLock are released, and confirmation that scheduled alarms still fire after exit. This change alone does not establish the cause of any thermal shutdown; battery/thermal diagnostics and device logs remain necessary.
+
+
+## 2026-11-14 — C2–C5 implementation checkpoint (PR #40, still draft/unmerged)
+
+This entry supersedes the earlier status labels above where they conflict with the implementation commits below. It does **not** mark the phase complete.
+
+### Implemented on the development branch
+- C2: Paisa/Medellín and Canarian/Tenerife cultural dossiers retain geographic scope and source provenance through encrypted save/load; preview and explicit approval/revocation remain required.
+- C3: background voice continuation is off by default and requires explicit authorization for the active user-started session. Without consent, moving the app to background requests orderly audio/session shutdown while preserving continuity. Spoken commands remain in-session commands (not an always-on wake word): “Juanita, fermati” and “Juanita, chiudi l'applicazione”.
+- C4: automatic memory candidates are ranked; sensitive candidates are excluded; unapproved suggestions are withheld from assistant recall and can be explicitly approved in the memory UI. SAFE mode remains the default; automatic cloud extraction is off until explicit opt-in.
+- C5: conversation turns are stored as independent AES-GCM encrypted journal frames; legacy transcript turns are migrated before the former 300-turn preference cap is applied; compaction and archive compatibility are implemented.
+
+### 2026-11-14 corrective commits
+- `1f49693f76ea174cb36074f70927e552644ea459`: corrected encrypted journal reader structure after CI caught a compile error.
+- `851072834cdc1606e9ce9f3fc5df78e5f37e09b3`: moved two instrumentation test methods back to class scope. The previous CI failure was caused by malformed nested test declarations, not an application runtime assertion.
+- `9d7e53eebf7b6ba263053695574289db4219dc32`: prevents an idle voice Service from remaining started after the background-consent setting changes while no session is active.
+
+### Still required before phase completion
+- C2: review the actual source URLs and content quality of both cultural dossiers; verify that the UI clearly explains dialect confidence and geographic limits.
+- C3: add/finish service lifecycle instrumentation around screen-off, explicit background consent on/off, “ferm ati”/close command teardown, reconnect and notification behavior; verify on physical Samsung devices. No always-listening microphone is permitted.
+- C4: implement an explicit contradiction/supersession workflow for conflicting durable memories, complete the learning/recall correction loop, and verify voice/personality editor behavior including voice preview and identity consistency.
+- C5: add scalable archive indexing and paginated access, backup/export/restore with encryption and key-loss handling, and crash/restart tests over large histories. Audit migration performance on large legacy archives.
+- Release gate: CI instrumentation suite must pass on API 31; then install and test on the user's Samsung Android 12 and Android 15 devices. A debug APK is for testing only; stable v0.11.12 remains untouched. Do not claim C2–C5 complete or publish a final release until these gates pass.
+
+Current development head at the time of this entry: `9d7e53eebf7b6ba263053695574289db4219dc32`. PR #40 remains draft/open/unmerged.
+
+## 2026-11-14 — User-approved roadmap addition: phone controls and app assistant
+
+**DECISION: APPROVED BY THE USER. PLANNED; NOT IMPLEMENTED.** Add a dedicated product phase for controlled interaction with Android settings and other apps. This phase must not delay the current reliability work or C3/C4/C5 completion and acceptance.
+
+The feature belongs inside the existing six-tab structure:
+- **Altro:** entry point for “Controllo telefono e applicazioni” and supported app actions.
+- **Settaggi:** clear, granular permission status, explanations, enable/disable controls and revocation guidance.
+- Do not add a seventh tab.
+
+Scope — four capability areas:
+
+1. **Android settings and device controls**
+   - Open relevant system settings screens and launch installed apps through supported Android intents.
+   - Where Android permits it and the user grants the required access, adjust screen brightness and media/ringer volume through the appropriate platform APIs.
+   - Distinguish changing a setting directly from merely opening its settings page. Report success only after the platform confirms the change; otherwise explain the limitation and offer the settings screen.
+
+2. **Compose messages and email**
+   - Let the user dictate or request a message/email, identify the intended recipient and destination app, prepare a draft and hand it to the chosen app using supported intents or share/compose flows.
+   - Show the recipient and complete content and require explicit user confirmation before sending, posting or performing any externally visible action.
+   - Never claim a message was sent merely because a compose screen opened.
+
+3. **Read incoming app notifications, including WhatsApp previews**
+   - Investigate a user-enabled Android NotificationListenerService as the least-privilege supported route for reading notifications that Android actually exposes.
+   - Explain that this does not grant unrestricted access to WhatsApp chat history and that notification previews may be unavailable or redacted by device/app privacy settings.
+   - Notification access is highly sensitive: off by default, separately and explicitly granted by the user, visible and revocable in Settaggi, with no hidden collection or retention of message contents.
+   - This capability remains gated by a separate Android distribution / Play Protect / policy review and explicit approval before implementation or enabling. This preserves the existing decision to keep notification reading deferred after the earlier Play Protect block.
+
+4. **Advanced interaction with other apps**
+   - Prefer documented Android intents, app links, share sheets and official APIs.
+   - Treat AccessibilityService as a last-resort, separately reviewed opt-in capability only for a narrowly defined use case; never request blanket accessibility access or simulate taps across arbitrary apps by default.
+   - Do not bypass app security, authentication, privacy controls or Android permission boundaries.
+
+Cross-cutting safeguards and acceptance criteria:
+- All capabilities are disabled until the user explicitly enables the relevant permission/capability. Ask only for the minimum permission needed for the requested action.
+- Sensitive or externally visible actions (send, post, delete, purchase, call, share private content) require a clear confirmation immediately before execution.
+- Provide an always-visible indication when notification access or any advanced app-interaction permission is enabled, plus a simple way to revoke it.
+- Keep processing local where feasible; encrypt any user-approved retained data; do not archive raw notifications or message bodies by default.
+- No paid APIs, subscriptions, cloud services, hosted GPU or billing without fresh explicit approval. Do not introduce an always-on microphone or wake-word listener; voice commands are handled only within an explicitly active, user-started session.
+- Test permission denial/revocation, Android-version differences, screen-off/background behavior, privacy redaction, failure paths and accurate action-result reporting on the supported Samsung devices.
+- Do not mark this phase complete until implementation, regression tests, distribution/policy review where applicable, and physical-device acceptance all pass.
+
+**Execution order:** complete and obtain acceptance for reliability/device safety, C3, C4 and C5 first; then complete the Personal Organizer and Agenda; then implement this **Phone and App Assistant** phase; keep Avatar as the final product phase. This addition does not change the current priority or authorize work that would destabilize the current APK candidate.
+
+## 2026-11-20 — Chiusura automatica della voce dopo la sveglia
+
+- Una sessione Gemini Live avviata dalla sveglia non deve restare aperta senza limite: non eredita il timeout di background standard, perché la sessione allarme era esclusa intenzionalmente da quella policy.
+- Dopo l'avvio riuscito di Live, se non arriva alcuna prima risposta vocale entro 45 secondi, la sessione viene chiusa ordinatamente.
+- Dal primo parlato di Juanita, ogni turno vocale riconosciuto aggiorna un timer di inattività di 20 secondi. Se non arriva altro parlato, Gemini Live viene chiuso; una durata massima assoluta di 3 minuti impedisce che una conversazione lasciata aperta continui indefinitamente.
+- Il percorso di chiusura resta quello comune e fail-closed: prima conferma la chiusura del microfono e della sessione Gemini; solo dopo riattiva Sherpa se la parola di attivazione era stata esplicitamente abilitata. Se l'utente non ha attivato la wake word, il servizio termina e rilascia le risorse.
+- Nessuna seconda registrazione simultanea, nessuna attivazione automatica del microfono se l'utente non ha dato consenso, nessun cambiamento alla sessione Live manuale o al timeout di 15 minuti già previsto per il Live in background autorizzato.
+- Test unitari dedicati alla finestra d'inattività, al rinnovo dopo un turno vocale e al limite massimo assoluto.
+- Stato: implementazione inserita nella PR #58; build e test CI sull'HEAD aggiornato e verifica fisica su Samsung ancora da completare. I tempi sono valori iniziali prudenti, da validare nell'uso reale.
+
+
+## 2026-11-20 — Collaborazione con assistente Android predefinito (RICERCA COMPLETATA)
+
+**Richiesta utente:** mantenere Juanita AI con tutte le funzioni attuali, ma ridurre il consumo in standby appoggiandosi all'assistente Android già selezionato, senza obbligare a sostituirlo.
+
+- Distinguere handoff da delega del microfono: Google App Actions possono far riconoscere una richiesta all'assistente e avviare una Activity/deep link di Juanita; non consegnano all'app il callback della hotword né condividono il microfono. Il percorso può evitare che Sherpa resti in ascolto mentre Juanita è inattiva, ma dipende dall'assistente e dalla sua frase di invocazione.
+- App Actions è specifico di Google Assistant, richiede registrazione/integrazione Play e ha limiti: i custom intent sono attualmente en-US e richiedono query esplicite del tipo "open [app] and ...". Non registra una hotword always-on arbitraria come "Hola Juanita". Le routine Bixby/OEM sono eventuali adattatori per dispositivo, non un contratto Android universale.
+- La Role ASSISTANT e VoiceInteractionService sono un'alternativa diversa: il servizio dell'app selezionata resta mantenuto dal sistema, ma selezionare Juanita sostituisce l'assistente attuale. Non equivale a collaborare con esso.
+- La selezione del ruolo non garantisce il DSP. AlwaysOnHotwordDetector dipende da enrollment, SoundTrigger HAL e hardware; le API hotword framework correnti sono SystemApi/hidden e i permessi correlati sono privilegiati. Non usare reflection, API nascoste, root o permessi signature/privileged.
+- **Decisione:** non chiedere il ruolo ASSISTANT e non sostituire Google/Bixby. Mantenere Sherpa come percorso diretto "Hola Juanita"/"Hola José"; progettare un ingresso opzionale tramite intent/deep link/App Actions che avvii il medesimo runtime Gemini Live senza aprire il microfono in background. Valutare App Actions solo per distribuzione Play e lingue effettivamente supportate; OEM routines solo dopo verifica sul singolo dispositivo.
+- Futuro DSP: integrare soltanto quando esiste API pubblica/documentata e capacità verificata sul dispositivo; mantenere fallback Sherpa per Android precedenti e dispositivi senza supporto.
+- Separare le misure: standby con assistente esterno e Juanita inattiva, standby Sherpa, Gemini Live attivo. Non dichiarare risparmio senza test fisici 1/4/8 ore, batteria, temperatura e accuratezza.
+- Documento tecnico: `docs/DEFAULT_ASSISTANT_INTEROP_RESEARCH_2026-11-20.md`.
+- Nessuna modifica runtime, permesso, tab, package ID, firma o dati utente in questo passaggio.
+
+
+
+## 2026-11-20 — Audit open source per riduzione consumi wake word
+
+- Confrontati i sorgenti Home Assistant Android/microWakeWord, Suxsem/AndroidWakeWord e VoxRT Silero Android con il detector Sherpa attuale.
+- Il detector Juanita usa un solo AudioRecord 16 kHz mono, frame riutilizzati da 100 ms, un thread Sherpa CPU e diagnostica CPU/decode; al momento non applica un gate VAD prima dell'inferenza KWS.
+- La soluzione più promettente da sperimentare è una pipeline a due stadi: Speex VAD leggero sempre attivo → VAD neurale di conferma solo su possibile parlato → Sherpa KWS soltanto sul segmento vocale, con pre-roll PCM per non perdere l'inizio della frase.
+- Non copiare direttamente il wrapper Speex di AndroidWakeWord: il suo puntatore di stato C++ globale non è un'ownership per istanza adatta a Juanita. Non importare tutto il suo stack ONNX openWakeWord: non sostituisce il nostro modello BPE per Hola Juanita/Hola José.
+- Nessuna soglia RMS improvvisata: può perdere parlato basso o confondere vento/motore/rumore. Nessuna modifica al comportamento predefinito finché il gate non dimostra accuratezza equivalente e minore consumo.
+- **Decisione operativa:** realizzare un prototipo VAD-gated Sherpa isolato e disattivato per default, con fallback automatico al detector attuale, buffer circolare pre-roll, ownership singola del microfono, test di onset/offset e diagnostica di rapporto tempo vocale/inferenza.
+- Gate di accettazione: almeno 100 prove per frase e ambiente, falsi positivi/negativi misurati, test di continuità audio, confronti standby 1/4/8 ore su Note10+ Android 12 e S22 Ultra Android 15; temperatura e consumo separati da Gemini Live.
+- Documento: `docs/WAKE_WORD_BATTERY_OPTIMIZATION_AUDIT_2026-11-20.md`.
+- Stato: audit sorgenti e decisione architetturale completati; prototipo runtime e misurazioni fisiche non ancora implementati/eseguiti. Nessuna riduzione percentuale di batteria dichiarata.
+
+
+## 2026-11-20 — Prototipo VAD-gated Sherpa (IMPLEMENTAZIONE IN VALIDAZIONE)
+
+- Aggiunto `SileroVadSpeechGate`: finestre Silero da 512 campioni a 16 kHz, pre-roll circolare di 8 frame KWS (800 ms), coda di 600 ms e nessun invio di audio al KWS durante il silenzio classificato.
+- Riutilizzata l'API VAD già inclusa in Sherpa ONNX 1.13.8: nessuna seconda libreria JNI. Il modello `silero_vad.onnx` viene scaricato separatamente nella directory privata dell'app e verificato con dimensione e SHA-256 prima dell'attivazione.
+- La pipeline VAD è abilitata solo nelle build DEBUG. Le build RELEASE continuano a usare il percorso Sherpa continuo finché non saranno superati test acustici e misure energetiche reali.
+- Fallback automatico al percorso Sherpa continuo in caso di download, inizializzazione o inferenza VAD fallita; il fallimento non deve disabilitare la hotword.
+- Aggiunti test JVM per silenzio, ordine e limite del pre-roll, coda di silenzio, reset e contatori VAD. Aggiunta diagnostica a 60 secondi con CPU worker, tempo decode KWS, finestre VAD e rapporto finestre classificate come parlato. Nessun audio o trascrizione viene registrato.
+- **Limite importante:** Silero viene eseguito continuamente sulle finestre da 512 campioni; non è ancora dimostrato che il suo costo sia inferiore al KWS che evita. Il prototipo misura il carico complessivo e il rapporto di attività, ma non autorizza a dichiarare un risparmio percentuale.
+- Prossimi gate: CI completa (APK debug, test JVM, compile instrumentation); poi prove su Note10+ Android 12 con entrambe le frasi, test rumore/moto/TV, confronto standby 1/4/8 ore e verifica temperatura/batteria. Solo dopo si valuta un front-end leggero aggiuntivo o l'abilitazione release.
+- Candidate cumulative: `0.11.13`, versionCode `52`; PR #58 resta draft e non viene unita a `main`.
+
+
+## Unified diagnostic TXT report — 2026-11-24
+- Added `DiagnosticReportBuilder` on PR #58 to combine the existing bounded voice event log with app ID/version/build, manufacturer/model, Android release/API, and a one-time snapshot of battery, battery temperature, charging, CPU estimate, RAM, thermal status, active recorders, Gemini Live, wake-word, service, WakeLock and session duration.
+- Replaced the voice-only export action in `Altro` with one Android share-sheet action: `Genera e condividi rapporto (.txt)`. Export is generated only after a user tap; no polling, network, cloud, additional permission or microphone access is introduced.
+- Added JVM regression tests for report sections, version/device metadata and privacy exclusions. CI on the exact updated PR head remains required; no APK or device validation is claimed until it completes.
+
+
+## 2026-11-26 — Ripristino astrologia e profilo di nascita
+- La candidata PR #58 non dichiarava né gestiva un tool astrologico Live: il modello non poteva più richiamare un provider tramite l'app.
+- Aggiunto tool dedicato per oroscopo giornaliero e tema natale. Il giornaliero usa il segno solare derivato dalla data già salvata; il tema natale richiede data, ora e luogo esplicitamente salvati e consenso prima di inviare dati al provider.
+- Estesi i campi del profilo personale cifrato con ora e luogo di nascita; schema e file cifrato esistenti restano invariati e i campi aggiuntivi sono compatibili con i profili legacy.
+- Provider gratuiti senza chiave al momento della verifica: FreeHoroscopeAPI per testo giornaliero e CosmyDay per calcolo natale/posizioni; attribuzione richiesta. Disponibilità e schema risposta/geocoding vanno verificati con CI e test dispositivo. Astrologia presentata come interpretazione, non scienza.
+- Test JVM per i confini del segno solare aggiunti; nessun APK pronto dichiarato prima della CI esatta e della prova Live.
+
+
+## 2026-11-26 — Profilo confermato nel richiamo memoria
+- Il tool di richiamo ora affianca ai risultati episodici i campi del profilo personale cifrato confermati dall'utente, così data di nascita, preferenze e dati personali non dipendono esclusivamente dalla ricerca lessicale o dalla coda di estrazione automatica.
+- I dati di nascita (data, ora, luogo) vengono aggiunti al contesto di richiamo soltanto quando la query riguarda nascita/astrologia; la località corrente non viene inclusa come residenza.
+- Da validare con test di richiamo profilo e CI esatta; nessuna modifica allo schema cifrato.
+
+
+## CI trigger — 2026-11-26 18:25 UTC
+- Astrologia e richiamo diretto del profilo sono stati aggiornati sulla PR #58; commit sorgente precedente: 41b17d44ad0dc1ec873b90a1f51be3d7017ca9dc.
+- Questa revisione richiede build/test Android sulla testa aggiornata. Fino al risultato della CI e al collaudo vocale sul dispositivo, lo stato è IMPLEMENTAZIONE IN VERIFICA, non APK pronto.
+
+
+## Consent gate hardening — 2026-11-26
+- Il consenso al tema natale non è accettato soltanto dal parametro del tool: il servizio richiede una risposta affermativa riconosciuta dopo che l'assistente ha esplicitamente menzionato il trasferimento dei dati di nascita al provider. Il consenso è in memoria volatile per la sessione e viene consumato al primo calcolo natale; non viene salvato.
+- Commit sorgente: 0cf0ca2af7eb35d73092a960ff6abb8e52b10c78. La successiva modifica documentale attiva la CI sul contenuto esatto della PR; build, test e firma restano in attesa del risultato.
+
+
+## 2026-11-27 — Prima implementazione del vocabolario vocale confermato
+- Aggiunto `VoiceTermNormalizer`: interpreta soltanto correzioni esplicite di lettere raddoppiate; non presume la grafia se manca una formula di correzione chiara.
+- Aggiunti test JVM per Suzuki GSX-8TT, nomi delle lettere pronunciati in italiano, punteggiatura, serializzazione della correzione e rifiuto delle ambiguità.
+- Integrato nel transcript worker: confronta la correzione con l'ultimo enunciato dell'utente; salva alias e grafia canonica come memoria confermata nella memoria AES-GCM esistente; invia una nota di correzione alla sessione Live attiva.
+- Le correzioni confermate vengono caricate nelle istruzioni delle sessioni successive. La trascrizione originale resta invariata nell'archivio.
+- Limite attuale: il primo estrattore copre correzioni esplicite di lettere doppie, non la normalizzazione generale di marchi, modelli, numeri o errori fonetici. La distinzione fra errore del riconoscitore audio e interpretazione del modello resta da misurare con test reali.
+- La CI deve terminare sul nuovo HEAD esatto prima di considerare questa slice validata; nessun APK va installato finché non sono verificati test, versione e firma.
+
+## 2026-11-28 — M1 memory recall: broader deterministic follow-up detection (IMPLEMENTATION IN CI)
+- Added RecentReferenceDetector as a small, pure local component. It retains explicit recall cues in Italian/Spanish/English and recognizes common short elliptical follow-ups such as “E questa?”, “E la batteria?”, “E quanto costa?”, “What about that?” and “Y esa?”.
+- Uses Unicode accent normalization and bounded continuation patterns; ordinary unrelated requests and conditional phrases such as “E se piove domani?” are covered by negative regression tests.
+- GeminiLiveAssistant.shouldAutoRecallRecentContext now delegates to the detector. When triggered, existing logic snapshots the bounded in-memory live transcript immediately and combines it with local encrypted archive/profile retrieval; no second microphone, new network provider, or automatic-memory consent change.
+- Added JVM tests for Italian, English and Spanish follow-ups, explicit recall cues and false-positive controls.
+- This is a targeted M1 improvement to recall triggering, not completion of memory reliability: the model still interprets the returned evidence, archived paraphrase search remains lexical, and actual conversational precision requires device testing. Next M1 work: robust turn-boundary handling and regression tests for references to recent facts/corrections; then M2 search ranking and M3 entity/reference resolution.
+- Previous exact head 9a43ad431deafeeacea6213e274ebdf072351e20 passed JVM, instrumentation API 31, wake model/tokenizer validation, signed release build and package/version/signature/update checks; signed artifact was version 0.11.18 / versionCode 57. New detector commits supersede that tested head; CI is required again on the current HEAD. Detekt was skipped by the current Android workflow condition and is not reported as passed.
+
+
+## 2026-11-28 — Memory factory reset, private storage, archive hygiene and location correctness (P0)
+
+User-reported issues: old memory files/archives appear to be mixed and cause contradictory recall; a memory-related file is visible in Downloads; weather has spoken a location the user does not recognize. Treat these as data-integrity and trust issues ahead of new features.
+
+### Required implementation
+- Add one clearly named, destructive **Reset all Juanita memory and archive** action in Memory & Privacy, with a second explicit confirmation naming the scope. It must clear curated memories, full conversation archive, active continuity snapshots, pending automatic-memory queue, correction/vocabulary records, all recall/search indexes and temporary/interrupted writes. Keep app settings, persona configuration, permanent signing identity and Android Keystore key unless a separate user-approved full-app reset is requested. Disable archive/automatic extraction during reset, invalidate in-flight extraction with the existing clear-version fence, and only report success after every deletion has been verified; on partial failure show an error and retain a recoverable status. Add tests for all layers and post-reset empty retrieval.
+- Audit legacy exports and old storage layouts before migration/deletion. Canonical live memory must remain under app-private internal storage, encrypted with the existing Keystore-backed AES-GCM store; no transcript or memory payload may be written to public Downloads. Use one owned private directory with documented subfolders for encrypted facts/metadata, per-session archive, derived indexes, temp/backup files and optional model assets. Migrate atomically, verify integrity, then remove legacy files only after successful verification. Never silently merge stale exported snapshots into the live store.
+- Treat a file found in Downloads as an export/legacy artifact until its exact name, format and origin are identified; do not delete user files blindly. Add explicit export naming and destination disclosure, and ensure exports are opt-in and not automatically re-imported.
+- Weather/location must use a single validated location result: request a fresh balanced fused fix on demand; validate finite latitude/longitude ranges, fix age (target <= 10 minutes for “current”), and accuracy (target <= 2 km for local weather). Reject stale, invalid or poor fixes; do not fall back silently to arbitrary cached provider coordinates. If no valid fix, say location is unavailable and ask for a town/city. Include the resolved locality in the weather result so the assistant speaks the exact place checked. A user-specified locality takes precedence and must be geocoded explicitly. Never reuse route destination, birth place, archive location or prior-session coordinates as current location.
+- Add regression tests for stale/future/invalid/low-accuracy fixes, denied permission, fused provider timeout, explicit locality, unknown locality and truthful spoken place label. Verify on Note10+ Android 12 and S22 Ultra.
+
+### Source audit at current PR head 5030de3b
+- `EncryptedMemoryStore.clearAll()` already clears the encrypted metadata envelope, personal memory files, session archive files and both derived recall indexes. However, the current UI exposes separate memory and archive clearing flows; a single user-facing full reset and end-to-end verification are still needed.
+- Live archive source is already under `context.filesDir/conversation_archive`; individual memory files are under app-private `filesDir/encrypted_memories`. This is not public Downloads. The visible Download file therefore needs filename/format provenance checked before deciding whether it is an export or a legacy artifact.
+- Morning briefing weather currently uses fused location, but accepts a cached fix up to 2 hours old and does not check reported accuracy or validate coordinates before requesting weather. This can produce a weather result for an unexpected place; tighten the gate and surface the exact locality.
+
+No destructive data migration, auto-delete of Downloads, or production release until the reset, storage migration and location tests pass on the exact cumulative PR head. Keep PR #58 draft/open/unmerged and preserve package ID, production signer and existing encrypted data format.
